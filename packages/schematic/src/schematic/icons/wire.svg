@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="soften-wire" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <linearGradient id="yellowNodeGrad-wire" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffde0"/>
+      <stop offset="12%" stop-color="#fffde0"/>
+      <stop offset="38%" stop-color="#ead417"/>
+      <stop offset="100%" stop-color="#a69400"/>
+    </linearGradient>
+    <g id="wire-icon-shape">
+      <g fill="#363636">
+        <rect x="60" y="44" width="46" height="12"/>
+        <rect x="94" y="44" width="12" height="112"/>
+        <rect x="94" y="144" width="46" height="12"/>
+      </g>
+      <rect x="30" y="30" width="40" height="40" rx="1.5" fill="url(#yellowNodeGrad-wire)"/>
+      <rect x="130" y="130" width="40" height="40" rx="1.5" fill="url(#yellowNodeGrad-wire)" transform="translate(300, 0) scale(-1, 1)"/>
+    </g>
+  </defs>
+  <use href="#wire-icon-shape" opacity="0.5" filter="url(#soften-wire)" transform="translate(3, 4)"/>
+  <use href="#wire-icon-shape"/>
+</svg>

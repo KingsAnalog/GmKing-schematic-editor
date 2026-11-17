@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+  <path d="M52 52 L138 138 M138 52 L52 138" stroke="#6f4636" stroke-width="38" stroke-linecap="square" opacity="0.48"/>
+  <path d="M52 52 L138 138 M138 52 L52 138" stroke="#9f392d" stroke-width="28" stroke-linecap="square" stroke-dasharray="42 16" opacity="0.9"/>
+  <path d="M57 57 L133 133 M133 57 L57 133" stroke="#d47a2d" stroke-width="6" stroke-linecap="square" stroke-dasharray="35 16" opacity="0.72"/>
+  <text x="150" y="145" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#6f4636">T</text>
+</svg>

@@ -1,0 +1,10 @@
+{
+  "id": "schematic-editor",
+  "name": "Schematic Editor",
+  "version": "0.1.0",
+  "minAppVersion": "1.13.4",
+  "description": "Draw and edit electronic circuit schematics inside your notes.",
+  "author": "RarityBrown",
+  "isDesktopOnly": true,
+  "authorUrl": "https://github.com/RarityBrown"
+}

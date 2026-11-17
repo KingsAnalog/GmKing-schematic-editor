@@ -1,0 +1,23 @@
+{
+  "name": "@edahelper/obsidian-schematic-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "build:dev": "node esbuild.config.mjs development",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "test:browser": "node scripts/note-editing-smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "jsdom": "^26.1.0",
+    "obsidian": "1.13.1"
+  },
+  "dependencies": {
+    "@edahelper/schematic": "0.1.0"
+  },
+  "license": "MIT",
+  "author": "RarityBrown"
+}

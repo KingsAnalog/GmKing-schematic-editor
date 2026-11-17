@@ -1,0 +1,24 @@
+{
+  "format": "adc-helper/schematic",
+  "schematic": {
+    "symbolTemplate": "razavi",
+    "components": [
+      {
+        "type": "resistor", "ref": "R1", "x": 40, "y": 60, "rotation": 0, "mirrored": false, "variantId": "fixed", "id": "resistor-1",
+        "values": {"main": "10k"}
+      }
+    ],
+    "wires": [
+      {"points": [{"x": 80, "y": 60}, {"x": 100, "y": 60}], "routeMode": "orthogonal", "appearance": {"variant": "signal"}, "id": "wire-1"},
+      {"points": [{"x": 100, "y": 60}, {"x": 120, "y": 60}], "routeMode": "orthogonal", "appearance": {"variant": "signal", "endMarker": "arrow"}, "id": "wire-1-segment-1"},
+      {"points": [{"x": 100, "y": 60}, {"x": 100, "y": 100}], "routeMode": "orthogonal", "id": "branch"}
+    ],
+    "connections": {"wires": {"wire-1": ["node-5", "node-1"], "wire-1-segment-1": ["node-1", "node-3"], "branch": ["node-1", "node-6"]}, "pins": {"resistor-1": {"p": "node-4", "n": "node-5"}}},
+    "junctionAppearances": [],
+    "netLabels": [{"id": "net-label-1", "name": "OUT", "attachment": {"wireId": "wire-1", "point": {"x": 100, "y": 60}}}],
+    "notes": [
+      {"x": 20, "y": 120, "width": 180, "height": 60, "format": "plain", "id": "note-1",
+        "text": "Golden note"}
+    ]
+  }
+}

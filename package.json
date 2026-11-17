@@ -1,0 +1,40 @@
+{
+  "name": "schematic-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/schematic",
+    "apps/web",
+    "apps/obsidian"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @edahelper/schematic && npm run build --workspace @edahelper/schematic-web && npm run build --workspace @edahelper/obsidian-schematic-editor",
+    "build:lib": "npm run build --workspace @edahelper/schematic",
+    "build:web": "npm run build --workspace @edahelper/schematic-web",
+    "build:obsidian": "npm run build --workspace @edahelper/obsidian-schematic-editor",
+    "dev": "npm run build:lib && npm run dev --workspace @edahelper/schematic-web",
+    "test": "npm run build:lib && npm run test --workspace @edahelper/schematic && npm run test --workspace @edahelper/obsidian-schematic-editor",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "test:persistence": "node scripts/persistence-smoke.mjs",
+    "test:interactions": "node scripts/interaction-smoke.mjs"
+  },
+  "devDependencies": {
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.7",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "@codemirror/state": "6.7.1",
+    "@codemirror/view": "6.43.7"
+  },
+  "license": "MIT",
+  "author": "RarityBrown",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  }
+}

@@ -1,0 +1,5 @@
+html, body { margin: 0; min-width: 320px; height: 100%; font-family: Arial, sans-serif; background: #f5f5f2; }
+body { --ink: #111111; --muted: #565656; --soft-rule: #d5d5d0; --viva-blue: #005f9e; }
+#app { height: 100dvh; box-sizing: border-box; }
+.schematic-shell { height: 100%; }
+button, input, select, textarea { font: inherit; }

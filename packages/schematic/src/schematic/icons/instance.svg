@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="soften-instance" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2.26"/>
+    </filter>
+    <radialGradient id="redGrad-instance" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#d85c5c"/>
+      <stop offset="60%" stop-color="#c64545"/>
+      <stop offset="100%" stop-color="#a92f32"/>
+    </radialGradient>
+    <radialGradient id="greenGrad-instance" cx="48%" cy="45%" r="72%">
+      <stop offset="0%" stop-color="#35c747"/>
+      <stop offset="62%" stop-color="#29b53b"/>
+      <stop offset="100%" stop-color="#1f922d"/>
+    </radialGradient>
+    <g id="instance-icon-shape">
+      <g fill="#303333">
+        <rect x="50.43" y="13.91" width="47.83" height="16.52"/>
+        <rect x="82.61" y="13.91" width="16.52" height="83.48"/>
+        <rect x="50.43" y="80.87" width="47.83" height="16.52"/>
+        <rect x="107.83" y="13.91" width="16.52" height="83.48"/>
+        <rect x="117.39" y="49.57" width="46.96" height="16.52"/>
+      </g>
+      <rect x="17.39" y="5.22" width="33.91" height="33.91" fill="url(#redGrad-instance)"/>
+      <rect x="17.39" y="72.17" width="33.91" height="33.91" fill="url(#redGrad-instance)"/>
+      <rect x="160" y="40.87" width="33.91" height="33.91" fill="url(#redGrad-instance)"/>
+      <circle cx="153.91" cy="139.13" r="35.65" fill="url(#greenGrad-instance)"/>
+      <rect x="147.83" y="114.78" width="11.30" height="47.83" fill="#FFFFFF"/>
+      <rect x="130.43" y="133.04" width="47.83" height="11.30" fill="#FFFFFF"/>
+    </g>
+  </defs>
+  <use href="#instance-icon-shape" opacity="0.42" filter="url(#soften-instance)"/>
+  <use href="#instance-icon-shape"/>
+</svg>

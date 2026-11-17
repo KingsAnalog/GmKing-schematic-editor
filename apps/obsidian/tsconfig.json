@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["node", "obsidian", "vitest/globals"],
+    "noEmit": true
+  },
+  "include": ["src", "tests", "esbuild.config.mjs", "vitest.config.ts"]
+}
