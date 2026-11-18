@@ -19,7 +19,7 @@ Open `http://127.0.0.1:8001`. After library changes, run `npm run build:lib` and
 
 ## Obsidian
 
-Build with `npm run build`. Copy `main.js`, `styles.css`, and `manifest.json` from `apps/obsidian/dist` into `<vault>/.obsidian/plugins/schematic-editor/`, then enable **Schematic Editor** in Community plugins. Run **Schematic Editor: Insert schematic** in the command palette; edit the inserted block in Live Preview. Circuit data stays in the note's JSON code block.
+Build with `npm run build`. Copy `main.js`, `styles.css`, and `manifest.json` from `apps/obsidian/dist` into `<vault>/.obsidian/plugins/schematic-editor/`, then enable **GmKing** in Community plugins. Run **GmKing: Insert schematic** in the command palette; edit the inserted block in Live Preview. Circuit data stays in the note's JSON code block.
 
 ## Hosting and data
 

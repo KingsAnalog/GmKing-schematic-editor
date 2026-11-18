@@ -64,18 +64,19 @@ describe("Obsidian bundle boundary", () => {
     expect(css).not.toMatch(/milkdown|ProseMirror|schematic-markdown-math/);
   });
 
-  it("keeps release metadata aligned with the 0.1.0 plugin contract", async () => {
+  it("keeps release metadata aligned with the plugin package", async () => {
     const manifest = JSON.parse(await readFile(new URL("../../../manifest.json", import.meta.url), "utf8"));
     const versions = JSON.parse(await readFile(new URL("../../../versions.json", import.meta.url), "utf8"));
+    const pluginPackage = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
     expect(manifest).toMatchObject({
       id: "schematic-editor",
-      name: "Schematic Editor",
-      version: "0.1.0",
+      name: "GmKing",
+      version: pluginPackage.version,
       minAppVersion: "1.13.4",
       author: "RarityBrown",
       isDesktopOnly: true
     });
-    expect(versions).toEqual({ "0.1.0": "1.13.4" });
+    expect(versions[manifest.version]).toBe(manifest.minAppVersion);
   });
 });
 
