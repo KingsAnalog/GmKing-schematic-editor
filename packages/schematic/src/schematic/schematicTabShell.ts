@@ -218,110 +218,82 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       "data-schematic-analysis-panel": true,
       "data-right-dock": true
     },
-      el("div", { class: "right-dock-narrow-switcher", role: "tablist", "aria-label": "Inspector views" },
+      el("div", { class: "schematic-sidebar-tabs right-dock-tabs", role: "tablist", "aria-label": "Inspector views" },
         el("button", {
           type: "button",
-          class: "right-dock-narrow-tab is-active",
-          "data-right-switch": "analysis",
+          class: "schematic-sidebar-tab is-active",
+          role: "tab",
+          "data-right-view": "analysis",
           "aria-selected": "true"
         }, t("right.analysis", "Analysis")),
         el("button", {
           type: "button",
-          class: "right-dock-narrow-tab",
-          "data-right-switch": "netlist",
-          "aria-selected": "false"
+          class: "schematic-sidebar-tab",
+          role: "tab",
+          "data-right-view": "netlist",
+          "aria-selected": "false",
+          tabindex: "-1"
         }, t("right.netlist", "Netlist")),
         el("button", {
           type: "button",
-          class: "right-dock-narrow-tab",
-          "data-right-switch": "diagnostics",
-          "aria-selected": "false"
+          class: "schematic-sidebar-tab",
+          role: "tab",
+          "data-right-view": "diagnostics",
+          "aria-selected": "false",
+          tabindex: "-1"
         }, t("right.diagnostics", "Diagnostics"))
       ),
-      el("section", { class: "right-dock-section", "data-right-panel": "analysis" },
-        el("button", {
-          type: "button",
-          class: "right-dock-section-toggle",
-          "data-right-view": "analysis",
-          "aria-expanded": "false"
-        },
-          el("span", { class: "right-dock-section-title" }, t("right.analysis", "Analysis")),
-          el("span", { class: "right-dock-chevron", "aria-hidden": "true" })
+      el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
+        el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
+        el("div", { "data-selection-summary": true, class: "selection-summary" }, "No object selected."),
+        el("div", { class: "net-pick-row" },
+          el("label", { for: analysisIds.inputP }, "Input +"),
+          el("select", { id: analysisIds.inputP, "data-net-select": "inputP" }),
+          el("button", { type: "button", "data-pick-net": "inputP" }, "Pick")
         ),
-        el("div", { class: "right-dock-section-body", "data-right-body": "analysis", hidden: true },
-          el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
-          el("div", { "data-selection-summary": true, class: "selection-summary" }, "No object selected."),
-          el("div", { class: "net-pick-row" },
-            el("label", { for: analysisIds.inputP }, "Input +"),
-            el("select", { id: analysisIds.inputP, "data-net-select": "inputP" }),
-            el("button", { type: "button", "data-pick-net": "inputP" }, "Pick")
-          ),
-          el("div", { class: "net-pick-row" },
-            el("label", { for: analysisIds.inputN }, "Input -"),
-            el("select", { id: analysisIds.inputN, "data-net-select": "inputN" }),
-            el("button", { type: "button", "data-pick-net": "inputN" }, "Pick")
-          ),
-          el("div", { class: "net-pick-row" },
-            el("label", { for: analysisIds.outputP }, "Output +"),
-            el("select", { id: analysisIds.outputP, "data-net-select": "outputP" }),
-            el("button", { type: "button", "data-pick-net": "outputP" }, "Pick")
-          ),
-          el("div", { class: "net-pick-row" },
-            el("label", { for: analysisIds.outputN }, "Output -"),
-            el("select", { id: analysisIds.outputN, "data-net-select": "outputN" }),
-            el("button", { type: "button", "data-pick-net": "outputN" }, "Pick")
-          ),
-          el("div", { class: "analysis-actions" },
-            el("button", { type: "button", "data-analysis": "compute" }, "Compute H(s), Zin(s), Zout(s)")
-          ),
-          el("div", {
-            class: "analysis-progress",
-            "data-analysis-progress": true,
-            hidden: true,
-            role: "progressbar",
-            "aria-label": "Symbolic analysis progress"
-          },
-            el("div", { class: "analysis-progress-bar" }),
-            el("span", { "data-analysis-progress-text": true }, "Solving symbolic MNA...")
-          ),
-          el("div", { "data-analysis-diagnostics": true, class: "analysis-diagnostics" }),
-          el("div", { class: "analysis-results" },
-            el("h3", {}, "Transfer Function"),
-            el("output", { "data-analysis-transfer": true }),
-            el("h3", {}, "Input Impedance"),
-            el("output", { "data-analysis-zin": true }),
-            el("h3", {}, "Output Impedance"),
-            el("output", { "data-analysis-zout": true })
-          )
+        el("div", { class: "net-pick-row" },
+          el("label", { for: analysisIds.inputN }, "Input -"),
+          el("select", { id: analysisIds.inputN, "data-net-select": "inputN" }),
+          el("button", { type: "button", "data-pick-net": "inputN" }, "Pick")
+        ),
+        el("div", { class: "net-pick-row" },
+          el("label", { for: analysisIds.outputP }, "Output +"),
+          el("select", { id: analysisIds.outputP, "data-net-select": "outputP" }),
+          el("button", { type: "button", "data-pick-net": "outputP" }, "Pick")
+        ),
+        el("div", { class: "net-pick-row" },
+          el("label", { for: analysisIds.outputN }, "Output -"),
+          el("select", { id: analysisIds.outputN, "data-net-select": "outputN" }),
+          el("button", { type: "button", "data-pick-net": "outputN" }, "Pick")
+        ),
+        el("div", { class: "analysis-actions" },
+          el("button", { type: "button", "data-analysis": "compute" }, "Compute H(s), Zin(s), Zout(s)")
+        ),
+        el("div", {
+          class: "analysis-progress",
+          "data-analysis-progress": true,
+          hidden: true,
+          role: "progressbar",
+          "aria-label": "Symbolic analysis progress"
+        },
+          el("div", { class: "analysis-progress-bar" }),
+          el("span", { "data-analysis-progress-text": true }, "Solving symbolic MNA...")
+        ),
+        el("div", { "data-analysis-diagnostics": true, class: "analysis-diagnostics" }),
+        el("div", { class: "analysis-results" },
+          el("h3", {}, "Transfer Function"),
+          el("output", { "data-analysis-transfer": true }),
+          el("h3", {}, "Input Impedance"),
+          el("output", { "data-analysis-zin": true }),
+          el("h3", {}, "Output Impedance"),
+          el("output", { "data-analysis-zout": true })
         )
       ),
-      el("section", { class: "right-dock-section", "data-right-panel": "netlist" },
-        el("button", {
-          type: "button",
-          class: "right-dock-section-toggle",
-          "data-right-view": "netlist",
-          "aria-expanded": "false"
-        },
-          el("span", { class: "right-dock-section-title" }, t("right.netlist", "Netlist")),
-          el("span", { class: "right-dock-chevron", "aria-hidden": "true" })
-        ),
-        el("div", { class: "right-dock-section-body", "data-right-body": "netlist", hidden: true },
-          el("p", { class: "analysis-note" }, t("right.netlistPlaceholder", "Netlist view arrives in R2."))
-        )
+      el("section", { class: "right-dock-panel", "data-right-panel": "netlist", role: "tabpanel", hidden: true },
+        el("p", { class: "analysis-note" }, t("right.netlistPlaceholder", "Netlist view arrives in R2."))
       ),
-      el("section", { class: "right-dock-section", "data-right-panel": "diagnostics" },
-        el("button", {
-          type: "button",
-          class: "right-dock-section-toggle",
-          "data-right-view": "diagnostics",
-          "aria-expanded": "false"
-        },
-          el("span", { class: "right-dock-section-title" }, t("right.diagnostics", "Diagnostics")),
-          el("span", { class: "right-dock-chevron", "aria-hidden": "true" })
-        ),
-        el("div", { class: "right-dock-section-body", "data-right-body": "diagnostics", hidden: true },
-          el("p", { class: "analysis-note" }, t("right.diagnosticsPlaceholder", "Diagnostics view arrives in R2."))
-        )
+      el("section", { class: "right-dock-panel", "data-right-panel": "diagnostics", role: "tabpanel", hidden: true },
+        el("p", { class: "analysis-note" }, t("right.diagnosticsPlaceholder", "Diagnostics view arrives in R2."))
       )
     ),
     el("button", {

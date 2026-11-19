@@ -1521,150 +1521,25 @@
   align-content: stretch;
   gap: 0;
   padding: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--schematic-ui-panel);
 }
 
-.right-dock-section {
+.right-dock-tabs {
   flex: 0 0 auto;
-  min-width: 0;
-  border-bottom: 1px solid var(--schematic-ui-line);
 }
 
-.right-dock-section:last-child {
-  border-bottom: 0;
-}
-
-.right-dock-section-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 0;
-  background: transparent;
-  color: var(--schematic-ink);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  line-height: 1.25;
-  text-align: left;
-  cursor: pointer;
-}
-
-.right-dock-section-toggle:hover {
-  background: var(--schematic-ui-hover);
-}
-
-.right-dock-section-toggle.is-expanded {
-  background: var(--schematic-ui-active);
-}
-
-.right-dock-section-toggle.is-active {
-  box-shadow: inset 3px 0 0 var(--schematic-focus);
-}
-
-.right-dock-section-toggle:focus-visible {
-  outline: 2px solid var(--schematic-focus);
-  outline-offset: -2px;
-}
-
-.right-dock-section-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.right-dock-chevron {
-  flex: 0 0 auto;
-  width: 12px;
-  color: var(--schematic-ui-muted);
-  font-size: 0.9rem;
-  line-height: 1;
-  text-align: center;
-}
-
-.right-dock-chevron::before {
-  content: "+";
-}
-
-.right-dock-section-toggle.is-expanded .right-dock-chevron::before {
-  content: "−";
-}
-
-.right-dock-section-body {
+.right-dock-panel {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   align-content: start;
   gap: 10px;
-  min-height: 140px;
-  padding: 2px 12px 14px;
+  padding: 12px;
+  overflow: auto;
 }
 
-.right-dock-section-body[hidden] {
-  display: none;
-}
-
-.right-dock-narrow-switcher {
-  display: none;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-narrow-switcher {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  display: flex;
-  flex: 0 0 auto;
-  gap: 2px;
-  padding: 6px 8px 0;
-  border-bottom: 1px solid var(--schematic-ui-line);
-  background: var(--schematic-ui-panel);
-}
-
-.right-dock-narrow-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1 1 0;
-  min-width: 0;
-  height: 32px;
-  padding: 0 4px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  background: transparent;
-  color: var(--schematic-ui-muted);
-  font: inherit;
-  font-size: 0.76rem;
-  cursor: pointer;
-}
-
-.right-dock-narrow-tab.is-active {
-  border-color: var(--schematic-ui-line);
-  border-bottom-color: var(--schematic-ui-panel);
-  background: var(--schematic-ui-panel);
-  color: var(--schematic-ink);
-  font-weight: 600;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-section {
-  display: none;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-section.is-active {
-  display: block;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-section-toggle {
-  display: none;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-section-body {
-  display: grid;
-}
-
-.schematic-shell.is-layout-narrow .right-dock-section-body[hidden] {
+.right-dock-panel[hidden] {
   display: none;
 }
 

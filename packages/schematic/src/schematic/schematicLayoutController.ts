@@ -5,7 +5,6 @@ export type SchematicSidebarTab = "library" | "properties";
 
 export interface RightDockLayoutState {
   activeView: RightDockView;
-  expanded: RightDockView[];
 }
 
 export interface SchematicLayoutState {
@@ -14,7 +13,6 @@ export interface SchematicLayoutState {
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   rightActiveView: RightDockView;
-  rightExpanded: RightDockView[];
   sidebarTab: SchematicSidebarTab;
   logHeight: number;
 }
@@ -32,7 +30,6 @@ const DEFAULT_STATE: SchematicLayoutState = {
   leftCollapsed: false,
   rightCollapsed: true,
   rightActiveView: "analysis",
-  rightExpanded: [],
   sidebarTab: "library",
   logHeight: 230
 };
@@ -62,7 +59,6 @@ export interface SchematicPanelLayoutAccess {
   setSidebarTab?(tab: SchematicSidebarTab): void;
   getLogHeight?(): number;
   setLogHeight?(height: number): void;
-  onPanelOpened?: ((side: SchematicPanelSide) => void) | null;
 }
 
 export function resolveSchematicPanelResize(
@@ -97,7 +93,6 @@ export function projectSchematicLayout(
 }
 
 export class SchematicLayoutController implements SchematicPanelLayoutAccess {
-  onPanelOpened: ((side: SchematicPanelSide) => void) | null = null;
   private readonly lifecycle: AbortController;
   private readonly elementConstructor: typeof Element | null;
   private readonly storage: Pick<Storage, "getItem" | "setItem"> | null;
@@ -155,7 +150,6 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   }
 
   openPanel(side: SchematicPanelSide) {
-    const wasVisible = this.isPanelVisible(side);
     if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
       this.drawer = side;
     } else if (side === "left") {
@@ -165,7 +159,6 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
     }
     this.persist();
     this.render();
-    if (!wasVisible && this.isPanelVisible(side)) this.onPanelOpened?.(side);
   }
 
   closePanel(side: SchematicPanelSide) {
@@ -195,12 +188,11 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   }
 
   getRightDockState(): RightDockLayoutState {
-    return { activeView: this.state.rightActiveView, expanded: [...this.state.rightExpanded] };
+    return { activeView: this.state.rightActiveView };
   }
 
   setRightDockState(state: RightDockLayoutState) {
     this.state.rightActiveView = state.activeView;
-    this.state.rightExpanded = [...state.expanded];
     this.persist();
   }
 
@@ -321,7 +313,6 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   }
 
   private setPanelWidth(side: SchematicPanelSide, width: number, persist = true) {
-    const wasVisible = this.isPanelVisible(side);
     const resolved = resolveSchematicPanelResize(side, width);
     if (side === "left") {
       this.state.leftWidth = resolved.width;
@@ -339,7 +330,6 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
     }
     if (persist) this.persist();
     this.render();
-    if (!wasVisible && this.isPanelVisible(side)) this.onPanelOpened?.(side);
   }
 
   private effectivePanelWidth(side: SchematicPanelSide) {
@@ -401,16 +391,12 @@ function readState(storage: Pick<Storage, "getItem"> | null): SchematicLayoutSta
       ?? "null";
     const parsed = JSON.parse(raw) as Partial<SchematicLayoutState> | null;
     if (!parsed || typeof parsed !== "object") return { ...DEFAULT_STATE };
-    const expanded = Array.isArray(parsed.rightExpanded)
-      ? [...new Set(parsed.rightExpanded.filter(isRightDockView))]
-      : [];
     return {
       leftWidth: clamp(Number(parsed.leftWidth), LEFT_WIDTH_RANGE, DEFAULT_STATE.leftWidth),
       rightWidth: clamp(Number(parsed.rightWidth), RIGHT_WIDTH_RANGE, DEFAULT_STATE.rightWidth),
       leftCollapsed: parsed.leftCollapsed === true,
       rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed,
       rightActiveView: isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
-      rightExpanded: expanded,
       sidebarTab: parsed.sidebarTab === "properties" ? "properties" : "library",
       logHeight: clamp(Number(parsed.logHeight), LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight)
     };

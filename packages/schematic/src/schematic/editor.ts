@@ -735,11 +735,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       initialHeight: layout?.getLogHeight?.() ?? 230,
       onHeightChange: (height) => layout?.setLogHeight?.(height)
     });
-    if (layout) {
-      layout.onPanelOpened = (side) => {
-        if (side === "right") this.rightDock?.ensureExpanded();
-      };
-    }
+
     const toolbarRoot = this.options.paperEl.closest(".schematic-shell");
     this.toolbarController = toolbarRoot
       ? new SchematicToolbarController(toolbarRoot, {
@@ -1813,35 +1809,30 @@ export class SchematicEditor implements SchematicHostedEditor {
     const dock = this.rightDock;
     if (!dock) return;
     const layout = this.options.layout;
+    const { analysisEl } = this.options;
     const visible = layout
       ? layout.isPanelVisible("right")
       : this.options.shellEl.classList.contains("is-right-panel-visible");
-    if (!visible) {
-      dock.ensureExpanded(view);
-      return;
-    }
-    dock.toggle(view);
-  }
-
-  private handleRightDockChange(state: RightDockState) {
-    const layout = this.options.layout;
-    layout?.setRightDockState?.(state);
-    const { analysisEl } = this.options;
-    if (state.expanded.length > 0) {
-      if (layout) {
-        layout.openPanel("right");
-      } else {
-        this.options.shellEl.classList.add("is-right-panel-visible");
-        analysisEl?.setAttribute("aria-hidden", "false");
+    if (visible && dock.activeView() === view) {
+      if (layout) layout.closePanel("right");
+      else {
+        this.options.shellEl.classList.remove("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "true");
       }
       return;
     }
-    if (layout) {
-      layout.closePanel("right");
-    } else {
-      this.options.shellEl.classList.remove("is-right-panel-visible");
-      analysisEl?.setAttribute("aria-hidden", "true");
+    dock.setView(view);
+    if (!visible) {
+      if (layout) layout.openPanel("right");
+      else {
+        this.options.shellEl.classList.add("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "false");
+      }
     }
+  }
+
+  private handleRightDockChange(state: RightDockState) {
+    this.options.layout?.setRightDockState?.(state);
   }
 
   private toggleInstanceTool() {

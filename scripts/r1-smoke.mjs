@@ -63,22 +63,20 @@ try {
 
   await clickSelector(page, "[data-command='netlist']");
   await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false", "netlist did not open the dock");
-  const netlistVisible = await evaluate(page, () => !document.querySelector("[data-right-body='netlist']")?.hidden);
-  if (!netlistVisible) throw new Error("netlist panel is not visible");
+  await waitFor(page, () => document.querySelector("[data-right-panel='netlist']")?.hidden === false, "netlist panel is not visible");
   await clickSelector(page, "[data-right-view='diagnostics']");
-  await waitFor(page, () => !document.querySelector("[data-right-body='diagnostics']")?.hidden, "diagnostics panel did not expand");
-  const stacked = await evaluate(page, () => ({
-    netlist: !document.querySelector("[data-right-body='netlist']")?.hidden,
-    diagnostics: !document.querySelector("[data-right-body='diagnostics']")?.hidden
+  await waitFor(page, () => document.querySelector("[data-right-panel='diagnostics']")?.hidden === false, "diagnostics panel did not switch");
+  const tabSwitch = await evaluate(page, () => ({
+    netlist: document.querySelector("[data-right-panel='netlist']")?.hidden,
+    diagnostics: document.querySelector("[data-right-panel='diagnostics']")?.hidden
   }));
-  if (!stacked.netlist || !stacked.diagnostics) throw new Error("views did not stack: " + JSON.stringify(stacked));
-
+  if (tabSwitch.netlist !== true || tabSwitch.diagnostics !== false) {
+    throw new Error("dock tabs did not switch exclusively: " + JSON.stringify(tabSwitch));
+  }
   await clickSelector(page, "[data-right-view='netlist']");
-  await waitFor(page, () => document.querySelector("[data-right-body='netlist']")?.hidden === true, "netlist did not collapse");
-  const diagnosticsStillOpen = await evaluate(page, () => !document.querySelector("[data-right-body='diagnostics']")?.hidden);
-  if (!diagnosticsStillOpen) throw new Error("collapsing one view closed the other");
-  await clickSelector(page, "[data-right-view='diagnostics']");
-  await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "true", "closing the last view did not close the dock");
+  await waitFor(page, () => document.querySelector("[data-right-panel='netlist']")?.hidden === false, "netlist tab did not switch back");
+  await clickSelector(page, "[data-command='netlist']");
+  await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "true", "active toolbar view did not close the dock");
 
   await key("l", "KeyL", 10);
   await waitFor(page, () => document.querySelector("[data-schematic-log]")?.hidden === false, "Ctrl+Shift+L did not open the log");
@@ -106,18 +104,18 @@ try {
   if (Math.abs((logAfter.stored ?? 0) - logAfter.height) > 2) throw new Error("log height was not persisted: " + JSON.stringify(logAfter));
 
   await clickSelector(page, "[data-command='analysis']");
-  await waitFor(page, () => !document.querySelector("[data-right-body='analysis']")?.hidden, "analysis did not reopen");
+  await waitFor(page, () => document.querySelector("[data-right-panel='analysis']")?.hidden === false, "analysis did not reopen");
   await clickSelector(page, "[data-sidebar-tab='properties']");
   await navigate(page, server.url);
   await waitFor(page, () => Boolean(document.querySelector("[data-schematic-paper] svg")), "editor did not remount after reload");
   const persisted = await evaluate(page, () => ({
     tab: document.querySelector(".schematic-sidebar-tab.is-active")?.getAttribute("data-sidebar-tab"),
     dockVisible: document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false",
-    analysisOpen: !document.querySelector("[data-right-body='analysis']")?.hidden,
+    analysisOpen: document.querySelector("[data-right-panel='analysis']")?.hidden === false,
     logHeight: Number.parseFloat((document.querySelector("[data-schematic-log]")?.style.height ?? "0")) || 0,
     layout: JSON.parse(localStorage.getItem("at-schematic-layout") ?? "null")
   }));
-  if (persisted.tab !== "properties" || !persisted.dockVisible || !persisted.analysisOpen) {
+  if (persisted.tab !== "properties" || !persisted.dockVisible || !persisted.analysisOpen || persisted.layout?.rightActiveView !== "analysis") {
     throw new Error("UI state did not persist: " + JSON.stringify(persisted));
   }
   if (Math.abs(persisted.logHeight - logAfter.height) > 2) {

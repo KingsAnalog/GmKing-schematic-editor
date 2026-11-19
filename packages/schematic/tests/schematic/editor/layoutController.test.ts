@@ -12,7 +12,6 @@ const expanded: SchematicLayoutState = {
   leftCollapsed: false,
   rightCollapsed: false,
   rightActiveView: "analysis",
-  rightExpanded: ["analysis"],
   sidebarTab: "library",
   logHeight: 230
 };
