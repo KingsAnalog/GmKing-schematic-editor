@@ -315,12 +315,9 @@ export class InstanceBrowser {
         const preview = element(doc, "span", "browser-cell-preview");
         preview.innerHTML = paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate() });
         const copy = element(doc, "span", "browser-cell-copy");
-        const label = deviceItemLabel(item);
-        copy.append(
-          element(doc, "span", "browser-option-name", deviceItemName(item)),
-          element(doc, "span", "browser-option-meta", label.toLowerCase() === deviceItemName(item).toLowerCase() ? "" : label)
-        );
-        button.append(preview, copy);
+        copy.append(element(doc, "span", "browser-option-name", deviceItemName(item)));
+        const badge = element(doc, "span", "browser-cell-badge", deviceItemLabel(item));
+        button.append(preview, copy, badge);
         list.append(button);
       });
     }

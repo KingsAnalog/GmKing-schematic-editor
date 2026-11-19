@@ -146,12 +146,11 @@ export class SidebarLibrary {
     const name = document.createElement("span");
     name.className = "library-cell-name";
     name.textContent = deviceItemName(item);
-    const meta = document.createElement("span");
-    meta.className = "library-cell-meta";
-    const label = deviceItemLabel(item);
-    meta.textContent = label.toLowerCase() === deviceItemName(item).toLowerCase() ? "" : label;
-    copy.append(name, meta);
-    button.append(preview, copy);
+    copy.append(name);
+    const badge = document.createElement("span");
+    badge.className = "library-cell-badge";
+    badge.textContent = deviceItemLabel(item);
+    button.append(preview, copy, badge);
     return button;
   }
 
