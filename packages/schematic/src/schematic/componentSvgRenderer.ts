@@ -6,8 +6,6 @@ import { componentCellPosition } from "./view-geometry";
 import type { ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
-import { isShapeInstance } from "./shapeModel";
-import { renderShapeSvg } from "./shapeSvgRenderer";
 
 const PORT_MARKER_SIZE = 3 * SYMBOL_STROKE_WIDTH;
 
@@ -18,7 +16,6 @@ export function renderComponentSvg(
   component: ComponentInstance,
   options: ComponentSvgRenderOptions = {}
 ) {
-  if (isShapeInstance(component)) return renderShapeSvg(component);
   const model = resolveComponentVisualModel(component, options);
   const offset = { x: -model.frameBox.x, y: -model.frameBox.y };
   const symbolTransform = model.mirrored

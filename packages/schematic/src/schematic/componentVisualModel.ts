@@ -37,9 +37,13 @@ export function resolveComponentVisualModel(instance: ComponentInstance, options
   return {
     ...appearance,
     artworkScale: scale,
-    terminalLeadPath: terminalLeadPath.trim(),
+    terminalLeadPath: instance.type === "rectangle" || instance.type === "triangle"
+      ? ""
+      : terminalLeadPath.trim(),
     def,
     frameBox,
-    visiblePinIds: new Set(def.pins.map(pin => pin.id))
+    visiblePinIds: instance.type === "rectangle" || instance.type === "triangle"
+      ? new Set<string>()
+      : new Set(def.pins.map(pin => pin.id))
   };
 }

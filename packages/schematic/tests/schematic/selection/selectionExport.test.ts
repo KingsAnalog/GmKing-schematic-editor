@@ -413,24 +413,14 @@ describe("schematic selection SVG export", () => {
     expect(unicodeHead.attr("refLabelTail/text")).toBe("3");
   });
 
-  it("renders rectangle names as centered 16px upright literals", () => {
+  it("keeps free rectangle names hidden", () => {
     expect(getComponentDef("resistor").nameFormat).toBe("schematic");
     expect(getComponentDef("rectangle").nameFormat).toBe("literal");
 
     ["PFD", "64C2", "PFD/CP", "÷2"].forEach((ref) => {
       const cell = makeComponentCell(component("rectangle", ref, 100, 120));
-      const centerY = cell.size().height / 2;
-
-      expect(cell.attr("centeredRefLabelPrefix/text"), ref).toBe(ref);
-      expect(cell.attr("centeredRefLabelPrefix/fontSize"), ref).toBe(16);
-      expect(cell.attr("centeredRefLabelPrefix/fontWeight"), ref).toBe(700);
-      expect(cell.attr("centeredRefLabelPrefix/fontStyle"), ref).toBe("normal");
-      expect(cell.attr("centeredRefLabelPrefix/x"), ref).toBe(cell.size().width / 2);
-      expect(cell.attr("centeredRefLabelPrefix/y"), ref).toBe(centerY + 16 * 0.35);
-      expect(cell.attr("centeredRefLabelPrefix/textAnchor"), ref).toBe("middle");
-      expect(cell.attr("centeredRefLabel/dominantBaseline"), ref).toBe("alphabetic");
-      expect(cell.attr("centeredRefLabelHead/text"), ref).toBe("");
-      expect(cell.attr("centeredRefLabelTail/text"), ref).toBe("");
+      expect(cell.attr("centeredRefLabel/opacity"), ref).toBe(0);
+      expect(cell.attr("label/opacity"), ref).toBe(0);
     });
   });
 

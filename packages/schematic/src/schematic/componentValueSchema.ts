@@ -76,13 +76,6 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
     valid: value => value.length <= 256,
     expected: "a layer id"
   },
-  {
-    key: "shape:",
-    prefix: true,
-    supports: component => component.type === "annotation" && typeof component.values["shape:kind"] === "string",
-    valid: value => value.length <= 4096,
-    expected: "a shape setting string"
-  },
   ...["pinVisible:", "pinSymbolVisible:", "pinMode:"].map(key => ({
     ...enumeration(key, key === "pinMode:" ? ["positive", "negative", "output"] : booleanValues),
     prefix: true

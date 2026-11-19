@@ -48,7 +48,7 @@ describe("rectangle component model", () => {
     const cell = makeComponentCell(rectangle, { selected: true, resizeHandles: true });
     expect(cell.attr("symbolBody/d")).toBe("M 20 20 L 100 20 L 100 60 L 20 60 Z");
     expect(cell.attr("symbolBody/strokeWidth")).toBe(2 * SYMBOL_STROKE_WIDTH);
-    expect(cell.attr("symbolPinMarks/d")).toBe("M 0 40 L 20 40 M 120 40 L 100 40");
+    expect(cell.attr("symbolPinMarks/d")).toBe("");
     expect(cell.attr("symbolPinMarks/strokeWidth")).toBe(SYMBOL_STROKE_WIDTH);
     expect(cell.attr("rectangleResizeNw/opacity")).toBe(1);
   });

@@ -21,7 +21,8 @@
     "test:interactions": "node scripts/interaction-smoke.mjs",
     "test:r1": "npm run build:lib && npm run build:web && node scripts/r1-smoke.mjs",
     "test:r2": "npm run build:lib && npm run build:web && node scripts/r2-smoke.mjs",
-    "test:r3": "npm run build:lib && npm run build:web && node scripts/r3-shapes.mjs"
+    "test:r3": "npm run build:lib && npm run build:web && node scripts/r3-library-shapes.mjs",
+    "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"
   },
   "devDependencies": {
     "@codemirror/state": "6.7.1",

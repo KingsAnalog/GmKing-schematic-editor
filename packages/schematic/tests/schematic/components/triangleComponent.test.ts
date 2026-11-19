@@ -22,9 +22,9 @@ describe("triangle component", () => {
     expect(resolveComponentDef(component).pins.map(pin => pin.id)).toEqual(["bc-1", "a"]);
     expect(componentPinPoint(component, "bc-1")).toEqual({ x: 140, y: 200 });
     expect(componentPinPoint(component, "a")).toEqual({ x: 260, y: 200 });
-    expect(makeComponentCell(component).attr("symbolPinMarks/d")).toBe("M 60 100 L 60 120 M 60 20 L 60 0");
+    expect(makeComponentCell(component).attr("symbolPinMarks/d")).toBe("");
     const svg = renderComponentSvg(component);
-    expect(svg).toContain('M 60 20 L 60 0');
+    expect(svg).not.toContain('data-selector="symbolPinMarks"');
     const document = fixtureDocument({ components: [component] });
     expect(parseSchematicDocumentFile(serializeSchematicDocumentFile(document)).components).toEqual(document.components);
   });
@@ -59,7 +59,7 @@ describe("triangle component", () => {
     expect(cell.attr("symbolPinMarks/strokeWidth")).toBe(2);
     const svg = renderComponentSvg(component);
     expect(svg).toContain(`d="${cell.attr("symbolBody/d")}"`);
-    expect(svg).toContain(`d="${cell.attr("symbolPinMarks/d")}"`);
+    expect(svg).not.toContain('data-selector="symbolPinMarks"');
     for (const vertex of ["A", "B", "C"]) {
       expect(cell.attr(`triangleResize${vertex}/opacity`)).toBe(1);
       expect(makeComponentCell(component, { resizeHandles: true, presentationMode: true }).attr(`triangleResize${vertex}/opacity`)).toBe(0);

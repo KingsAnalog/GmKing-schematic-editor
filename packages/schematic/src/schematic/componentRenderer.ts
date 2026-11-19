@@ -12,8 +12,6 @@ import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
-import { isShapeInstance } from "./shapeModel";
-import { makeShapeCell } from "./shapeRenderer";
 import {
   symbolContentCellAttrs,
   symbolContentDefaultAttrs,
@@ -175,7 +173,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
         "aria-label": `Drag vertex ${vertex.toUpperCase()}` }],
       [`triangleVertex${vertex.toUpperCase()}`, { x: x + 7, y: y - 7, text: vertex.toUpperCase(),
         fill: "#005f9e", fontFamily: SCHEMATIC_FONT_STACK, fontSize: 9,
-        opacity: visible ? 1 : 0, pointerEvents: "none" }]
+        opacity: 0, pointerEvents: "none" }]
     ];
   }));
   return {
@@ -448,7 +446,6 @@ export function makeComponentCell(
   instance: ComponentInstance,
   options: ComponentRenderOptions = {}
 ) {
-  if (isShapeInstance(instance)) return makeShapeCell(instance);
   const model = resolveComponentVisualModel(instance, options);
   const frame = model.frameBox;
   const position = {
@@ -469,7 +466,7 @@ export function makeComponentCell(
           attrs: { portBody: attrs.portBody }
         }
       },
-      items: model.def.pins.map((pin) => {
+      items: instance.type === "rectangle" || instance.type === "triangle" ? [] : model.def.pins.map((pin) => {
         return {
           id: pin.id,
           group: "pin",

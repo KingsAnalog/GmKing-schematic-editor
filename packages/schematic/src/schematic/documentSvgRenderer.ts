@@ -6,7 +6,6 @@ import { pointKey } from "./geometry";
 import { renderSchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
-import { isShapeInstance } from "./shapeModel";
 import { svgIdFragment } from "./svgId";
 import type { Rect } from "./view-geometry";
 import type { SchematicContent, SchematicDocument } from "./types";
@@ -61,7 +60,7 @@ export function renderSchematicDocumentSvg(
     {
       symbolTemplate: document.symbolTemplate,
       components: document.components.filter(component =>
-        !isShapeInstance(component) || !hiddenLayers.has(component.values["shape:layerId"] ?? "")
+        !hiddenLayers.has(component.values["layer:id"] ?? "")
       ),
       inductorCouplings: document.inductorCouplings,
       wires: document.wires,

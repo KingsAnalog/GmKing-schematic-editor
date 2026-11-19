@@ -551,7 +551,8 @@ export function resolveRazaviComponentVisualModel(
           visiblePinIds.has("ctrl")
         )
       : symbolPath(def.symbol, def.size.width, def.size.height);
-  const pinMarksPath = def.type === "inverter"
+  const freeLibraryShape = def.type === "rectangle" || def.type === "triangle";
+  const pinMarksPath = freeLibraryShape ? "" : def.type === "inverter"
     ? inverterSupplyLeadSymbol(def.size.width, def.size.height, visiblePinIds)
     : def.symbol === "plus"
     ? plusPinRoleSymbols(
@@ -604,7 +605,7 @@ export function resolveRazaviComponentVisualModel(
   const preview = !!options.preview;
   const frameBox = componentLocalFrameBox(instance);
   const symbolBox = componentSymbolBounds(def);
-  const showPins = !options.presentationMode && !preview;
+  const showPins = !freeLibraryShape && !options.presentationMode && !preview;
   const isAnnotation = def.symbol === "annotation";
   const showName = componentLabelVisible(instance);
   const displayValue = componentValueVisible(instance) ? componentDisplayValue(instance, def) : "";
@@ -630,7 +631,8 @@ export function resolveRazaviComponentVisualModel(
     valueLabelText,
     options.flipReferenceLabelSide
   );
-  const showRefLabel = def.type !== "vdd"
+  const showRefLabel = !freeLibraryShape
+    && def.type !== "vdd"
     && (showName || (!converterValueEmbedded && !!displayValue))
     && !isAnnotation
     && !preview;
@@ -710,7 +712,7 @@ export function resolveRazaviComponentVisualModel(
     showPins,
     visiblePinIds,
     isAnnotation,
-    showSymbolLabel: !!symbolLabelText || !!vddLabelText || componentLabelVisible(instance),
+    showSymbolLabel: !freeLibraryShape && (!!symbolLabelText || !!vddLabelText || componentLabelVisible(instance)),
     labelText,
     refLabelAttrs,
     showRefLabel,

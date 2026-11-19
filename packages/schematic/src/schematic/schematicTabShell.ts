@@ -136,16 +136,6 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
         )
       ),
       el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
-      el("div", { class: "shape-picker", "data-shape-picker": true, hidden: true, role: "menu", "aria-label": "Draw shape" },
-        el("button", { type: "button", "data-shape-tool": "rectangle" }, "Rectangle"),
-        el("button", { type: "button", "data-shape-tool": "triangle" }, "Triangle"),
-        el("button", { type: "button", "data-shape-tool": "ellipse" }, "Ellipse"),
-        el("button", { type: "button", "data-shape-tool": "line" }, "Line"),
-        el("button", { type: "button", "data-shape-tool": "polyline" }, "Polyline"),
-        el("button", { type: "button", "data-shape-tool": "polygon" }, "Polygon"),
-        el("button", { type: "button", "data-shape-tool": "circle" }, "Circle"),
-        el("button", { type: "button", "data-shape-tool": "arc" }, "Arc")
-      ),
       el("div", { class: "schematic-paper", tabindex: "0", "aria-label": "Schematic canvas", "data-schematic-paper": true }),
       el("div", {
         class: "schematic-log-drawer",
