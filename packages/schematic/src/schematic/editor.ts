@@ -275,7 +275,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private netlistRefreshTimer: number | null = null;
   private activeLayerId = "layer-1";
   private pendingShapeKind: ShapeKind | null = null;
-  private shapeDrawStart: Point | null = null;
+  private shapeDraftPoints: Point[] = [];
   private lastLoggedStatus = "";
   private lastHadSelection = false;
   private readonly contextMenuController;
@@ -1082,6 +1082,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.propertyPanelController.bind();
     this.bindMosParamEvents();
     this.bindLayerEvents();
+    this.bindShapePropertyEvents();
   }
 
   private layers(): SchematicLayer[] {
@@ -1105,9 +1106,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       const down = target.closest<HTMLElement>("[data-layer-down]");
       const select = target.closest<HTMLElement>("[data-layer-select]");
       const row = target.closest<HTMLElement>("[data-layer-id]");
-      const shapeAdd = target.closest<HTMLElement>("[data-shape-add]");
-      const shapeDelete = target.closest<HTMLElement>("[data-shape-delete]");
-      const shapeZ = target.closest<HTMLElement>("[data-shape-z]");
       if (add) { event.preventDefault(); this.addLayer(); return; }
       if (remove) { event.preventDefault(); this.deleteLayer(); return; }
       if (up || down) {
@@ -1122,28 +1120,12 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.renderLayersPanel();
         return;
       }
-      if (shapeAdd) {
-        event.preventDefault();
-        const kind = shapeAdd.dataset.shapeAdd;
-        if (!isShapeKind(kind)) return;
-        if (kind === "rectangle" || kind === "triangle" || kind === "ellipse") {
-          this.pendingShapeKind = kind;
-          this.options.shellEl.classList.add("is-drawing-shape");
-          this.setStatus(`Drag on the canvas to draw a ${kind}, or press Esc to cancel.`);
-          this.focusCanvas();
-          return;
-        }
-        this.addShape(kind);
-        return;
-      }
-      if (shapeDelete) { event.preventDefault(); this.deleteSelectedShape(); return; }
-      if (shapeZ) { event.preventDefault(); this.raiseShape(shapeZ.dataset.shapeZ === "up" ? 1 : -1); }
     }, { signal });
     root.addEventListener("dblclick", (event) => {
       const select = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-layer-select]");
       const id = select?.dataset.layerSelect;
       if (!select || !id) return;
-      const name = this.host.ownerWindow.prompt("Layer name", select.textContent ?? "");
+      const name = this.host.ownerWindow.prompt("Layer name", select.dataset.layerName ?? select.textContent ?? "");
       if (name?.trim()) this.updateLayer(id, { name: name.trim() });
     }, { signal });
     root.addEventListener("change", (event) => {
@@ -1156,8 +1138,44 @@ export class SchematicEditor implements SchematicHostedEditor {
         else this.updateLayer(layerId, { name: target.value });
         return;
       }
+    }, { signal });
+  }
+
+  private bindShapePropertyEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    if (!root) return;
+    root.addEventListener("change", (event) => {
+      const target = event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+      if (!target) return;
       const field = target.dataset.shapeField;
-      if (field) this.updateSelectedShape(field, target.value);
+      if (field) {
+        this.updateSelectedShape(field, target.value);
+        return;
+      }
+      if (target.hasAttribute("data-property-layer")) {
+        const component = this.selectedTransformObjects().components[0];
+        if (!component) return;
+        this.transact((draft) => {
+          const instance = draft.components.find(item => item.id === component.id);
+          if (instance) instance.values["layer:id"] = target.value;
+        }, { origin: "editor", reason: "component-layer" });
+        this.renderDocument();
+        this.renderLayersPanel();
+        this.syncComponentLayer();
+      }
+    }, { signal });
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      const shapeDelete = target?.closest<HTMLElement>("[data-shape-delete]");
+      const shapeZ = target?.closest<HTMLElement>("[data-shape-z]");
+      if (shapeDelete) {
+        event.preventDefault();
+        this.deleteSelectedShape();
+      } else if (shapeZ) {
+        event.preventDefault();
+        this.raiseShape(shapeZ.dataset.shapeZ === "up" ? 1 : -1);
+      }
     }, { signal });
   }
 
@@ -1183,8 +1201,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     const id = this.activeLayerId;
-    if (this.document.components.some(component => isShapeInstance(component) && component.values["shape:layerId"] === id)) {
-      this.setStatus("Move or delete shapes on this layer first.");
+    if (this.document.components.some(component => this.componentLayerId(component) === id)) {
+      this.setStatus("Move or delete objects on this layer first.");
       return;
     }
     this.transact((draft) => {
@@ -1213,7 +1231,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.renderLayersPanel();
   }
 
-  private addShape(kind: ShapeKind, geometry: { center: Point; width: number; height: number } | null = null) {
+  private addShape(
+    kind: ShapeKind,
+    geometry: { center: Point; width: number; height: number; values?: Record<string, string> } | null = null
+  ) {
     const layers = this.layers();
     if (!layers.some(layer => layer.id === this.activeLayerId)) this.activeLayerId = layers[0]?.id ?? "layer-1";
     const center = geometry?.center ?? snapPoint(this.viewportCenterPoint());
@@ -1236,13 +1257,14 @@ export class SchematicEditor implements SchematicHostedEditor {
               "shape:width": String(Math.max(20, Math.round(geometry.width))),
               "shape:height": String(Math.max(20, Math.round(geometry.height)))
             }
-          : {})
+          : {}),
+        ...(geometry?.values ?? {})
       }
     };
     this.transact((draft) => { draft.components.push(shape); }, { origin: "editor", reason: "add-shape" });
     this.selectionSession.setMixed([id], []);
     this.finishSelectionChange();
-    this.sidebarLibrary.showLayers();
+    this.sidebarLibrary.showProperties();
     this.renderLayersPanel();
   }
 
@@ -1285,6 +1307,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       strokeWidth: "shape:strokeWidth",
       dash: "shape:dash",
       points: "shape:points",
+      startArrow: "shape:startArrow",
+      endArrow: "shape:endArrow",
+      arrowSize: "shape:arrowSize",
       z: "shape:z"
     };
     const key = keyMap[field];
@@ -1293,7 +1318,18 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.transact((draft) => {
         const target = draft.components.find(component => component.id === shape.id);
         if (!target) return;
-        Object.assign(target.values, defaultShapeValues(value, target.values["shape:layerId"] || this.activeLayerId, Number(target.values["shape:z"] ?? 0) || 0));
+        const preserve = [
+          "shape:fill", "shape:stroke", "shape:strokeWidth", "shape:dash",
+          "shape:startArrow", "shape:endArrow", "shape:arrowSize", "shape:layerId", "shape:z"
+        ].reduce<Record<string, string>>((values, key) => {
+          if (target.values[key] !== undefined) values[key] = target.values[key];
+          return values;
+        }, {});
+        Object.assign(
+          target.values,
+          defaultShapeValues(value, target.values["shape:layerId"] || this.activeLayerId, Number(target.values["shape:z"] ?? 0) || 0),
+          preserve
+        );
       }, { origin: "editor", reason: "shape-kind" });
       this.finishSelectionChange();
       this.renderLayersPanel();
@@ -1308,7 +1344,17 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
     this.transact((draft) => {
       const target = draft.components.find(component => component.id === shape.id);
-      if (target) target.values[key] = value;
+      if (!target) return;
+      target.values[key] = value;
+      if (field === "points") {
+        const points = parseShapePoints(value);
+        const xs = points.map(point => point.x);
+        const ys = points.map(point => point.y);
+        if (points.length > 1) {
+          target.values["shape:width"] = String(Math.max(20, Math.max(...xs) - Math.min(...xs)));
+          target.values["shape:height"] = String(Math.max(20, Math.max(...ys) - Math.min(...ys)));
+        }
+      }
     }, { origin: "editor", reason: "shape-property" });
     this.finishSelectionChange();
     this.syncShapeForm();
@@ -1340,7 +1386,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       select.type = "button";
       select.className = "layer-select";
       select.dataset.layerSelect = layer.id;
-      select.textContent = layer.name;
+      select.dataset.layerName = layer.name;
+      const count = this.document.components.filter(component => this.componentLayerId(component) === layer.id).length;
+      select.textContent = `${layer.name} (${count})`;
       const up = doc.createElement("button");
       up.type = "button";
       up.textContent = "↑";
@@ -1359,7 +1407,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncShapeForm(shape = this.selectedShape()) {
-    const form = this.options.paletteEl.querySelector<HTMLElement>("[data-shape-form]");
+    const form = this.options.propertyEl.querySelector<HTMLElement>("[data-property-shape-form]");
+    const componentForm = this.options.propertyEl.querySelector<HTMLElement>("[data-property-component-form]");
+    componentForm?.classList.toggle("is-shape", !!shape);
     if (!form) return;
     form.hidden = !shape;
     if (!shape) return;
@@ -1386,8 +1436,34 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     const kind = values["shape:kind"] ?? "rectangle";
     form.querySelectorAll<HTMLElement>("[data-shape-radius-row]").forEach(row => { row.hidden = kind !== "rectangle"; });
-    form.querySelectorAll<HTMLElement>("[data-shape-points-row]").forEach(row => { row.hidden = kind !== "polyline" && kind !== "polygon"; });
+    form.querySelectorAll<HTMLElement>("[data-shape-points-row]").forEach(row => {
+      row.hidden = kind !== "polyline" && kind !== "polygon" && kind !== "line" && kind !== "triangle";
+    });
+    form.querySelectorAll<HTMLElement>("[data-shape-size-rows]").forEach(row => {
+      row.hidden = kind === "line" || kind === "polyline" || kind === "polygon" || kind === "triangle";
+    });
     form.querySelectorAll<HTMLElement>("[data-shape-arc-rows]").forEach(row => { row.hidden = kind !== "arc"; });
+    form.querySelectorAll<HTMLElement>("[data-shape-arrow-rows]").forEach(row => {
+      row.hidden = kind !== "line" && kind !== "polyline";
+    });
+  }
+
+  private syncComponentLayer() {
+    const row = this.options.propertyEl.querySelector<HTMLElement>("[data-property-layer-row]");
+    const select = this.options.propertyEl.querySelector<HTMLSelectElement>("[data-property-layer]");
+    if (!row || !select) return;
+    const components = this.selectedTransformObjects().components;
+    const component = components.length === 1 ? components[0] : null;
+    row.hidden = !component || isShapeInstance(component);
+    if (!component || isShapeInstance(component)) return;
+    const layers = this.layers();
+    select.replaceChildren(...layers.map((layer) => {
+      const option = select.ownerDocument.createElement("option");
+      option.value = layer.id;
+      option.textContent = layer.name;
+      return option;
+    }));
+    select.value = component.values["layer:id"] ?? layers[0]?.id ?? "layer-1";
   }
 
   private bindMosParamEvents() {
@@ -1453,30 +1529,157 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private bindShapeDrawingEvents() {
     const { signal } = this.lifecycleController;
+    this.options.shellEl.addEventListener("click", (event) => {
+      const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-shape-tool]");
+      const kind = target?.dataset.shapeTool;
+      if (!isShapeKind(kind)) return;
+      event.preventDefault();
+      this.beginShapeDrawing(kind);
+    }, { signal });
     this.options.paperEl.addEventListener("pointerdown", (event) => {
       if (!this.pendingShapeKind || event.button !== 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      this.shapeDrawStart = this.localPointFromClient(event.clientX, event.clientY);
+      const point = snapPoint(this.localPointFromClient(event.clientX, event.clientY));
+      this.addShapeDraftPoint(point);
     }, { capture: true, signal });
-    this.host.ownerWindow.addEventListener("pointerup", (event) => {
-      const kind = this.pendingShapeKind;
-      const start = this.shapeDrawStart;
-      if (!kind || !start || event.button !== 0) return;
+    this.options.paperEl.addEventListener("dblclick", (event) => {
+      if (!this.pendingShapeKind) return;
       event.preventDefault();
-      const end = this.localPointFromClient(event.clientX, event.clientY);
-      const width = Math.abs(end.x - start.x);
-      const height = Math.abs(end.y - start.y);
-      const center = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-      this.pendingShapeKind = null;
-      this.shapeDrawStart = null;
-      this.options.shellEl.classList.remove("is-drawing-shape");
-      if (width < 10 || height < 10) {
-        this.addShape(kind, { center: start, width: 140, height: 90 });
-      } else {
-        this.addShape(kind, { center, width, height });
+      event.stopImmediatePropagation();
+      this.finishShapeDraft();
+    }, { capture: true, signal });
+  }
+
+  private toggleShapePicker() {
+    const picker = this.options.shellEl.querySelector<HTMLElement>("[data-shape-picker]");
+    if (!picker) return;
+    picker.hidden = !picker.hidden;
+    if (!picker.hidden) {
+      this.setStatus("Choose a shape to draw.");
+      picker.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+  }
+
+  private beginShapeDrawing(kind: ShapeKind) {
+    const picker = this.options.shellEl.querySelector<HTMLElement>("[data-shape-picker]");
+    if (picker) picker.hidden = true;
+    this.pendingShapeKind = kind;
+    this.shapeDraftPoints = [];
+    this.options.shellEl.classList.add("is-drawing-shape");
+    const count = this.shapePointCount(kind);
+    this.setStatus(count > 0
+      ? `Draw ${kind}: click ${count} grid points; Esc cancels.`
+      : `Draw ${kind}: click grid points; double-click to finish; Esc cancels.`);
+    this.focusCanvas();
+  }
+
+  private shapePointCount(kind: ShapeKind) {
+    if (kind === "rectangle" || kind === "circle") return 2;
+    if (kind === "triangle" || kind === "arc") return 3;
+    if (kind === "ellipse") return 4;
+    return 0;
+  }
+
+  private addShapeDraftPoint(point: Point) {
+    const kind = this.pendingShapeKind;
+    if (!kind) return;
+    const last = this.shapeDraftPoints[this.shapeDraftPoints.length - 1];
+    if (last && last.x === point.x && last.y === point.y) return;
+    this.shapeDraftPoints.push(point);
+    const required = this.shapePointCount(kind);
+    if (required > 0 && this.shapeDraftPoints.length >= required) {
+      this.finishShapeDraft();
+      return;
+    }
+    const remaining = required > 0 ? required - this.shapeDraftPoints.length : 0;
+    this.setStatus(required > 0
+      ? `${kind}: ${remaining} more point${remaining === 1 ? "" : "s"}.`
+      : `${kind}: ${this.shapeDraftPoints.length} points; double-click to finish.`);
+  }
+
+  private finishShapeDraft() {
+    const kind = this.pendingShapeKind;
+    if (!kind) return;
+    const points = [...this.shapeDraftPoints];
+    const required = this.shapePointCount(kind);
+    if (required > 0 && points.length < required) return;
+    if (required === 0 && points.length < 2) return;
+    const last = points[points.length - 1];
+    const previous = points[points.length - 2];
+    if (last && previous && last.x === previous.x && last.y === previous.y) points.pop();
+    if ((kind === "polygon" && points.length < 3) || (kind === "line" && points.length < 2)) return;
+    this.pendingShapeKind = null;
+    this.shapeDraftPoints = [];
+    this.options.shellEl.classList.remove("is-drawing-shape");
+    const values = this.shapeValuesFromPoints(kind, points);
+    if (!values) {
+      this.setStatus("Shape needs a non-zero size.");
+      return;
+    }
+    const center = { x: Number(values.centerX), y: Number(values.centerY) };
+    delete values.centerX;
+    delete values.centerY;
+    this.addShape(kind, {
+      center,
+      width: Number(values["shape:width"]),
+      height: Number(values["shape:height"]),
+      values
+    });
+  }
+
+  private shapeValuesFromPoints(kind: ShapeKind, points: Point[]): Record<string, string> | null {
+    if (points.length < 2) return null;
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    const local = points.map(point => ({ x: point.x - center.x, y: point.y - center.y }));
+    const values = defaultShapeValues(kind, this.activeLayerId, 0);
+    values["shape:width"] = String(Math.max(20, maxX - minX));
+    values["shape:height"] = String(Math.max(20, maxY - minY));
+    values["shape:points"] = local.map(point => `${point.x},${point.y}`).join(" ");
+    values.centerX = String(center.x);
+    values.centerY = String(center.y);
+    if (kind === "rectangle") {
+      values["shape:points"] = [
+        `${minX - center.x},${minY - center.y}`,
+        `${maxX - center.x},${minY - center.y}`,
+        `${maxX - center.x},${maxY - center.y}`,
+        `${minX - center.x},${maxY - center.y}`
+      ].join(" ");
+    }
+    if (kind === "circle") {
+      const radius = Math.max(10, Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y));
+      values["shape:width"] = String(radius * 2);
+      values["shape:height"] = String(radius * 2);
+      values["shape:points"] = `0,0 ${Math.round(radius)},0`;
+      values.centerX = String(points[0].x);
+      values.centerY = String(points[0].y);
+    }
+    if (kind === "ellipse" && points.length >= 4) {
+      const major = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+      const minor = Math.hypot(points[3].x - points[2].x, points[3].y - points[2].y);
+      values["shape:width"] = String(Math.max(20, major));
+      values["shape:height"] = String(Math.max(20, minor));
+      values.centerX = String((points[0].x + points[1].x) / 2);
+      values.centerY = String((points[0].y + points[1].y) / 2);
+    }
+    if (kind === "arc" && points.length >= 3) {
+      const arc = circleThroughPoints(points[0], points[1], points[2]);
+      if (arc) {
+        values["shape:width"] = String(arc.radius * 2);
+        values["shape:height"] = String(arc.radius * 2);
+        values["shape:startAngle"] = String(arc.startAngle);
+        values["shape:endAngle"] = String(arc.endAngle);
+        values.centerX = String(arc.center.x);
+        values.centerY = String(arc.center.y);
       }
-    }, { signal });
+    }
+    return values;
   }
 
   private bindGlobalDocumentWindowInteractions() {
@@ -1820,7 +2023,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       event.preventDefault();
       event.stopPropagation();
       this.pendingShapeKind = null;
-      this.shapeDrawStart = null;
+      this.shapeDraftPoints = [];
       this.options.shellEl.classList.remove("is-drawing-shape");
       this.setStatus("Shape drawing canceled.");
       return;
@@ -2023,6 +2226,9 @@ export class SchematicEditor implements SchematicHostedEditor {
         break;
       case "open-library":
         this.openLibraryPanel();
+        break;
+      case "open-shape-picker":
+        this.toggleShapePicker();
         break;
       case "open-right-view":
         this.openRightView(intent.view);
@@ -2584,9 +2790,16 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
+    if (outcome.source === "placement") {
+      outcome.result.selectedIds.forEach((id) => {
+        const component = this.document.components.find(item => item.id === id);
+        if (component) component.values["layer:id"] = this.activeLayerId;
+      });
+    }
     this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
     applyNormalizedDocumentWires(this.document);
     this.renderDocument();
+    if (outcome.source === "placement") this.renderLayersPanel();
     this.consumeHistoryIntent(outcome.result);
     if (outcome.nextPlacementItem) {
       this.instanceSelector.prepareNextPlacementInput(outcome.nextPlacementItem);
@@ -3182,11 +3395,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
-    this.graphAdapter.addCells(
-      this.document.components
-        .filter(component => !isShapeInstance(component))
-        .map((component) => this.makeComponentCell(component))
-    );
+    this.graphAdapter.addCells(this.sortedLayerCells());
     this.graphAdapter.addCells(this.document.wires.map((wire) => this.makeWireCell(wire)));
     const resolution = resolveSchematicNets(this.document);
     this.netResolutionCache = resolution;
@@ -3198,7 +3407,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       })
     ));
     this.junctionRenderCoordinator.refreshFull(resolution);
-    this.graphAdapter.addCells(this.sortedShapeCells());
     this.syncSelectionStyles({ resolution });
     this.renderNotes();
     this.transientToolSession.projectActivePreview(
@@ -3316,27 +3524,49 @@ export class SchematicEditor implements SchematicHostedEditor {
     return parseJunctionKey(key);
   }
 
-  private sortedShapeCells() {
+  private layersById() {
     const layers: SchematicLayer[] = this.document.layers ?? defaultLayers();
-    const layerIndex = new Map(layers.map((layer, index) => [layer.id, index]));
-    const visible = new Map(layers.map(layer => [layer.id, layer.visible !== false]));
-    const locked = new Map(layers.map(layer => [layer.id, layer.locked === true]));
+    return {
+      index: new Map(layers.map((layer, index) => [layer.id, index])),
+      visible: new Map(layers.map(layer => [layer.id, layer.visible !== false])),
+      locked: new Map(layers.map(layer => [layer.id, layer.locked === true])),
+      first: layers[0]?.id ?? "layer-1"
+    };
+  }
+
+  private componentLayerId(component: ComponentInstance) {
+    const layers = this.layersById();
+    return isShapeInstance(component)
+      ? component.values["shape:layerId"] ?? layers.first
+      : component.values["layer:id"] ?? layers.first;
+  }
+
+  private sortedLayerCells() {
+    const layers = this.layersById();
     return this.document.components
-      .filter(isShapeInstance)
-      .filter((shape) => visible.get(shape.values["shape:layerId"] ?? "") !== false)
+      .filter((component) => layers.visible.get(this.componentLayerId(component)) !== false)
       .sort((first, second) => {
-        const firstLayer = layerIndex.get(first.values["shape:layerId"] ?? "") ?? 0;
-        const secondLayer = layerIndex.get(second.values["shape:layerId"] ?? "") ?? 0;
+        const firstLayer = layers.index.get(this.componentLayerId(first)) ?? 0;
+        const secondLayer = layers.index.get(this.componentLayerId(second)) ?? 0;
         if (firstLayer !== secondLayer) return firstLayer - secondLayer;
-        const firstZ = Number(first.values["shape:z"] ?? 0);
-        const secondZ = Number(second.values["shape:z"] ?? 0);
+        const firstZ = Number(first.values[isShapeInstance(first) ? "shape:z" : "layer:z"] ?? 0);
+        const secondZ = Number(second.values[isShapeInstance(second) ? "shape:z" : "layer:z"] ?? 0);
         if (firstZ !== secondZ) return firstZ - secondZ;
-        return first.id.localeCompare(second.id);
+        return this.document.components.indexOf(first) - this.document.components.indexOf(second);
       })
-      .map(shape => makeShapeCell(shape, {
-        locked: locked.get(shape.values["shape:layerId"] ?? "") === true,
-        selected: this.selectionSession.isCellSelected(shape.id)
-      }));
+      .map((component) => {
+        const layerId = this.componentLayerId(component);
+        const locked = layers.locked.get(layerId) === true;
+        if (isShapeInstance(component)) {
+          return makeShapeCell(component, {
+            locked,
+            selected: this.selectionSession.isCellSelected(component.id)
+          });
+        }
+        const cell = this.makeComponentCell(component);
+        if (locked) cell.attr({ root: { pointerEvents: "none" } });
+        return cell;
+      });
   }
 
   private makeComponentCell(instance: ComponentInstance, options: { preview?: boolean } = {}) {
@@ -4169,9 +4399,9 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.syncMosParams();
     const shape = this.selectedShape();
     this.syncShapeForm(shape);
-    if (shape && !this.lastHadSelection) this.sidebarLibrary.showLayers();
+    this.syncComponentLayer();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
-    if (hasSelection && !this.lastHadSelection && !shape) this.sidebarLibrary.showProperties();
+    if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();
     this.lastHadSelection = hasSelection;
     const target = this.options.selectionSummaryEl;
     if (!target) return;
@@ -4328,4 +4558,26 @@ function isUnmodifiedPrintableKey(event: KeyboardEvent) {
 
 function isElementLike(target: EventTarget | null): target is Element {
   return !!target && typeof (target as Element).closest === "function";
+}
+
+function circleThroughPoints(start: Point, end: Point, middle: Point) {
+  const d = 2 * (start.x * (end.y - middle.y) + end.x * (middle.y - start.y) + middle.x * (start.y - end.y));
+  if (Math.abs(d) < 1e-6) return null;
+  const startSq = start.x * start.x + start.y * start.y;
+  const endSq = end.x * end.x + end.y * end.y;
+  const middleSq = middle.x * middle.x + middle.y * middle.y;
+  const center = {
+    x: (startSq * (end.y - middle.y) + endSq * (middle.y - start.y) + middleSq * (start.y - end.y)) / d,
+    y: (startSq * (middle.x - end.x) + endSq * (start.x - middle.x) + middleSq * (end.x - start.x)) / d
+  };
+  const radius = Math.hypot(start.x - center.x, start.y - center.y);
+  const angle = (point: Point) => Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
+  const startAngle = angle(start);
+  let endAngle = angle(end);
+  const middleAngle = angle(middle);
+  const positive = (value: number) => (value % 360 + 360) % 360;
+  if (positive(middleAngle - startAngle) > positive(endAngle - startAngle)) {
+    endAngle -= 360;
+  }
+  return { center, radius, startAngle, endAngle };
 }

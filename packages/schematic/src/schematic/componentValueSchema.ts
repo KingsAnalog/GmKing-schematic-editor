@@ -70,6 +70,13 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   { key: SPNT_POSITION_VALUE_KEY, supports: only("spntSwitch"), valid: (value, component) => validSpntPosition(component, value), expected: "a switch position from 0 (open) to the number of throws" },
   { key: "vsource:", prefix: true, supports: only("voltageSource"), valid: (value, _component, key) => validVoltageSourceFieldValue(key, value), expected: "a valid voltage source setting" },
   {
+    key: "layer:",
+    prefix: true,
+    supports: () => true,
+    valid: value => value.length <= 256,
+    expected: "a layer id"
+  },
+  {
     key: "shape:",
     prefix: true,
     supports: component => component.type === "annotation" && typeof component.values["shape:kind"] === "string",

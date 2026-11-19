@@ -1,26 +1,30 @@
 import type { ComponentInstance, Point } from "./types";
 
-export type ShapeKind = "rectangle" | "triangle" | "ellipse" | "polyline" | "polygon" | "arc";
+export type ShapeKind = "rectangle" | "triangle" | "ellipse" | "line" | "polyline" | "polygon" | "circle" | "arc";
 
 export const SHAPE_KINDS: readonly ShapeKind[] = [
-  "rectangle", "triangle", "ellipse", "polyline", "polygon", "arc"
+  "rectangle", "triangle", "ellipse", "line", "polyline", "polygon", "circle", "arc"
 ];
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
   rectangle: "Rectangle",
   triangle: "Triangle",
   ellipse: "Ellipse",
+  line: "Line",
   polyline: "Polyline",
   polygon: "Polygon",
+  circle: "Circle",
   arc: "Arc"
 };
 
 const DEFAULTS: Record<ShapeKind, { width: number; height: number; fill: string }> = {
-  rectangle: { width: 140, height: 90, fill: "#e8f0fb" },
-  triangle: { width: 120, height: 110, fill: "#e8f0fb" },
-  ellipse: { width: 110, height: 80, fill: "#e8f0fb" },
+  rectangle: { width: 140, height: 90, fill: "#ffffff" },
+  triangle: { width: 120, height: 110, fill: "#ffffff" },
+  ellipse: { width: 110, height: 80, fill: "#ffffff" },
+  line: { width: 120, height: 0, fill: "none" },
   polyline: { width: 140, height: 100, fill: "none" },
-  polygon: { width: 130, height: 120, fill: "#e8f0fb" },
+  polygon: { width: 130, height: 120, fill: "#ffffff" },
+  circle: { width: 100, height: 100, fill: "#ffffff" },
   arc: { width: 120, height: 100, fill: "none" }
 };
 
@@ -55,12 +59,24 @@ export function defaultShapeValues(
     "shape:strokeWidth": "2",
     "shape:dash": "solid",
     "shape:layerId": layerId,
-    "shape:z": String(zOrder)
+    "shape:z": String(zOrder),
+    "shape:startArrow": "none",
+    "shape:endArrow": "none",
+    "shape:arrowSize": "9"
   };
-  if (kind === "rectangle") values["shape:radius"] = "12";
+  if (kind === "rectangle") {
+    values["shape:radius"] = "0";
+    values["shape:points"] = `-70,-45 70,-45 70,45 -70,45`;
+  }
+  if (kind === "triangle") {
+    values["shape:points"] = `0,-55 60,55 -60,55`;
+  }
   if (kind === "arc") {
     values["shape:startAngle"] = "0";
     values["shape:endAngle"] = "180";
+  }
+  if (kind === "line") {
+    values["shape:points"] = "-60,0 60,0";
   }
   if (kind === "polyline") {
     values["shape:points"] = "-60,30 -25,-30 15,25 60,-25";
@@ -84,6 +100,9 @@ export interface ShapeGeometry {
   points: Point[];
   startAngle: number;
   endAngle: number;
+  startArrow: string;
+  endArrow: string;
+  arrowSize: number;
 }
 
 export function resolveShapeGeometry(instance: ComponentInstance): ShapeGeometry {
@@ -99,6 +118,9 @@ export function resolveShapeGeometry(instance: ComponentInstance): ShapeGeometry
   const points = parsePoints(instance.values["shape:points"], kind);
   const startAngle = finite(instance.values["shape:startAngle"], 0);
   const endAngle = finite(instance.values["shape:endAngle"], 180);
+  const startArrow = instance.values["shape:startArrow"] || "none";
+  const endArrow = instance.values["shape:endArrow"] || "none";
+  const arrowSize = Math.max(2, finite(instance.values["shape:arrowSize"], 9));
   const path = shapePath(kind, width, height, radius, points, startAngle, endAngle);
   return {
     kind,
@@ -112,7 +134,68 @@ export function resolveShapeGeometry(instance: ComponentInstance): ShapeGeometry
     radius,
     points,
     startAngle,
-    endAngle
+    endAngle,
+    startArrow,
+    endArrow,
+    arrowSize
+  };
+}
+
+export interface ShapeArrow {
+  d: string;
+  filled: boolean;
+}
+
+export function shapeArrows(geometry: ShapeGeometry): { start: ShapeArrow | null; end: ShapeArrow | null } {
+  if (geometry.kind !== "line" && geometry.kind !== "polyline") {
+    return { start: null, end: null };
+  }
+  if (geometry.points.length < 2) return { start: null, end: null };
+  const first = geometry.points[0];
+  const second = geometry.points[1];
+  const last = geometry.points[geometry.points.length - 1];
+  const previous = geometry.points[geometry.points.length - 2];
+  return {
+    start: buildArrow(first, { x: first.x - second.x, y: first.y - second.y }, geometry.startArrow, geometry.arrowSize),
+    end: buildArrow(last, { x: last.x - previous.x, y: last.y - previous.y }, geometry.endArrow, geometry.arrowSize)
+  };
+}
+
+function buildArrow(tip: Point, direction: Point, type: string, size: number): ShapeArrow | null {
+  const length = Math.hypot(direction.x, direction.y);
+  if (type === "none" || !length) return null;
+  const ux = direction.x / length;
+  const uy = direction.y / length;
+  const px = -uy;
+  const py = ux;
+  const base = { x: tip.x - ux * size, y: tip.y - uy * size };
+  const half = size * 0.45;
+  const left = { x: base.x + px * half, y: base.y + py * half };
+  const right = { x: base.x - px * half, y: base.y - py * half };
+  if (type === "open") {
+    return {
+      d: `M ${number(left.x)} ${number(left.y)} L ${number(tip.x)} ${number(tip.y)} L ${number(right.x)} ${number(right.y)}`,
+      filled: false
+    };
+  }
+  if (type === "bar") {
+    const center = { x: tip.x - ux * size, y: tip.y - uy * size };
+    return {
+      d: `M ${number(center.x + px * size * 0.6)} ${number(center.y + py * size * 0.6)} L ${number(center.x - px * size * 0.6)} ${number(center.y - py * size * 0.6)}`,
+      filled: false
+    };
+  }
+  if (type === "circle") {
+    const center = { x: tip.x - ux * size * 0.5, y: tip.y - uy * size * 0.5 };
+    const radius = size * 0.35;
+    return {
+      d: `M ${number(center.x - radius)} ${number(center.y)} A ${number(radius)} ${number(radius)} 0 1 0 ${number(center.x + radius)} ${number(center.y)} A ${number(radius)} ${number(radius)} 0 1 0 ${number(center.x - radius)} ${number(center.y)}`,
+      filled: true
+    };
+  }
+  return {
+    d: `M ${number(tip.x)} ${number(tip.y)} L ${number(left.x)} ${number(left.y)} L ${number(right.x)} ${number(right.y)} Z`,
+    filled: true
   };
 }
 
@@ -173,9 +256,12 @@ function shapePath(
     ].join(" ");
   }
   if (kind === "triangle") {
+    if (points.length >= 3) {
+      return points.slice(0, 3).map((point, index) => `${index === 0 ? "M" : "L"} ${number(point.x)} ${number(point.y)}`).join(" ") + " Z";
+    }
     return `M 0 ${number(-height / 2)} L ${number(width / 2)} ${number(height / 2)} L ${number(-width / 2)} ${number(height / 2)} Z`;
   }
-  if (kind === "ellipse") {
+  if (kind === "ellipse" || kind === "circle") {
     const rx = width / 2;
     const ry = height / 2;
     return [

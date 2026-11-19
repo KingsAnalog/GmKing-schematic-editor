@@ -1,6 +1,6 @@
 import { escapeAttribute } from "./uiUtils";
 import type { ComponentInstance, Point } from "./types";
-import { resolveShapeGeometry, shapeKind } from "./shapeModel";
+import { resolveShapeGeometry, shapeArrows, shapeKind } from "./shapeModel";
 
 export function renderShapeSvg(instance: ComponentInstance): string {
   const geometry = resolveShapeGeometry(instance);
@@ -8,7 +8,11 @@ export function renderShapeSvg(instance: ComponentInstance): string {
     `translate(${number(instance.x)} ${number(instance.y)})`,
     instance.rotation ? `rotate(${instance.rotation})` : ""
   ].filter(Boolean).join(" ");
-  return `<g data-shape-id="${escapeAttribute(instance.id)}" data-shape-kind="${escapeAttribute(shapeKind(instance))}" transform="${transform}"><path d="${escapeAttribute(geometry.path)}" fill="${escapeAttribute(geometry.fill)}" stroke="${escapeAttribute(geometry.stroke)}" stroke-width="${number(geometry.strokeWidth)}" stroke-linejoin="round" stroke-linecap="round"${geometry.dashArray === "none" ? "" : ` stroke-dasharray="${geometry.dashArray}"`} /></g>`;
+  const arrows = shapeArrows(geometry);
+  const arrowSvg = (arrow: typeof arrows.start) => arrow
+    ? `<path d="${escapeAttribute(arrow.d)}" fill="${arrow.filled ? escapeAttribute(geometry.stroke) : "none"}" stroke="${escapeAttribute(geometry.stroke)}" stroke-width="${number(geometry.strokeWidth)}" stroke-linejoin="round" stroke-linecap="round" />`
+    : "";
+  return `<g data-shape-id="${escapeAttribute(instance.id)}" data-shape-kind="${escapeAttribute(shapeKind(instance))}" transform="${transform}"><path d="${escapeAttribute(geometry.path)}" fill="${escapeAttribute(geometry.fill)}" stroke="${escapeAttribute(geometry.stroke)}" stroke-width="${number(geometry.strokeWidth)}" stroke-linejoin="round" stroke-linecap="round"${geometry.dashArray === "none" ? "" : ` stroke-dasharray="${geometry.dashArray}"`} />${arrowSvg(arrows.start)}${arrowSvg(arrows.end)}</g>`;
 }
 
 export function shapeExportBounds(instance: ComponentInstance) {

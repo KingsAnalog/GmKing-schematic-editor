@@ -194,6 +194,7 @@ export type SchematicToolbarCommandIntent =
   | { kind: "undo" }
   | { kind: "redo" }
   | { kind: "open-library" }
+  | { kind: "open-shape-picker" }
   | { kind: "open-right-view"; view: "analysis" | "netlist" }
   | { kind: "toggle-log" };
 
@@ -360,6 +361,8 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
       return { kind: "redo" };
     case "library":
       return { kind: "open-library" };
+    case "shapes":
+      return { kind: "open-shape-picker" };
     case "analysis":
       return { kind: "open-right-view", view: "analysis" };
     case "netlist":

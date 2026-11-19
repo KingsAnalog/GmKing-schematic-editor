@@ -12,6 +12,7 @@ import labelIcon from "./icons/label.svg?raw";
 import mirrorXIcon from "./icons/mirror-x.svg?raw";
 import mirrorYIcon from "./icons/mirror-y.svg?raw";
 import noteIcon from "./icons/note.svg?raw";
+import shapesIcon from "./icons/shapes.svg?raw";
 import presentationIcon from "./icons/presentation.svg?raw";
 import redoIcon from "./icons/redo.svg?raw";
 import resetIcon from "./icons/reset.svg?raw";
@@ -43,6 +44,7 @@ export function buildSchematicToolbar<T extends object>(ui: UiBuilder<T>, namesp
     toolbarButton(ui, "instance", "Instance", "i", namespaceSvgIds(instanceIcon, `${namespace}-instance`), "tool"),
     toolbarButton(ui, "wire", "Wire", "w", namespaceSvgIds(wireIcon, `${namespace}-wire`), "tool"),
     toolbarButton(ui, "label", "Net Label", "L", namespaceSvgIds(labelIcon, `${namespace}-label`), "tool"),
+    toolbarButton(ui, "shapes", "Shapes", "", namespaceSvgIds(shapesIcon, `${namespace}-shapes`), "tool"),
     toolbarButton(ui, "note", "Note", "Shift+N", namespaceSvgIds(noteIcon, `${namespace}-note`)),
     toolbarButton(ui, "rotate", "Rotate", "r", namespaceSvgIds(rotateIcon, `${namespace}-rotate`)),
     toolbarButton(ui, "mirror-x", "Mirror X", "Shift+R", namespaceSvgIds(mirrorXIcon, `${namespace}-mirror-x`)),

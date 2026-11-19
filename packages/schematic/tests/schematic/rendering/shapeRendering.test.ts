@@ -8,7 +8,7 @@ import { defaultShapeValues, resolveShapeGeometry } from "../../../src/schematic
 import { renderShapeSvg } from "../../../src/schematic/shapeSvgRenderer";
 import type { ComponentInstance } from "../../../src/schematic/types";
 
-function shape(kind: "rectangle" | "triangle" | "ellipse" | "polyline" | "polygon" | "arc"): ComponentInstance {
+function shape(kind: "rectangle" | "triangle" | "ellipse" | "line" | "polyline" | "polygon" | "circle" | "arc"): ComponentInstance {
   return {
     id: `shape-${kind}`,
     type: "annotation",
@@ -31,15 +31,28 @@ describe("free shape rendering", () => {
     const svg = renderShapeSvg(instance);
     expect(svg).toContain('data-shape-kind="rectangle"');
     expect(svg).toContain(" Q ");
-    expect(svg).toContain('fill="#e8f0fb"');
+    expect(svg).toContain('fill="#ffffff"');
   });
 
-  it("renders triangle, ellipse, polyline, polygon and arc paths", () => {
+  it("renders triangle, ellipse, line, circle, polyline, polygon and arc paths", () => {
     expect(resolveShapeGeometry(shape("triangle")).path).toContain(" Z");
     expect(resolveShapeGeometry(shape("ellipse")).path).toContain(" A ");
+    expect(resolveShapeGeometry(shape("line")).path).not.toContain(" Z");
+    expect(resolveShapeGeometry(shape("circle")).path).toContain(" A ");
     expect(resolveShapeGeometry(shape("polyline")).path).not.toContain(" Z");
     expect(resolveShapeGeometry(shape("polygon")).path).toContain(" Z");
     expect(resolveShapeGeometry(shape("arc")).path).toContain(" A ");
+  });
+
+  it("renders line arrowheads and omits them for closed shapes", () => {
+    const line = shape("line");
+    line.values["shape:startArrow"] = "open";
+    line.values["shape:endArrow"] = "triangle";
+    const svg = renderShapeSvg(line);
+    expect(svg).toContain('fill="#111111"');
+    expect((svg.match(/<path /g) ?? []).length).toBe(3);
+    const closed = renderShapeSvg(shape("rectangle"));
+    expect((closed.match(/<path /g) ?? []).length).toBe(1);
   });
 
   it("uses the shape renderer in component SVG and export bounds", () => {
@@ -85,11 +98,11 @@ describe("free shape rendering", () => {
     const parsedShape = parsed.components.find(component => component.id === instance.id);
     expect(parsedShape?.values["shape:kind"]).toBe("rectangle");
     expect(parsedShape?.values["shape:layerId"]).toBe("layer-1");
-    expect(parsedShape?.values["shape:radius"]).toBe("12");
+    expect(parsedShape?.values["shape:radius"]).toBe("0");
   });
 
   it("reflects geometry edits in the path", () => {
-    const instance = shape("triangle");
+    const instance = shape("rectangle");
     instance.values["shape:width"] = "220";
     const geometry = resolveShapeGeometry(instance);
     expect(geometry.width).toBe(220);
