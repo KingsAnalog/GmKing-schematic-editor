@@ -10,7 +10,7 @@ import {
 import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
 import { InstanceBrowser } from "./instanceBrowser";
 import { SidebarLibrary } from "./sidebarLibrary";
-import { RightDockController, type RightDockView } from "./rightDock";
+import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog } from "./eventLog";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
@@ -706,8 +706,11 @@ export class SchematicEditor implements SchematicHostedEditor {
       closeAfterActivation: this.hostBridge.closeInstanceSearchAfterActivation,
       onPanelVisibilityChange: (open) => this.hostBridge.onInstanceSearchVisibilityChange?.(open)
     });
+    const layout = this.options.layout;
     this.sidebarLibrary = new SidebarLibrary(this.options.paletteEl, {
       symbolTemplate: () => this.document.symbolTemplate,
+      initialTab: layout?.getSidebarTab?.() ?? "library",
+      onTabChange: (tab) => layout?.setSidebarTab?.(tab),
       onPick: (item) => {
         this.beginPlacement(item);
         this.focusCanvas();
@@ -722,8 +725,21 @@ export class SchematicEditor implements SchematicHostedEditor {
       onClose: () => this.focusCanvas()
     });
     const { analysisEl } = this.options;
-    this.rightDock = analysisEl ? new RightDockController(analysisEl) : null;
-    this.eventLog = new SchematicEventLog(this.options.shellEl);
+    this.rightDock = analysisEl
+      ? new RightDockController(analysisEl, {
+          initial: layout?.getRightDockState?.(),
+          onChange: (state) => this.handleRightDockChange(state)
+        })
+      : null;
+    this.eventLog = new SchematicEventLog(this.options.shellEl, {
+      initialHeight: layout?.getLogHeight?.() ?? 230,
+      onHeightChange: (height) => layout?.setLogHeight?.(height)
+    });
+    if (layout) {
+      layout.onPanelOpened = (side) => {
+        if (side === "right") this.rightDock?.ensureExpanded();
+      };
+    }
     const toolbarRoot = this.options.paperEl.closest(".schematic-shell");
     this.toolbarController = toolbarRoot
       ? new SchematicToolbarController(toolbarRoot, {
@@ -1794,25 +1810,37 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private openRightView(view: RightDockView) {
-    if (!this.rightDock) return;
+    const dock = this.rightDock;
+    if (!dock) return;
     const layout = this.options.layout;
     const visible = layout
       ? layout.isPanelVisible("right")
       : this.options.shellEl.classList.contains("is-right-panel-visible");
+    if (!visible) {
+      dock.ensureExpanded(view);
+      return;
+    }
+    dock.toggle(view);
+  }
+
+  private handleRightDockChange(state: RightDockState) {
+    const layout = this.options.layout;
+    layout?.setRightDockState?.(state);
     const { analysisEl } = this.options;
-    if (visible && this.rightDock.activeView() === view) {
-      if (layout) layout.closePanel("right");
-      else {
-        this.options.shellEl.classList.remove("is-right-panel-visible");
-        analysisEl?.setAttribute("aria-hidden", "true");
+    if (state.expanded.length > 0) {
+      if (layout) {
+        layout.openPanel("right");
+      } else {
+        this.options.shellEl.classList.add("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "false");
       }
       return;
     }
-    this.rightDock.setView(view);
-    if (layout) layout.openPanel("right");
-    else {
-      this.options.shellEl.classList.add("is-right-panel-visible");
-      analysisEl?.setAttribute("aria-hidden", "false");
+    if (layout) {
+      layout.closePanel("right");
+    } else {
+      this.options.shellEl.classList.remove("is-right-panel-visible");
+      analysisEl?.setAttribute("aria-hidden", "true");
     }
   }
 

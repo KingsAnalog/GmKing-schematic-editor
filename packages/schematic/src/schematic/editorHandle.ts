@@ -10,6 +10,20 @@ export interface SchematicPanelLayoutAccess {
   closePanel(side: "left" | "right"): void;
   togglePanel(side: "left" | "right"): void;
   isPanelVisible(side: "left" | "right"): boolean;
+  getRightDockState?(): {
+    activeView: "analysis" | "netlist" | "diagnostics";
+    expanded: ("analysis" | "netlist" | "diagnostics")[];
+  };
+  setRightDockState?(state: {
+    activeView: "analysis" | "netlist" | "diagnostics";
+    expanded: ("analysis" | "netlist" | "diagnostics")[];
+  }): void;
+  getSidebarTab?(): "library" | "properties";
+  setSidebarTab?(tab: "library" | "properties"): void;
+  getLogHeight?(): number;
+  setLogHeight?(height: number): void;
+  isNarrow?(): boolean;
+  onPanelOpened?: ((side: "left" | "right") => void) | null;
 }
 
 export interface SchematicEditorMountElements {

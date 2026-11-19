@@ -1,4 +1,4 @@
-import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
+﻿import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
 import {
   DEVICE_LIBRARIES,
   deviceItemAliases,
@@ -11,11 +11,13 @@ import {
 import { t } from "./schematicI18n";
 import type { SymbolTemplateId } from "./symbolTemplateModel";
 
-type SidebarTab = "library" | "properties";
+export type SidebarTab = "library" | "properties";
 
 interface SidebarLibraryEvents {
   symbolTemplate: () => SymbolTemplateId | undefined;
   onPick: (item: InstancePaletteItem) => void;
+  initialTab?: SidebarTab;
+  onTabChange?: (tab: SidebarTab) => void;
 }
 
 export class SidebarLibrary {
@@ -23,6 +25,7 @@ export class SidebarLibrary {
   private readonly lifecycle = new AbortController();
   private librarySelect: HTMLSelectElement | null = null;
   private cellList: HTMLElement | null = null;
+  private currentTab: SidebarTab = "library";
   private bound = false;
 
   constructor(
@@ -44,7 +47,11 @@ export class SidebarLibrary {
     }, { signal });
     this.renderLibraries();
     this.renderCells();
-    this.setActiveTab("library");
+    this.setActiveTab(this.events.initialTab ?? "library");
+  }
+
+  activeTab(): SidebarTab {
+    return this.currentTab;
   }
 
   destroy() {
@@ -81,6 +88,8 @@ export class SidebarLibrary {
   }
 
   private setActiveTab(tab: SidebarTab) {
+    this.currentTab = tab;
+    this.events.onTabChange?.(tab);
     this.root.querySelectorAll<HTMLElement>("[data-sidebar-tab]").forEach((button) => {
       const active = button.dataset.sidebarTab === tab;
       button.classList.toggle("is-active", active);
@@ -137,7 +146,7 @@ export class SidebarLibrary {
     button.type = "button";
     button.className = "library-cell";
     button.dataset.libraryItem = item;
-    button.title = [deviceItemName(item), ...deviceItemAliases(item)].filter(Boolean).join(" · ");
+    button.title = [deviceItemName(item), ...deviceItemAliases(item)].filter(Boolean).join(" 路 ");
     const preview = document.createElement("span");
     preview.className = "library-cell-preview";
     preview.innerHTML = paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate() });

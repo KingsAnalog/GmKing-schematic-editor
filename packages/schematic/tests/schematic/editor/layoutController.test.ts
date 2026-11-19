@@ -10,7 +10,11 @@ const expanded: SchematicLayoutState = {
   leftWidth: 280,
   rightWidth: 330,
   leftCollapsed: false,
-  rightCollapsed: false
+  rightCollapsed: false,
+  rightActiveView: "analysis",
+  rightExpanded: ["analysis"],
+  sidebarTab: "library",
+  logHeight: 230
 };
 
 describe("schematic layout projection", () => {

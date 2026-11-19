@@ -1,10 +1,22 @@
+import type { RightDockView } from "./rightDock";
+
 export type SchematicPanelSide = "left" | "right";
+export type SchematicSidebarTab = "library" | "properties";
+
+export interface RightDockLayoutState {
+  activeView: RightDockView;
+  expanded: RightDockView[];
+}
 
 export interface SchematicLayoutState {
   leftWidth: number;
   rightWidth: number;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  rightActiveView: RightDockView;
+  rightExpanded: RightDockView[];
+  sidebarTab: SchematicSidebarTab;
+  logHeight: number;
 }
 
 export interface SchematicLayoutProjection {
@@ -18,25 +30,39 @@ const DEFAULT_STATE: SchematicLayoutState = {
   leftWidth: 280,
   rightWidth: 330,
   leftCollapsed: false,
-  rightCollapsed: true
+  rightCollapsed: true,
+  rightActiveView: "analysis",
+  rightExpanded: [],
+  sidebarTab: "library",
+  logHeight: 230
 };
 const LEFT_WIDTH_RANGE = { min: 210, max: 520 };
 const RIGHT_WIDTH_RANGE = { min: 320, max: 900 };
+const LOG_HEIGHT_RANGE = { min: 180, max: 400 };
 const NARROW_CONTAINER_WIDTH = 1080;
-const STORAGE_KEY = "adc-helper/schematic-layout";
+const STORAGE_KEY = "at-schematic-layout";
+const LEGACY_STORAGE_KEY = "adc-helper/schematic-layout";
 const KEYBOARD_RESIZE_STEP = 20;
+const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["analysis", "netlist", "diagnostics"];
 
 export interface SchematicPanelResizeResult {
   width: number;
   collapsed: boolean;
 }
 
-/** Minimal surface the editor uses to open the left or right panel. */
+/** Minimal surface the editor uses to open panels and persist view state. */
 export interface SchematicPanelLayoutAccess {
   openPanel(side: SchematicPanelSide): void;
   closePanel(side: SchematicPanelSide): void;
   togglePanel(side: SchematicPanelSide): void;
   isPanelVisible(side: SchematicPanelSide): boolean;
+  getRightDockState?(): RightDockLayoutState;
+  setRightDockState?(state: RightDockLayoutState): void;
+  getSidebarTab?(): SchematicSidebarTab;
+  setSidebarTab?(tab: SchematicSidebarTab): void;
+  getLogHeight?(): number;
+  setLogHeight?(height: number): void;
+  onPanelOpened?: ((side: SchematicPanelSide) => void) | null;
 }
 
 export function resolveSchematicPanelResize(
@@ -71,6 +97,7 @@ export function projectSchematicLayout(
 }
 
 export class SchematicLayoutController implements SchematicPanelLayoutAccess {
+  onPanelOpened: ((side: SchematicPanelSide) => void) | null = null;
   private readonly lifecycle: AbortController;
   private readonly elementConstructor: typeof Element | null;
   private readonly storage: Pick<Storage, "getItem" | "setItem"> | null;
@@ -95,7 +122,7 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.lifecycle = new AbortControllerCtor();
     this.elementConstructor = realm?.Element ?? null;
-    this.storage = options.storage === undefined ? sessionStorageFor(root) : options.storage;
+    this.storage = options.storage === undefined ? localStorageFor(root) : options.storage;
     this.state = readState(this.storage);
     const ResizeObserverCtor = options.resizeObserver === undefined
       ? root.ownerDocument.defaultView?.ResizeObserver ?? globalThis.ResizeObserver
@@ -128,6 +155,7 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   }
 
   openPanel(side: SchematicPanelSide) {
+    const wasVisible = this.isPanelVisible(side);
     if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
       this.drawer = side;
     } else if (side === "left") {
@@ -137,6 +165,7 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
     }
     this.persist();
     this.render();
+    if (!wasVisible && this.isPanelVisible(side)) this.onPanelOpened?.(side);
   }
 
   closePanel(side: SchematicPanelSide) {
@@ -159,6 +188,38 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   isPanelVisible(side: SchematicPanelSide) {
     const projection = projectSchematicLayout(this.containerWidth, this.state, this.drawer);
     return side === "left" ? projection.leftVisible : projection.rightVisible;
+  }
+
+  isNarrow() {
+    return this.containerWidth < NARROW_CONTAINER_WIDTH;
+  }
+
+  getRightDockState(): RightDockLayoutState {
+    return { activeView: this.state.rightActiveView, expanded: [...this.state.rightExpanded] };
+  }
+
+  setRightDockState(state: RightDockLayoutState) {
+    this.state.rightActiveView = state.activeView;
+    this.state.rightExpanded = [...state.expanded];
+    this.persist();
+  }
+
+  getSidebarTab(): SchematicSidebarTab {
+    return this.state.sidebarTab;
+  }
+
+  setSidebarTab(tab: SchematicSidebarTab) {
+    this.state.sidebarTab = tab;
+    this.persist();
+  }
+
+  getLogHeight() {
+    return this.state.logHeight;
+  }
+
+  setLogHeight(height: number) {
+    this.state.logHeight = clamp(height, LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight);
+    this.persist();
   }
 
   destroy() {
@@ -260,6 +321,7 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   }
 
   private setPanelWidth(side: SchematicPanelSide, width: number, persist = true) {
+    const wasVisible = this.isPanelVisible(side);
     const resolved = resolveSchematicPanelResize(side, width);
     if (side === "left") {
       this.state.leftWidth = resolved.width;
@@ -277,6 +339,7 @@ export class SchematicLayoutController implements SchematicPanelLayoutAccess {
     }
     if (persist) this.persist();
     this.render();
+    if (!wasVisible && this.isPanelVisible(side)) this.onPanelOpened?.(side);
   }
 
   private effectivePanelWidth(side: SchematicPanelSide) {
@@ -333,22 +396,36 @@ function panelWidthRange(side: SchematicPanelSide) {
 
 function readState(storage: Pick<Storage, "getItem"> | null): SchematicLayoutState {
   try {
-    const parsed = JSON.parse(storage?.getItem(STORAGE_KEY) ?? "null") as Partial<SchematicLayoutState> | null;
+    const raw = storage?.getItem(STORAGE_KEY)
+      ?? storage?.getItem(LEGACY_STORAGE_KEY)
+      ?? "null";
+    const parsed = JSON.parse(raw) as Partial<SchematicLayoutState> | null;
     if (!parsed || typeof parsed !== "object") return { ...DEFAULT_STATE };
+    const expanded = Array.isArray(parsed.rightExpanded)
+      ? [...new Set(parsed.rightExpanded.filter(isRightDockView))]
+      : [];
     return {
       leftWidth: clamp(Number(parsed.leftWidth), LEFT_WIDTH_RANGE, DEFAULT_STATE.leftWidth),
       rightWidth: clamp(Number(parsed.rightWidth), RIGHT_WIDTH_RANGE, DEFAULT_STATE.rightWidth),
       leftCollapsed: parsed.leftCollapsed === true,
-      rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed
+      rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed,
+      rightActiveView: isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
+      rightExpanded: expanded,
+      sidebarTab: parsed.sidebarTab === "properties" ? "properties" : "library",
+      logHeight: clamp(Number(parsed.logHeight), LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight)
     };
   } catch {
     return { ...DEFAULT_STATE };
   }
 }
 
-function sessionStorageFor(root: HTMLElement) {
+function isRightDockView(value: unknown): value is RightDockView {
+  return typeof value === "string" && (RIGHT_DOCK_VIEWS as readonly string[]).includes(value);
+}
+
+function localStorageFor(root: HTMLElement) {
   try {
-    return root.ownerDocument.defaultView?.sessionStorage ?? null;
+    return root.ownerDocument.defaultView?.localStorage ?? null;
   } catch {
     return null;
   }

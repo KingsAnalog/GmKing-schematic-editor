@@ -63,15 +63,66 @@ try {
 
   await clickSelector(page, "[data-command='netlist']");
   await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false", "netlist did not open the dock");
-  const netlistVisible = await evaluate(page, () => !document.querySelector("[data-right-panel='netlist']")?.hidden);
+  const netlistVisible = await evaluate(page, () => !document.querySelector("[data-right-body='netlist']")?.hidden);
   if (!netlistVisible) throw new Error("netlist panel is not visible");
   await clickSelector(page, "[data-right-view='diagnostics']");
-  await waitFor(page, () => !document.querySelector("[data-right-panel='diagnostics']")?.hidden, "diagnostics panel did not switch");
+  await waitFor(page, () => !document.querySelector("[data-right-body='diagnostics']")?.hidden, "diagnostics panel did not expand");
+  const stacked = await evaluate(page, () => ({
+    netlist: !document.querySelector("[data-right-body='netlist']")?.hidden,
+    diagnostics: !document.querySelector("[data-right-body='diagnostics']")?.hidden
+  }));
+  if (!stacked.netlist || !stacked.diagnostics) throw new Error("views did not stack: " + JSON.stringify(stacked));
+
+  await clickSelector(page, "[data-right-view='netlist']");
+  await waitFor(page, () => document.querySelector("[data-right-body='netlist']")?.hidden === true, "netlist did not collapse");
+  const diagnosticsStillOpen = await evaluate(page, () => !document.querySelector("[data-right-body='diagnostics']")?.hidden);
+  if (!diagnosticsStillOpen) throw new Error("collapsing one view closed the other");
+  await clickSelector(page, "[data-right-view='diagnostics']");
+  await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "true", "closing the last view did not close the dock");
 
   await key("l", "KeyL", 10);
   await waitFor(page, () => document.querySelector("[data-schematic-log]")?.hidden === false, "Ctrl+Shift+L did not open the log");
   const logRows = await evaluate(page, () => document.querySelectorAll(".schematic-log-row").length);
   if (logRows < 1) throw new Error("log has no entries");
+
+  const logBefore = await evaluate(page, () => {
+    const drawer = document.querySelector("[data-schematic-log]");
+    const handle = document.querySelector("[data-log-resizer]");
+    const rect = handle?.getBoundingClientRect();
+    return {
+      height: drawer?.getBoundingClientRect().height ?? 0,
+      x: rect ? rect.left + rect.width / 2 : 0,
+      y: rect ? rect.top + rect.height / 2 : 0
+    };
+  });
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: logBefore.x, y: logBefore.y, button: "left", clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: logBefore.x, y: logBefore.y - 60, button: "left", buttons: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: logBefore.x, y: logBefore.y - 60, button: "left", clickCount: 1 });
+  await waitFor(page, (height) => (document.querySelector("[data-schematic-log]")?.getBoundingClientRect().height ?? 0) > height + 20, "log did not resize", { args: [logBefore.height] });
+  const logAfter = await evaluate(page, () => ({
+    height: document.querySelector("[data-schematic-log]")?.getBoundingClientRect().height ?? 0,
+    stored: JSON.parse(localStorage.getItem("at-schematic-layout") ?? "null")?.logHeight
+  }));
+  if (Math.abs((logAfter.stored ?? 0) - logAfter.height) > 2) throw new Error("log height was not persisted: " + JSON.stringify(logAfter));
+
+  await clickSelector(page, "[data-command='analysis']");
+  await waitFor(page, () => !document.querySelector("[data-right-body='analysis']")?.hidden, "analysis did not reopen");
+  await clickSelector(page, "[data-sidebar-tab='properties']");
+  await navigate(page, server.url);
+  await waitFor(page, () => Boolean(document.querySelector("[data-schematic-paper] svg")), "editor did not remount after reload");
+  const persisted = await evaluate(page, () => ({
+    tab: document.querySelector(".schematic-sidebar-tab.is-active")?.getAttribute("data-sidebar-tab"),
+    dockVisible: document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false",
+    analysisOpen: !document.querySelector("[data-right-body='analysis']")?.hidden,
+    logHeight: Number.parseFloat((document.querySelector("[data-schematic-log]")?.style.height ?? "0")) || 0,
+    layout: JSON.parse(localStorage.getItem("at-schematic-layout") ?? "null")
+  }));
+  if (persisted.tab !== "properties" || !persisted.dockVisible || !persisted.analysisOpen) {
+    throw new Error("UI state did not persist: " + JSON.stringify(persisted));
+  }
+  if (Math.abs(persisted.logHeight - logAfter.height) > 2) {
+    throw new Error("log height did not survive reload: " + JSON.stringify({ persisted, logAfter }));
+  }
 
   const result = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   await fs.writeFile(path.join(outDir, "r1-after-place.png"), Buffer.from(result.data, "base64"));

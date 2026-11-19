@@ -10,6 +10,14 @@ export interface LogEntry {
 }
 
 const MAX_ENTRIES = 500;
+const MIN_HEIGHT = 180;
+const MAX_HEIGHT = 400;
+const DEFAULT_HEIGHT = 230;
+
+interface EventLogOptions {
+  initialHeight?: number;
+  onHeightChange?: (height: number) => void;
+}
 
 export class SchematicEventLog {
   private entries: LogEntry[] = [];
@@ -19,11 +27,19 @@ export class SchematicEventLog {
   private list: HTMLElement | null = null;
   private levelSelect: HTMLSelectElement | null = null;
   private searchInput: HTMLInputElement | null = null;
+  private resizer: HTMLElement | null = null;
+  private height: number;
+  private drag: { startY: number; startHeight: number } | null = null;
   private readonly lifecycle = new AbortController();
   private mounted = false;
   private openState = false;
 
-  constructor(private readonly root: HTMLElement) {}
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly options: EventLogOptions = {}
+  ) {
+    this.height = clampHeight(options.initialHeight ?? DEFAULT_HEIGHT);
+  }
 
   mount() {
     if (this.mounted) return;
@@ -32,7 +48,14 @@ export class SchematicEventLog {
     this.list = this.root.querySelector<HTMLElement>("[data-log-list]");
     this.levelSelect = this.root.querySelector<HTMLSelectElement>("[data-log-level]");
     this.searchInput = this.root.querySelector<HTMLInputElement>("[data-log-search]");
+    this.resizer = this.root.querySelector<HTMLElement>("[data-log-resizer]");
+    this.applyHeight();
     const { signal } = this.lifecycle;
+    this.resizer?.addEventListener("pointerdown", (event) => this.beginResize(event), { signal });
+    this.resizer?.addEventListener("keydown", (event) => this.handleResizeKey(event), { signal });
+    this.root.ownerDocument.addEventListener("pointermove", (event) => this.resizeTo(event), { signal });
+    this.root.ownerDocument.addEventListener("pointerup", () => this.finishResize(), { signal });
+    this.root.ownerDocument.addEventListener("pointercancel", () => this.finishResize(), { signal });
     this.root.querySelectorAll<HTMLElement>("[data-log-toggle]").forEach((button) => {
       button.addEventListener("click", () => this.toggle(), { signal });
     });
@@ -117,6 +140,56 @@ export class SchematicEventLog {
     this.render();
   }
 
+  private beginResize(event: PointerEvent) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    this.drag = { startY: event.clientY, startHeight: this.height };
+    this.resizer?.setPointerCapture?.(event.pointerId);
+    this.root.classList.add("is-log-resizing");
+  }
+
+  private resizeTo(event: PointerEvent) {
+    if (!this.drag) return;
+    event.preventDefault();
+    this.setHeight(this.drag.startHeight + (this.drag.startY - event.clientY), false);
+  }
+
+  private finishResize() {
+    if (!this.drag) return;
+    this.drag = null;
+    this.root.classList.remove("is-log-resizing");
+    this.options.onHeightChange?.(this.height);
+  }
+
+  private handleResizeKey(event: KeyboardEvent) {
+    const step = event.shiftKey ? 40 : 20;
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      this.setHeight(this.height + step, true);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      this.setHeight(this.height - step, true);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      this.setHeight(MAX_HEIGHT, true);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      this.setHeight(MIN_HEIGHT, true);
+    }
+  }
+
+  private setHeight(height: number, persist: boolean) {
+    this.height = clampHeight(height);
+    this.applyHeight();
+    if (persist) this.options.onHeightChange?.(this.height);
+  }
+
+  private applyHeight() {
+    if (!this.drawer) return;
+    this.drawer.style.height = `${this.height}px`;
+    if (this.resizer) this.resizer.setAttribute("aria-valuenow", String(this.height));
+  }
+
   private render() {
     const list = this.list;
     if (!list) return;
@@ -177,4 +250,9 @@ export class SchematicEventLog {
       textarea.remove();
     }
   }
+}
+
+function clampHeight(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_HEIGHT;
+  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(value)));
 }
