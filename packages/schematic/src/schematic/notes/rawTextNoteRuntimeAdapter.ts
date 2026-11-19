@@ -22,7 +22,7 @@ class RawTextNoteRuntime implements SchematicNoteRuntime {
     this.previousWhiteSpace = options.host.style.whiteSpace;
     this.hadRawMarkdownClass = options.host.classList.contains("schematic-note-raw-markdown-content");
     options.host.classList.add("schematic-note-raw-markdown-content");
-    options.host.style.whiteSpace = "";
+    options.host.style.removeProperty("white-space");
     options.signal?.addEventListener("abort", this.handleAbort, { once: true });
     this.render();
   }

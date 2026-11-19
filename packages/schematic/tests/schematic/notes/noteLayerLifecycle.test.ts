@@ -48,7 +48,15 @@ class FakeClassList {
 class FakeElement {
   readonly classList = new FakeClassList();
   readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
+  readonly style = {
+    whiteSpace: "",
+    removeProperty(name: string) {
+      if (name !== "white-space") return "";
+      const previous = this.whiteSpace;
+      this.whiteSpace = "";
+      return previous;
+    }
+  };
   readonly attributes = new Map<string, string>();
   readonly children: FakeElement[] = [];
   parentElement: FakeElement | null = null;

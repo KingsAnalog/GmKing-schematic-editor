@@ -79,8 +79,8 @@ export class SchematicContextMenuController {
     }
     this.element.setAttribute("aria-label", scope === "blank" ? "Schematic clipboard menu" : "Schematic selection copy menu");
     this.element.hidden = false;
-    this.element.style.left = "";
-    this.element.style.top = "";
+    this.element.style.removeProperty("left");
+    this.element.style.removeProperty("top");
     const rect = this.element.getBoundingClientRect();
     const viewport = this.viewport();
     const x = Math.min(clientX, viewport.width - rect.width - 8);

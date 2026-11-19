@@ -40,6 +40,13 @@ export default defineConfig([
   ...reviewConfig,
   {
     files: ["**/*.ts"],
+    rules: {
+      // The Community review for 0.1.2 flags empty inline style assignments that plugin 0.6.0 permits.
+      "no-restricted-syntax": ["error", {
+        selector: "AssignmentExpression[operator='='][left.object.property.name='style'][right.type='Literal'][right.value='']",
+        message: "Clear inline CSS with style.removeProperty() for Community review compatibility."
+      }]
+    },
     languageOptions: {
       parserOptions: {
         projectService: true,

@@ -57,7 +57,16 @@ class FakeElement {
   textContent: string | null = null;
   type = "";
   readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
+  readonly style = {
+    left: "",
+    top: "",
+    display: "",
+    removeProperty(name: "left" | "top") {
+      const previous = this[name];
+      this[name] = "";
+      return previous;
+    }
+  };
   readonly children: FakeElement[] = [];
   rect = { width: 0, height: 0 };
   parent: FakeElement | null = null;
