@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { fixtureComponent, fixtureWire } from "../support/fixtures";
 import { fixtureDocument } from "../support/fixtureDocument";
 import { componentPinPoint } from "../../../src/schematic/connectivity";
-import { buildStructuralNetlist, printNetlist } from "../../../src/schematic/netlist/index";
+import {
+  buildStructuralNetlist,
+  defaultDeviceConfig,
+  printNetlist
+} from "../../../src/schematic/netlist/index";
 import type { ComponentInstance, Wire } from "../../../src/schematic/types";
 
 function wireBetween(
@@ -58,37 +62,87 @@ function mosDocument() {
 }
 
 describe("structural netlist", () => {
-  it("prints a divider in SPICE and Spectre", () => {
+  it("prints a divider as one subckt with a ground port", () => {
     const design = buildStructuralNetlist(dividerDocument());
     expect(design.diagnostics.filter(d => d.severity === "error")).toEqual([]);
     expect(design.instances).toHaveLength(3);
+    expect(design.ports).toEqual(["GND"]);
     expect(printNetlist(design, "spice")).toBe([
       "* analog-tools structural netlist",
-      "V1 net0 0 DC 1",
-      "R1 net0 net1 1k",
-      "R2 net1 0 2k",
+      ".subckt schematic GND",
+      "  V1 net0 GND DC 1",
+      "  R1 net0 net1 1k",
+      "  R2 net1 GND 2k",
+      ".ends schematic",
       ""
     ].join("\n"));
     expect(printNetlist(design, "spectre")).toBe([
       "// analog-tools structural netlist",
       "simulator lang=spectre",
-      "V1 (net0 0) vsource dc=1",
-      "R1 (net0 net1) resistor r=1k",
-      "R2 (net1 0) resistor r=2k",
+      "subckt schematic GND",
+      "  V1 (net0 GND) vsource dc=1",
+      "  R1 (net0 net1) resistor r=1k",
+      "  R2 (net1 GND) resistor r=2k",
+      "ends schematic",
       ""
     ].join("\n"));
   });
 
-  it("prints a sky130 MOS with W/L", () => {
+  it("prints a sky130 MOS with VDD/GND ports and W/L", () => {
     const design = buildStructuralNetlist(mosDocument());
     expect(design.diagnostics.filter(d => d.severity === "error")).toEqual([]);
+    expect(design.ports).toEqual(["VDD", "GND"]);
     const spice = printNetlist(design, "spice");
+    expect(spice).toContain(".subckt schematic VDD GND");
     expect(spice).toContain("sky130_fd_pr__nfet_01v8 w=1u l=0.15u");
-    expect(spice).toMatch(/^XM1 /m);
+    expect(spice).toMatch(/^\s+XM1 /m);
     expect(printNetlist(design, "spectre")).toContain("M1 (");
   });
 
-  it("reports unsupported devices and missing MOS parameters", () => {
+  it("turns canvas net labels into subckt ports", () => {
+    const document = dividerDocument();
+    const wire = document.wires.find(item => item.id === "w1")!;
+    const [first, second] = wire.points;
+    document.netLabels = [{
+      id: "label-vin",
+      name: "VIN",
+      attachment: {
+        wireId: wire.id,
+        point: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
+      }
+    }];
+    const design = buildStructuralNetlist(document);
+    expect(design.ports).toEqual(["VIN", "GND"]);
+    expect(printNetlist(design, "spice")).toContain(".subckt schematic VIN GND");
+    expect(printNetlist(design, "spice")).toContain("V1 VIN GND DC 1");
+  });
+
+  it("emits unresolved values as parameters with defaults", () => {
+    const document = dividerDocument();
+    document.components.find(component => component.ref === "R1")!.values.main = "R";
+    const design = buildStructuralNetlist(document);
+    expect(design.parameters).toContainEqual({ name: "R", value: "1k" });
+    const spice = printNetlist(design, "spice");
+    expect(spice).toContain(".param R=1k");
+    expect(spice).toContain("R1 net0 net1 {R}");
+    expect(printNetlist(design, "spectre")).toContain("R1 (net0 net1) resistor r=R");
+  });
+
+  it("still generates a netlist for floating pins and keeps the error", () => {
+    const original = dividerDocument();
+    const document = fixtureDocument({
+      components: original.components,
+      wires: original.wires.filter(wire => wire.id !== "w3" && wire.id !== "w4")
+    });
+    const design = buildStructuralNetlist(document);
+    expect(design.instances).toHaveLength(3);
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "FLOATING_PIN", severity: "error" }));
+    const spice = printNetlist(design, "spice");
+    expect(spice).toContain(".subckt schematic GND");
+    expect(spice).toMatch(/R2 net\d+ net\d+ 2k/);
+  });
+
+  it("reports unsupported devices and defaults missing MOS parameters", () => {
     const inverter = fixtureComponent("inverter", "X1", 600, 100);
     const unsupported = buildStructuralNetlist(fixtureDocument({ components: [inverter], wires: [] }));
     expect(unsupported.diagnostics).toContainEqual(expect.objectContaining({
@@ -102,9 +156,11 @@ describe("structural netlist", () => {
     delete mos.values["mos:w"];
     const missing = buildStructuralNetlist(document);
     expect(missing.diagnostics).toContainEqual(expect.objectContaining({
-      code: "MISSING_PARAM",
+      code: "DEFAULT_PARAM",
       componentId: "M1"
     }));
+    expect(missing.parameters).toContainEqual({ name: "M1_W", value: "1u" });
+    expect(printNetlist(missing, "spice")).toContain("w={M1_W}");
   });
 
   it("prints sine sources for both formats", () => {
@@ -116,8 +172,57 @@ describe("structural netlist", () => {
     source.values["vsource:sine:frequency"] = "1k";
     const design = buildStructuralNetlist(document);
     expect(design.diagnostics.filter(item => item.severity === "error")).toEqual([]);
-    expect(printNetlist(design, "spice")).toContain("V1 net0 0 SIN(0 1 1k 0 0)");
-    expect(printNetlist(design, "spectre")).toContain("V1 (net0 0) vsource sine dc=0 ampl=1 freq=1k delay=0");
+    expect(printNetlist(design, "spice")).toContain("V1 net0 GND SIN(0 1 1k 0 0)");
+    expect(printNetlist(design, "spectre")).toContain("V1 (net0 GND) vsource sine dc=0 ampl=1 freq=1k delay=0");
+  });
+
+  it("uses the selected process device for modeled passives", () => {
+    const config = defaultDeviceConfig("sky130");
+    config.devices.resistor = "sky130_fd_pr__res_generic_po";
+    const design = buildStructuralNetlist(dividerDocument(), { config });
+    expect(printNetlist(design, "spice")).toContain("XR1 net0 net1 sky130_fd_pr__res_generic_po r=1k");
+    expect(printNetlist(design, "spectre")).toContain("R1 (net0 net1) sky130_fd_pr__res_generic_po r=1k");
+  });
+
+  it("defaults a 3-terminal MOS bulk to its source and exposes supply ports", () => {
+    const vdd = fixtureComponent("vdd", "VDD1", 300, 40);
+    const nmos = fixtureComponent("nmos", "M1", 300, 120);
+    nmos.values["mos:w"] = "1u";
+    nmos.values["mos:l"] = "0.15u";
+    const gnd = fixtureComponent("gnd", "GND1", 300, 220);
+    const document = fixtureDocument({
+      components: [vdd, nmos, gnd],
+      wires: [
+        wireBetween("w1", vdd, "vdd", nmos, "d"),
+        wireBetween("w2", nmos, "g", gnd, "g"),
+        wireBetween("w3", nmos, "s", gnd, "g")
+      ]
+    });
+    const design = buildStructuralNetlist(document);
+    expect(design.ports).toEqual(["VDD", "GND"]);
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "BULK_DEFAULTED", severity: "warning" }));
+    expect(design.diagnostics.filter(item => item.severity === "error")).toEqual([]);
+    expect(printNetlist(design, "spice")).toContain("XM1 VDD GND GND GND");
+  });
+
+  it("prints BJTs with the selected process model", () => {
+    const npn = fixtureComponent("npn", "Q1", 300, 100);
+    const document = fixtureDocument({ components: [npn], wires: [] });
+    const design = buildStructuralNetlist(document, {
+      config: {
+        process: "sky130",
+        devices: {
+          nmos: "sky130_fd_pr__nfet_01v8",
+          pmos: "sky130_fd_pr__pfet_01v8",
+          npn: "sky130_fd_pr__npn_05v5_W0p68L0p68",
+          pnp: "sky130_fd_pr__pnp_05v5_W0p68L0p68",
+          resistor: "R",
+          capacitor: "C",
+          inductor: "L"
+        }
+      }
+    });
+    expect(printNetlist(design, "spice")).toContain("Q1 net0 net1 net2 sky130_fd_pr__npn_05v5_W0p68L0p68");
   });
 
   it("is deterministic", () => {

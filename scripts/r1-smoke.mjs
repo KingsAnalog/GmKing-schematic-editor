@@ -64,13 +64,13 @@ try {
   await clickSelector(page, "[data-command='netlist']");
   await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false", "netlist did not open the dock");
   await waitFor(page, () => document.querySelector("[data-right-panel='netlist']")?.hidden === false, "netlist panel is not visible");
-  await clickSelector(page, "[data-right-view='diagnostics']");
-  await waitFor(page, () => document.querySelector("[data-right-panel='diagnostics']")?.hidden === false, "diagnostics panel did not switch");
+  await clickSelector(page, "[data-right-view='analysis']");
+  await waitFor(page, () => document.querySelector("[data-right-panel='analysis']")?.hidden === false, "analysis panel did not switch");
   const tabSwitch = await evaluate(page, () => ({
-    netlist: document.querySelector("[data-right-panel='netlist']")?.hidden,
-    diagnostics: document.querySelector("[data-right-panel='diagnostics']")?.hidden
+    analysis: document.querySelector("[data-right-panel='analysis']")?.hidden,
+    netlist: document.querySelector("[data-right-panel='netlist']")?.hidden
   }));
-  if (tabSwitch.netlist !== true || tabSwitch.diagnostics !== false) {
+  if (tabSwitch.analysis !== false || tabSwitch.netlist !== true) {
     throw new Error("dock tabs did not switch exclusively: " + JSON.stringify(tabSwitch));
   }
   await clickSelector(page, "[data-right-view='netlist']");

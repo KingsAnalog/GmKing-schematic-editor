@@ -1,6 +1,18 @@
 export { buildStructuralNetlist } from "./build";
 export { printNetlist, printSpice, printSpectre } from "./print";
-export { SKY130_PROFILE, PROCESS_PROFILES } from "./sky130";
+export {
+  DEVICE_KINDS,
+  DEVICE_LABELS,
+  PROCESS_PROFILES,
+  defaultDeviceConfig,
+  deviceOptions,
+  normalizeDeviceConfig,
+  processProfile,
+  type DeviceKind,
+  type NetlistDeviceConfig,
+  type ProcessId,
+  type ProcessProfile
+} from "./profiles";
 export {
   hasNetlistErrors,
   type NetlistBuildOptions,
@@ -8,6 +20,6 @@ export {
   type NetlistDiagnostic,
   type NetlistFormat,
   type NetlistInstance,
-  type NetlistSeverity,
-  type ProcessProfile
+  type NetlistParameter,
+  type NetlistSeverity
 } from "./model";

@@ -1554,6 +1554,60 @@
   display: none;
 }
 
+.netlist-panel {
+  display: flex;
+  flex-direction: column;
+  align-content: stretch;
+  gap: 8px;
+  overflow: auto;
+}
+
+.netlist-config {
+  display: grid;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  border: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+.netlist-config-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.netlist-device-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.netlist-device-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: var(--schematic-ui-muted);
+}
+
+.netlist-device-row select,
+.netlist-device-row input,
+.netlist-config-row select {
+  min-width: 0;
+  width: 100%;
+  height: 25px;
+  padding: 1px 4px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
 .netlist-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1635,13 +1689,15 @@
   color: #7a5a00;
 }
 
-.netlist-status[data-state="blocked"] {
+.netlist-status[data-state="blocked"],
+.netlist-status[data-state="error"] {
   border-color: #e0b4b4;
   color: #8f2424;
 }
 
 .netlist-code {
-  min-height: 120px;
+  flex: 1 1 420px;
+  min-height: 340px;
   margin: 0;
   padding: 8px;
   overflow: auto;
@@ -1671,9 +1727,63 @@
   white-space: pre;
 }
 
+.netlist-token-comment {
+  color: #7a7a72;
+  font-style: italic;
+}
+
+.netlist-token-directive {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.netlist-token-device {
+  color: #9a5b13;
+  font-weight: 600;
+}
+
+.netlist-token-number {
+  color: #0f766e;
+}
+
+.netlist-token-node {
+  color: var(--schematic-ink);
+}
+
+.netlist-token-punct {
+  color: #6b7280;
+}
+
+.netlist-token-value {
+  color: #a16207;
+}
+
+.netlist-diagnostics-head {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ui-muted);
+  font-size: 0.72rem;
+}
+
+.netlist-diagnostics-head[data-state="error"] {
+  border-color: #e0b4b4;
+  color: #8f2424;
+}
+
+.netlist-diagnostics-head[data-state="warning"] {
+  border-color: #e6d29a;
+  color: #7a5a00;
+}
+
 .netlist-diagnostics {
   display: grid;
   gap: 6px;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 220px;
+  overflow: auto;
 }
 
 .netlist-diagnostic {
@@ -1735,6 +1845,26 @@ button.netlist-diagnostic:hover {
 :root[data-effective-theme="dark"] .schematic-shell .netlist-status[data-state="ready"] {
   border-color: #3f6049;
   color: #9fd6b1;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-token-comment {
+  color: #8d8d84;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-token-directive {
+  color: #c4a7ff;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-token-device {
+  color: #e0a45e;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-token-number {
+  color: #7ed7c7;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-token-value {
+  color: #e8c574;
 }
 
 /* Log drawer ------------------------------------------------------------- */

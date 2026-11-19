@@ -39,19 +39,47 @@ try {
     status: document.querySelector("[data-netlist-status]")?.textContent,
     code: document.querySelector("[data-netlist-code]")?.textContent,
     diagnostics: document.querySelectorAll(".netlist-diagnostic").length,
-    blocked: document.querySelector("[data-netlist-status]")?.getAttribute("data-state")
+    state: document.querySelector("[data-netlist-status]")?.getAttribute("data-state"),
+    devices: document.querySelectorAll("[data-netlist-device]").length,
+    diagnosticsBelowCode: Boolean(
+      document.querySelector("[data-netlist-code] + [data-netlist-diagnostics-summary]")
+    )
   }));
-  if (state.blocked !== "blocked" || state.diagnostics < 1) throw new Error("netlist panel did not block: " + JSON.stringify(state));
+  if (state.state !== "error" || state.diagnostics < 1 || !state.code?.includes("R1") || state.devices !== 7 || !state.diagnosticsBelowCode) {
+    throw new Error("netlist panel did not generate with diagnostics: " + JSON.stringify(state));
+  }
   const shot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-  await fs.writeFile(path.join(outDir, "r2-netlist-blocked.png"), Buffer.from(shot.data, "base64"));
+  await fs.writeFile(path.join(outDir, "r2-netlist-generated.png"), Buffer.from(shot.data, "base64"));
 
   await clickSelector(page, "[data-netlist-format='spectre']");
   const format = await evaluate(page, () => document.querySelector("[data-netlist-format='spectre']")?.getAttribute("aria-pressed"));
   if (format !== "true") throw new Error("format did not switch");
-  await clickSelector(page, "[data-right-view='diagnostics']");
-  await waitFor(page, () => document.querySelector("[data-right-panel='diagnostics']")?.hidden === false, "diagnostics tab did not open");
-  const shot2 = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-  await fs.writeFile(path.join(outDir, "r2-diagnostics.png"), Buffer.from(shot2.data, "base64"));
+
+  await evaluate(page, () => {
+    const process = document.querySelector("[data-netlist-process]");
+    if (process) {
+      process.value = "custom";
+      process.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await waitFor(page, () => document.querySelectorAll("[data-netlist-device]").length === 7, "custom devices did not render");
+  const custom = await evaluate(page, () => ({
+    tag: document.querySelector("[data-netlist-device='nmos']")?.tagName,
+    nmos: document.querySelector("[data-netlist-device='nmos']")?.value,
+    resistor: document.querySelector("[data-netlist-device='resistor']")?.value
+  }));
+  if (custom.tag !== "INPUT" || custom.nmos !== "NMOS" || custom.resistor !== "R") {
+    throw new Error("custom defaults are wrong: " + JSON.stringify(custom));
+  }
+  await evaluate(page, () => {
+    const input = document.querySelector("[data-netlist-device='resistor']");
+    if (input) {
+      input.value = "my_res";
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await waitFor(page, () => (document.querySelector("[data-netlist-code]")?.textContent ?? "").includes("my_res"), "custom resistor model did not reach the netlist");
+
   await clickSelector(page, "[data-netlist-diagnostic-component]");
   await waitFor(page, () => (document.querySelector("[data-schematic-status]")?.textContent ?? "").includes("Selected R1"), "diagnostic did not select the component");
   console.log(JSON.stringify({ state, format, ok: true }));

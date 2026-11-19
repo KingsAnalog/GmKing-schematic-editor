@@ -194,7 +194,7 @@ export type SchematicToolbarCommandIntent =
   | { kind: "undo" }
   | { kind: "redo" }
   | { kind: "open-library" }
-  | { kind: "open-right-view"; view: "analysis" | "netlist" | "diagnostics" }
+  | { kind: "open-right-view"; view: "analysis" | "netlist" }
   | { kind: "toggle-log" };
 
 const TOOL_MODE_SET = new Set<string>(TOOL_MODES);
@@ -365,7 +365,7 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
     case "netlist":
       return { kind: "open-right-view", view: "netlist" };
     case "diagnostics":
-      return { kind: "open-right-view", view: "diagnostics" };
+      return { kind: "open-right-view", view: "netlist" };
     case "log":
       return { kind: "toggle-log" };
     default:

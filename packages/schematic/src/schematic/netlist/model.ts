@@ -1,5 +1,6 @@
 import type { ComponentType } from "../types";
 import type { VoltageSourceType } from "../voltageSourceModel";
+import type { NetlistDeviceConfig } from "./profiles";
 
 export type NetlistFormat = "spice" | "spectre";
 export type NetlistSeverity = "error" | "warning" | "info";
@@ -13,12 +14,17 @@ export interface NetlistDiagnostic {
   netName?: string;
 }
 
+export interface NetlistParameter {
+  name: string;
+  value: string;
+}
+
 export interface NetlistInstance {
   componentId: string;
   ref: string;
   master: string;
   type: ComponentType;
-  kind: "primitive" | "mos" | "source" | "probe";
+  kind: "primitive" | "mos" | "source" | "probe" | "bjt" | "modeledPassive";
   nodes: string[];
   params: Record<string, string>;
   sourceKind?: VoltageSourceType | "dc";
@@ -26,25 +32,14 @@ export interface NetlistInstance {
 
 export interface NetlistDesign {
   name: string;
+  ports: string[];
+  parameters: NetlistParameter[];
   instances: NetlistInstance[];
   diagnostics: NetlistDiagnostic[];
 }
 
 export interface NetlistBuildOptions {
-  process: "sky130";
-}
-
-export interface MosProcessDevice {
-  master: string;
-  terminals: readonly string[];
-  params: Readonly<Record<string, string>>;
-  required: readonly string[];
-}
-
-export interface ProcessProfile {
-  id: "sky130";
-  label: string;
-  devices: { nmos: MosProcessDevice; pmos: MosProcessDevice };
+  config?: Partial<NetlistDeviceConfig>;
 }
 
 export function hasNetlistErrors(design: NetlistDesign) {

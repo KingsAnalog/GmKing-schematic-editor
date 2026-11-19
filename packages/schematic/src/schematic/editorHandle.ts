@@ -11,10 +11,10 @@ export interface SchematicPanelLayoutAccess {
   togglePanel(side: "left" | "right"): void;
   isPanelVisible(side: "left" | "right"): boolean;
   getRightDockState?(): {
-    activeView: "analysis" | "netlist" | "diagnostics";
+    activeView: "analysis" | "netlist";
   };
   setRightDockState?(state: {
-    activeView: "analysis" | "netlist" | "diagnostics";
+    activeView: "analysis" | "netlist";
   }): void;
   getSidebarTab?(): "library" | "properties";
   setSidebarTab?(tab: "library" | "properties"): void;

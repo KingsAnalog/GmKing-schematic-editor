@@ -40,7 +40,7 @@ const NARROW_CONTAINER_WIDTH = 1080;
 const STORAGE_KEY = "at-schematic-layout";
 const LEGACY_STORAGE_KEY = "adc-helper/schematic-layout";
 const KEYBOARD_RESIZE_STEP = 20;
-const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["analysis", "netlist", "diagnostics"];
+const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["analysis", "netlist"];
 
 export interface SchematicPanelResizeResult {
   width: number;
@@ -396,7 +396,9 @@ function readState(storage: Pick<Storage, "getItem"> | null): SchematicLayoutSta
       rightWidth: clamp(Number(parsed.rightWidth), RIGHT_WIDTH_RANGE, DEFAULT_STATE.rightWidth),
       leftCollapsed: parsed.leftCollapsed === true,
       rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed,
-      rightActiveView: isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
+      rightActiveView: String(parsed.rightActiveView) === "diagnostics"
+        ? "netlist"
+        : isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
       sidebarTab: parsed.sidebarTab === "properties" ? "properties" : "library",
       logHeight: clamp(Number(parsed.logHeight), LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight)
     };

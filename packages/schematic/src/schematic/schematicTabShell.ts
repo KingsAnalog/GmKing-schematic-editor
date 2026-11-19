@@ -233,15 +233,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           "data-right-view": "netlist",
           "aria-selected": "false",
           tabindex: "-1"
-        }, t("right.netlist", "Netlist")),
-        el("button", {
-          type: "button",
-          class: "schematic-sidebar-tab",
-          role: "tab",
-          "data-right-view": "diagnostics",
-          "aria-selected": "false",
-          tabindex: "-1"
-        }, t("right.diagnostics", "Diagnostics"))
+        }, t("right.netlist", "Netlist"))
       ),
       el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
         el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
@@ -305,17 +297,24 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
               "aria-pressed": "false"
             }, "Spectre")
           ),
-          el("select", { class: "netlist-process", "data-netlist-process": true, "aria-label": "Process" },
-            el("option", { value: "sky130" }, "sky130")
-          ),
           el("button", { type: "button", "data-netlist-copy": true }, "Copy"),
           el("button", { type: "button", "data-netlist-download": true }, "Download")
         ),
+        el("div", { class: "netlist-config" },
+          el("label", { class: "netlist-config-row" },
+            el("span", {}, "Process"),
+            el("select", { "data-netlist-process": true, "aria-label": "Process" },
+              el("option", { value: "sky130" }, "SkyWater SKY130"),
+              el("option", { value: "gf180mcu" }, "GF180MCU"),
+              el("option", { value: "ihp-sg13g2" }, "IHP SG13G2"),
+              el("option", { value: "custom" }, "Custom")
+            )
+          ),
+          el("div", { class: "netlist-device-grid", "data-netlist-devices": true })
+        ),
         el("div", { class: "netlist-status", "data-netlist-status": true }, "Ready"),
-        el("pre", { class: "netlist-code", "data-netlist-code": true })
-      ),
-      el("section", { class: "right-dock-panel diagnostics-panel", "data-right-panel": "diagnostics", role: "tabpanel", hidden: true },
-        el("div", { class: "netlist-status", "data-netlist-diagnostics-summary": true }, "No diagnostics."),
+        el("pre", { class: "netlist-code", "data-netlist-code": true }),
+        el("div", { class: "netlist-diagnostics-head", "data-netlist-diagnostics-summary": true }, "No diagnostics."),
         el("div", { class: "netlist-diagnostics", "data-netlist-diagnostics-list": true })
       )
     ),
