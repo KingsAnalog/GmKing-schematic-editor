@@ -38,6 +38,7 @@
 .schematic-shell {
   --schematic-left-panel-width: 280px;
   --schematic-right-panel-width: 330px;
+  --schematic-font-family: "Inter", "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, Helvetica, sans-serif;
   display: grid;
   grid-template-columns: var(--schematic-left-panel-width) 12px minmax(0, 1fr) 12px var(--schematic-right-panel-width);
   gap: 0;
@@ -246,7 +247,7 @@
   border-radius: 0;
   background: transparent;
   color: #334155;
-  font: 600 12px/28px Arial, sans-serif;
+  font: 600 12px/28px var(--schematic-font-family);
   letter-spacing: 0;
   text-align: left;
 }
@@ -303,7 +304,7 @@
 .schematic-document-tab-new {
   flex: 0 0 auto;
   margin-left: 4px;
-  font: 500 20px/28px Arial, sans-serif;
+  font: 500 20px/28px var(--schematic-font-family);
 }
 
 .schematic-document-tab-action {
@@ -507,7 +508,7 @@
   padding: 1px 4px;
   border: 1px solid #c9c9c4;
   background: #f6f6f4;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--schematic-font-family);
   font-size: 0.72rem;
 }
 
@@ -1038,6 +1039,7 @@
   padding: 6px 8px 0;
   border-bottom: 1px solid var(--schematic-ui-line);
   background: var(--schematic-ui-panel);
+  overflow-x: auto;
 }
 
 .schematic-sidebar-tab {
@@ -1045,7 +1047,7 @@
   align-items: center;
   justify-content: center;
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 62px;
   height: 34px;
   padding: 0 8px;
   border: 1px solid transparent;
@@ -1226,6 +1228,45 @@
 }
 
 .property-mos-params[hidden] {
+  display: none;
+}
+
+.layer-list {
+  display: grid;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 2px;
+  color: var(--schematic-ink);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.layer-row input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.schematic-shell.is-layer-hidden-component [data-layer="component"],
+.schematic-shell.is-layer-hidden-shape [data-layer="shape"],
+.schematic-shell.is-layer-hidden-wire [data-layer="wire"],
+.schematic-shell.is-layer-hidden-junction [data-layer="junction"],
+.schematic-shell.is-layer-hidden-label [data-layer="label"] {
+  display: none;
+}
+
+.schematic-shell.is-layer-hidden-pin .joint-port {
+  display: none;
+}
+
+.schematic-shell.is-layer-hidden-note [data-note-id] {
   display: none;
 }
 

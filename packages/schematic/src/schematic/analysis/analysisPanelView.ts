@@ -1,7 +1,7 @@
 import { typesetMath } from "../../shared/mathjax";
 import type { AnalysisPortSelection, AnalysisResult } from "../types";
 
-const COMPUTE_BUTTON_TEXT = "Compute H(s), Zin(s), Zout(s)";
+const COMPUTE_BUTTON_TEXT = "Compute H(s), ZIN(s), Zout(s)";
 const ANALYSIS_OUTPUT_SELECTOR = "[data-analysis-transfer], [data-analysis-zin], [data-analysis-zout]";
 const ANALYSIS_PORT_FIELDS = ["inputP", "inputN", "outputP", "outputN"] as const;
 
@@ -17,7 +17,7 @@ export function setAnalysisBusy(root: HTMLElement, busy: boolean): void {
   const button = root.querySelector<HTMLButtonElement>("[data-analysis='compute']");
   if (button) {
     button.disabled = busy;
-    button.textContent = busy ? "Computing..." : COMPUTE_BUTTON_TEXT;
+    renderComputeButton(button, busy);
   }
 
   const progress = root.querySelector<HTMLElement>("[data-analysis-progress]");
@@ -25,6 +25,26 @@ export function setAnalysisBusy(root: HTMLElement, busy: boolean): void {
     progress.hidden = !busy;
     progress.setAttribute("aria-busy", String(busy));
   }
+}
+
+function renderComputeButton(button: HTMLButtonElement, busy: boolean) {
+  button.setAttribute("aria-label", COMPUTE_BUTTON_TEXT);
+  if (busy) {
+    button.textContent = "Computing...";
+    return;
+  }
+  const document = button.ownerDocument;
+  const inputSubscript = document.createElement("sub");
+  inputSubscript.textContent = "IN";
+  const outputSubscript = document.createElement("sub");
+  outputSubscript.textContent = "out";
+  button.replaceChildren(
+    document.createTextNode("Compute H(s), Z"),
+    inputSubscript,
+    document.createTextNode("(s), Z"),
+    outputSubscript,
+    document.createTextNode("(s)")
+  );
 }
 
 export function renderAnalysisDiagnostics(root: HTMLElement, diagnostics: readonly string[]): void {

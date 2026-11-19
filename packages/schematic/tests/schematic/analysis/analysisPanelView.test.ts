@@ -10,7 +10,7 @@ import {
 } from "../../../src/schematic/analysis/analysisPanelView";
 import type { AnalysisPortSelection, AnalysisResult } from "../../../src/schematic/types";
 
-const COMPUTE_BUTTON_TEXT = "Compute H(s), Zin(s), Zout(s)";
+const COMPUTE_BUTTON_TEXT = "Compute H(s), ZIN(s), Zout(s)";
 const PROGRESS_TEXT = "Solving symbolic MNA...";
 
 type FakeNode = FakeElement | FakeTextNode;

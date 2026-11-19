@@ -6,6 +6,7 @@ import {
   inductorCouplingCellAttrs
 } from "./inductorCouplingRenderer";
 import type { InductorCoupling, SchematicDocument } from "./types";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 
 export const InductorCouplingElement = (dia.Element as any).define(
   "eda.InductorCoupling",
@@ -20,7 +21,7 @@ export const InductorCouplingElement = (dia.Element as any).define(
       label: {
         fill: INDUCTOR_COUPLING_COLOR,
         stroke: "none",
-        fontFamily: "Arial, Helvetica, sans-serif",
+        fontFamily: SCHEMATIC_FONT_STACK,
         fontSize: INDUCTOR_COUPLING_LABEL_FONT_SIZE,
         fontWeight: 700,
         textAnchor: "middle",

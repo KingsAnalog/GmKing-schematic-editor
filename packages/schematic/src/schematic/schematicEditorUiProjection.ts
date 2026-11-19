@@ -7,6 +7,7 @@ import { MAX_NOTE_FONT_SIZE_PX, MIN_NOTE_FONT_SIZE_PX } from "./notes/noteSizing
 import { NOTE_WIDTH_INPUT_MAX, NOTE_WIDTH_INPUT_MIN } from "./notes/noteProperties";
 import { PAPER_COLOR_PRESETS, NOTE_BACKGROUND_COLOR_PRESETS } from "../shared/color";
 import { SYMBOL_TEMPLATES } from "./symbolTemplateModel";
+import { SCHEMATIC_LAYERS, type SchematicLayerId } from "./layers";
 
 const SCHEMATIC_COLOR_PRESETS = PAPER_COLOR_PRESETS.filter((preset) => preset.color !== DEFAULT_COMPONENT_COLOR);
 
@@ -23,6 +24,7 @@ export function buildSchematicEditorSidebar<T extends object>(
 ) {
   const libraryPanelId = `${namespace}-library`;
   const propertiesPanelId = `${namespace}-properties`;
+  const layersPanelId = `${namespace}-layers`;
   return el("aside", { class: "schematic-palette", "aria-label": "Schematic controls", "data-schematic-palette": true },
     el("section", { class: "symbol-template-panel", "aria-label": "Schematic symbol template" },
       el("label", { class: "symbol-template-control" },
@@ -54,7 +56,16 @@ export function buildSchematicEditorSidebar<T extends object>(
         "aria-selected": "false",
         "aria-controls": propertiesPanelId,
         tabindex: "-1"
-      }, t("sidebar.properties", "Properties"))
+      }, t("sidebar.properties", "Properties")),
+      el("button", {
+        type: "button",
+        class: "schematic-sidebar-tab",
+        role: "tab",
+        "data-sidebar-tab": "layers",
+        "aria-selected": "false",
+        "aria-controls": layersPanelId,
+        tabindex: "-1"
+      }, t("sidebar.layers", "Layers"))
     ),
     el("section", {
       id: libraryPanelId,
@@ -97,7 +108,40 @@ export function buildSchematicEditorSidebar<T extends object>(
         couplingProperties(el),
         noteProperties(el)
       )
+    ),
+    el("section", {
+      id: layersPanelId,
+      class: "schematic-sidebar-panel",
+      "data-sidebar-panel": "layers",
+      role: "tabpanel",
+      "aria-label": t("sidebar.layers", "Layers"),
+      hidden: true
+    },
+      el("div", { class: "palette-title" },
+        el("div", { class: "palette-title-copy" },
+          el("strong", {}, t("sidebar.layers", "Layers")),
+          el("span", {}, "Visibility only; netlist is unchanged.")
+        )
+      ),
+      el("div", { class: "layer-list", "data-layer-list": true },
+        ...SCHEMATIC_LAYERS.map(layer => layerToggle(el, layer.id, layer.label))
+      )
     )
+  );
+}
+
+function layerToggle<T extends object>(
+  el: UiBuilder<T>["el"],
+  layer: SchematicLayerId,
+  label: string
+) {
+  return el("label", { class: "layer-row" },
+    el("input", {
+      type: "checkbox",
+      "data-layer-toggle": layer,
+      "aria-label": label
+    }),
+    el("span", {}, label)
   );
 }
 

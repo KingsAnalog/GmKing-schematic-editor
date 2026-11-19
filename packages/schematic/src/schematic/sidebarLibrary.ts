@@ -1,4 +1,4 @@
-﻿import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
+import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
 import {
   DEVICE_LIBRARIES,
   deviceItemAliases,
@@ -11,7 +11,7 @@ import {
 import { t } from "./schematicI18n";
 import type { SymbolTemplateId } from "./symbolTemplateModel";
 
-export type SidebarTab = "library" | "properties";
+export type SidebarTab = "library" | "properties" | "layers";
 
 interface SidebarLibraryEvents {
   symbolTemplate: () => SymbolTemplateId | undefined;
@@ -67,6 +67,10 @@ export class SidebarLibrary {
     this.setActiveTab("properties");
   }
 
+  showLayers() {
+    this.setActiveTab("layers");
+  }
+
   refresh() {
     this.renderLibraries();
     this.renderCells();
@@ -76,7 +80,7 @@ export class SidebarLibrary {
     const target = event.target as HTMLElement | null;
     if (!target) return;
     const tab = target.closest<HTMLElement>("[data-sidebar-tab]")?.dataset.sidebarTab;
-    if (tab === "library" || tab === "properties") {
+    if (tab === "library" || tab === "properties" || tab === "layers") {
       this.setActiveTab(tab);
       return;
     }

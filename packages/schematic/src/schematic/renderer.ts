@@ -7,6 +7,7 @@ import type { NetLabel } from "./types";
 import { NET_LABEL_FONT_SIZE, NET_LABEL_HEIGHT, netLabelPosition, netLabelWidth } from "./netLabelModel";
 import type { NetLabelStatus } from "./netResolution";
 import { wireColor } from "./networkColorModel";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
   resolvedWireAppearance,
   wireDigitalLocalGeometry,
@@ -146,6 +147,7 @@ export function makeWireCell(
   });
   link.set("wireId", wire.id);
   link.set("preview", preview);
+  link.attr("root/data-layer", "wire");
   return link;
 }
 
@@ -289,6 +291,7 @@ export function makeJunctionCell(point: Point, options: { selected?: boolean; co
   });
   cell.set("junction", true);
   cell.set("junctionKey", pointKey(point));
+  cell.attr("root/data-layer", "junction");
   return cell;
 }
 
@@ -301,7 +304,7 @@ export function netLabelTextAttrs(options: {
   const inactive = options.status === "inactive";
   return {
     fill: options.selected || options.preview ? "#005f9e" : conflict ? "#b00020" : "#111111",
-    fontFamily: "Arial, Helvetica, sans-serif",
+    fontFamily: SCHEMATIC_FONT_STACK,
     fontSize: NET_LABEL_FONT_SIZE,
     fontWeight: 400,
     textAnchor: "start",
@@ -338,5 +341,6 @@ export function makeNetLabelCell(
   });
   cell.set("netLabelId", label.id);
   cell.set("preview", !!options.preview);
+  cell.attr("root/data-layer", "label");
   return cell;
 }

@@ -259,7 +259,13 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           el("button", { type: "button", "data-pick-net": "outputN" }, "Pick")
         ),
         el("div", { class: "analysis-actions" },
-          el("button", { type: "button", "data-analysis": "compute" }, "Compute H(s), Zin(s), Zout(s)")
+          el("button", { type: "button", "data-analysis": "compute" },
+            "Compute H(s), Z",
+            el("sub", {}, "IN"),
+            "(s), Z",
+            el("sub", {}, "out"),
+            "(s)"
+          )
         ),
         el("div", {
           class: "analysis-progress",

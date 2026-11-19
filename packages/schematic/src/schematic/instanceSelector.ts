@@ -8,6 +8,7 @@ import type { SymbolTemplateId, SymbolTemplateContext } from "./symbolTemplateMo
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { renderSymbolContentSvg } from "./symbolContentView";
 import { clamp, escapeAttribute, escapeHtml } from "./uiUtils";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import type { ComponentType } from "./types";
 
 export type InstancePaletteItem = ComponentType | SchematicTemplateId;
@@ -763,7 +764,7 @@ export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplat
       ${model.pinMarksPath ? `<path d="${escapeAttribute(model.pinMarksPath)}" fill="none" stroke="currentColor" stroke-width="${SYMBOL_STROKE_WIDTH}" stroke-linecap="square" stroke-linejoin="miter"></path>` : ""}
       ${model.markerPath ? `<path d="${escapeAttribute(model.markerPath)}" fill="currentColor" stroke="none"></path>` : ""}
       ${symbolContent}
-      ${!model.isAnnotation && model.labelText ? `<text x="${model.labelLayout.x}" y="${model.labelLayout.y}" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-size="${model.labelLayout.fontSize}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}">${escapeHtml(model.labelText)}</text>` : ""}
+      ${!model.isAnnotation && model.labelText ? `<text x="${model.labelLayout.x}" y="${model.labelLayout.y}" fill="currentColor" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${model.labelLayout.fontSize}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}">${escapeHtml(model.labelText)}</text>` : ""}
     </svg>
   `;
 }

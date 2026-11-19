@@ -100,7 +100,7 @@ describe("schematic selection copy/export model", () => {
     const filter = paletteSymbolPreview("filter");
 
     expect(delay).toContain('data-symbol-content-run="0"');
-    expect(delay).toContain('font-family="Arial, Helvetica, sans-serif"');
+    expect(delay).toContain("font-family=\"&quot;Inter&quot;");
     expect(delay).not.toContain("DLY");
 
     expect(filter).toContain('data-symbol-content-path="0"');

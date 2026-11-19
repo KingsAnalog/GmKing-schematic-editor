@@ -1,7 +1,7 @@
 import type { RightDockView } from "./rightDock";
 
 export type SchematicPanelSide = "left" | "right";
-export type SchematicSidebarTab = "library" | "properties";
+export type SchematicSidebarTab = "library" | "properties" | "layers";
 
 export interface RightDockLayoutState {
   activeView: RightDockView;
@@ -399,7 +399,9 @@ function readState(storage: Pick<Storage, "getItem"> | null): SchematicLayoutSta
       rightActiveView: String(parsed.rightActiveView) === "diagnostics"
         ? "netlist"
         : isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
-      sidebarTab: parsed.sidebarTab === "properties" ? "properties" : "library",
+      sidebarTab: parsed.sidebarTab === "properties" || parsed.sidebarTab === "layers"
+        ? parsed.sidebarTab
+        : "library",
       logHeight: clamp(Number(parsed.logHeight), LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight)
     };
   } catch {

@@ -11,6 +11,7 @@ import { PREVIEW_COMPONENT_ID } from "./previewIds";
 import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
   symbolContentCellAttrs,
   symbolContentDefaultAttrs,
@@ -50,14 +51,14 @@ export const SymbolElement = (dia.Element as any).define(
       ...symbolContentDefaultAttrs(),
       switchBladeHit: { fill: "none", stroke: "transparent", strokeWidth: 8, strokeLinecap: "butt", vectorEffect: "non-scaling-stroke", "data-switch-blade": "true" },
       deleteCross: { fill: "none", stroke: "none", strokeWidth: 3, pointerEvents: "none" },
-      label: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, textAnchor: "middle", dominantBaseline: "alphabetic" },
-      refLabel: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif", fontSize: REF_LABEL_FONT_SIZE, textAnchor: "middle" },
+      label: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK, fontSize: 13, textAnchor: "middle", dominantBaseline: "alphabetic" },
+      refLabel: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK, fontSize: REF_LABEL_FONT_SIZE, textAnchor: "middle" },
       refLabelSign: { fontWeight: 700, fontStyle: "normal" },
       refLabelPrefix: { fontWeight: 700, fontStyle: "normal" },
       refLabelHead: { fontWeight: 700, fontStyle: "italic" },
       refLabelTail: { fontWeight: 700, fontStyle: "normal", fontSize: REF_LABEL_TAIL_FONT_SIZE },
       refLabelValue: { fontWeight: 700, fontStyle: "normal", fontSize: REF_LABEL_FONT_SIZE },
-      centeredRefLabel: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif" },
+      centeredRefLabel: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK },
       centeredRefLabelSign: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelPrefix: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelHead: { fontWeight: 700, fontStyle: "italic" },
@@ -171,12 +172,15 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
         "data-triangle-resize-handle": vertex, "data-component-id": model.componentId,
         "aria-label": `Drag vertex ${vertex.toUpperCase()}` }],
       [`triangleVertex${vertex.toUpperCase()}`, { x: x + 7, y: y - 7, text: vertex.toUpperCase(),
-        fill: "#005f9e", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 9,
+        fill: "#005f9e", fontFamily: SCHEMATIC_FONT_STACK, fontSize: 9,
         opacity: visible ? 1 : 0, pointerEvents: "none" }]
     ];
   }));
   return {
     ...triangleHandleAttrs,
+    root: {
+      "data-layer": model.def.type === "rectangle" || model.def.type === "triangle" ? "shape" : "component"
+    },
     frame: {
       x: 0,
       y: 0,

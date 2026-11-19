@@ -13,6 +13,7 @@ import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
+import { defaultLayerVisibility, SCHEMATIC_LAYERS, type SchematicLayerId } from "./layers";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
 import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator";
@@ -264,6 +265,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly eventLog: SchematicEventLog;
   private readonly netlistPanel: NetlistPanelController | null;
   private netlistRefreshTimer: number | null = null;
+  private readonly layerVisibility = defaultLayerVisibility();
   private lastLoggedStatus = "";
   private lastHadSelection = false;
   private readonly contextMenuController;
@@ -795,6 +797,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.eventLog.mount();
     this.netlistPanel?.mount();
     this.netlistPanel?.refresh(this.document);
+    this.applyLayerVisibility();
     this.renderPalette();
     this.bindEvents();
     this.syncToolUi();
@@ -1067,6 +1070,22 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.toolbarController?.bind();
     this.propertyPanelController.bind();
     this.bindMosParamEvents();
+    this.options.paletteEl.addEventListener("change", (event) => {
+      const input = (event.target as HTMLElement | null)?.closest<HTMLInputElement>("[data-layer-toggle]");
+      const layer = input?.dataset.layerToggle as SchematicLayerId | undefined;
+      if (!input || !layer) return;
+      this.layerVisibility[layer] = input.checked;
+      this.applyLayerVisibility();
+    }, { signal: this.lifecycleController.signal });
+  }
+
+  private applyLayerVisibility() {
+    SCHEMATIC_LAYERS.forEach((layer) => {
+      this.options.shellEl.classList.toggle(`is-layer-hidden-${layer.id}`, !this.layerVisibility[layer.id]);
+      this.options.paletteEl
+        .querySelectorAll<HTMLInputElement>(`[data-layer-toggle="${layer.id}"]`)
+        .forEach(input => { input.checked = this.layerVisibility[layer.id]; });
+    });
   }
 
   private bindMosParamEvents() {

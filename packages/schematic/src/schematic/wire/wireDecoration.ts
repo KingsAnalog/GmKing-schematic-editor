@@ -1,4 +1,5 @@
 import { variableSymbolArrowHeadSize } from "../symbols/variableSymbolDecoration";
+import { SCHEMATIC_FONT_STACK } from "../schematicFont";
 import type {
   Point,
   Wire,
@@ -9,7 +10,7 @@ import type {
 } from "../types";
 
 export const WIRE_DIGITAL_LABEL_FONT_SIZE = 12;
-export const WIRE_DIGITAL_LABEL_FONT_FAMILY = "Arial, Helvetica, sans-serif";
+export const WIRE_DIGITAL_LABEL_FONT_FAMILY = SCHEMATIC_FONT_STACK;
 
 const DIGITAL_SLASH_HALF_PROJECTION = 2;
 const DIGITAL_LABEL_X_OFFSET = 4;

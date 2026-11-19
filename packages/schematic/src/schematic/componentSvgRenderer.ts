@@ -5,6 +5,7 @@ import { escapeAttribute, escapeHtml } from "./uiUtils";
 import { componentCellPosition } from "./view-geometry";
 import type { ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 
 const PORT_MARKER_SIZE = 3 * SYMBOL_STROKE_WIDTH;
 
@@ -106,13 +107,13 @@ function renderSymbolLabel(
         const dy = index === 0 ? 0.3 - (lines.length - 1) / 2 : 1;
         return `<tspan x="${number(x)}" dy="${number(dy)}em">${escapeHtml(line)}</tspan>`;
       }).join("");
-  return `<text data-selector="label" x="${number(x)}" y="${number(y)}"${svgAttr("transform", model.labelTransform)} fill="${escapeAttribute(model.color)}" font-family="Arial, Helvetica, sans-serif" font-size="${number(model.labelLayout.fontSize)}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}"${opacityAttr(model.labelOpacity)}>${content}</text>`;
+  return `<text data-selector="label" x="${number(x)}" y="${number(y)}"${svgAttr("transform", model.labelTransform)} fill="${escapeAttribute(model.color)}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${number(model.labelLayout.fontSize)}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}"${opacityAttr(model.labelOpacity)}>${content}</text>`;
 }
 
 function renderReferenceLabel(model: ReturnType<typeof resolveComponentVisualModel>) {
   if (!model.showRefLabel) return "";
   const attrs = model.refLabelAttrs;
-  const common = `${svgAttr("transform", attrs.refLabel.transform)} fill="${escapeAttribute(model.color)}"${opacityAttr(model.labelOpacity)} font-family="Arial, Helvetica, sans-serif"`;
+  const common = `${svgAttr("transform", attrs.refLabel.transform)} fill="${escapeAttribute(model.color)}"${opacityAttr(model.labelOpacity)} font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}"`;
   return `<g data-selector="refLabel"${common}>${[
     absoluteRefText("refLabelSign", attrs.refLabelSign, model.refLabelSignFontSize, "normal", attrs.refLabel.dominantBaseline),
     absoluteRefText("refLabelPrefix", attrs.refLabelPrefix, model.refLabelPrefixFontSize, "normal", attrs.refLabel.dominantBaseline),

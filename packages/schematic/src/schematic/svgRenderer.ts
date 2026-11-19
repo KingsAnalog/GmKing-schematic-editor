@@ -14,6 +14,7 @@ import {
 import type { NetLabelStatus } from "./netResolution";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { escapeAttribute, escapeHtml } from "./uiUtils";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
   netLabelVisualBounds,
   noteVisualBounds,
@@ -151,7 +152,7 @@ function wrapSvg(
   const grid = options.showGrid
     ? `<defs><pattern id="${escapeAttribute(patternId)}" width="${GRID_SIZE}" height="${GRID_SIZE}" patternUnits="userSpaceOnUse"><path d="M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}" fill="none" stroke="#d8dee8" stroke-width="0.6" /></pattern></defs><rect x="${number(viewBox.x)}" y="${number(viewBox.y)}" width="${number(viewBox.width)}" height="${number(viewBox.height)}" fill="url(#${escapeAttribute(patternId)})" />`
     : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${number(viewBox.x)} ${number(viewBox.y)} ${number(viewBox.width)} ${number(viewBox.height)}">${background}${grid}<g font-family="Arial, Helvetica, sans-serif">${body}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${number(viewBox.x)} ${number(viewBox.y)} ${number(viewBox.width)} ${number(viewBox.height)}">${background}${grid}<g font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}">${body}</g></svg>`;
 }
 
 function renderWire(wire: Wire, connections: { start: boolean; end: boolean }) {
@@ -197,7 +198,7 @@ function renderWireDigital(wire: Wire, attrs: ReturnType<typeof wireAttrs>) {
   if (!geometry) return "";
   const slash = `<path data-wire-digital-slash d="M ${number(geometry.slashStart.x)} ${number(geometry.slashStart.y)} L ${number(geometry.slashEnd.x)} ${number(geometry.slashEnd.y)}" fill="none" stroke="${attrs.stroke}" stroke-width="${number(geometry.strokeWidth)}" stroke-linecap="square"${opacityAttr(attrs.opacity)} />`;
   const label = geometry.label
-    ? `<text data-wire-digital-label x="${number(geometry.labelPosition.x)}" y="${number(geometry.labelPosition.y)}" fill="${attrs.stroke}" font-family="Arial, Helvetica, sans-serif" font-size="${WIRE_DIGITAL_LABEL_FONT_SIZE}" dominant-baseline="middle"${opacityAttr(attrs.opacity)}>${escapeHtml(geometry.label)}</text>`
+    ? `<text data-wire-digital-label x="${number(geometry.labelPosition.x)}" y="${number(geometry.labelPosition.y)}" fill="${attrs.stroke}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${WIRE_DIGITAL_LABEL_FONT_SIZE}" dominant-baseline="middle"${opacityAttr(attrs.opacity)}>${escapeHtml(geometry.label)}</text>`
     : "";
   return `${slash}${label}`;
 }
@@ -212,7 +213,7 @@ function renderNetLabel(label: NetLabel, status?: NetLabelStatus) {
   const conflict = status === "conflict";
   const inactive = status === "inactive";
   const color = conflict ? "#b00020" : "#111111";
-  return `<text data-net-label-id="${escapeAttribute(label.id)}" x="${number(position.x)}" y="${number(position.y + NET_LABEL_HEIGHT / 2)}" fill="${color}" font-family="Arial, Helvetica, sans-serif" font-size="${NET_LABEL_FONT_SIZE}" dominant-baseline="middle"${conflict ? ' text-decoration="underline"' : ""}${opacityAttr(inactive ? 0.42 : 1)}>${escapeHtml(label.name)}</text>`;
+  return `<text data-net-label-id="${escapeAttribute(label.id)}" x="${number(position.x)}" y="${number(position.y + NET_LABEL_HEIGHT / 2)}" fill="${color}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${NET_LABEL_FONT_SIZE}" dominant-baseline="middle"${conflict ? ' text-decoration="underline"' : ""}${opacityAttr(inactive ? 0.42 : 1)}>${escapeHtml(label.name)}</text>`;
 }
 
 function renderNote(
@@ -242,7 +243,7 @@ function renderNote(
   const border = markdown ? 1 : 0;
   const horizontalPadding = NOTE_HORIZONTAL_PADDING + (markdown ? 0 : 1);
   const foreignObject = !portable && html
-    ? `<foreignObject${markdown ? ' requiredExtensions="http://www.w3.org/1999/xhtml"' : ""} x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;border:${border}px solid transparent;padding:${number(NOTE_VERTICAL_PADDING)}px ${horizontalPadding}px;overflow:hidden;color:${escapeAttribute(noteTextColor(note))};font-family:Arial,Helvetica,sans-serif;font-size:${number(fontSize)}px;line-height:${lineHeight};white-space:${whiteSpace};overflow-wrap:${overflowWrap}">${html}</div></foreignObject>`
+    ? `<foreignObject${markdown ? ' requiredExtensions="http://www.w3.org/1999/xhtml"' : ""} x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;border:${border}px solid transparent;padding:${number(NOTE_VERTICAL_PADDING)}px ${horizontalPadding}px;overflow:hidden;color:${escapeAttribute(noteTextColor(note))};font-family:${escapeAttribute(SCHEMATIC_FONT_STACK)};font-size:${number(fontSize)}px;line-height:${lineHeight};white-space:${whiteSpace};overflow-wrap:${overflowWrap}">${html}</div></foreignObject>`
     : "";
   const content = foreignObject
     ? markdown ? `<switch>${foreignObject}${native}</switch>` : foreignObject
@@ -267,7 +268,7 @@ function renderNativeNoteText(
   const y = box.y + NOTE_VERTICAL_PADDING + fontSize * (plain ? 0.85 : 1);
   const tspans = lines.map((line, index) => `<tspan x="${number(x)}"${index === 0 ? "" : ` dy="${number(lineHeight)}"`}>${escapeHtml(line || " ")}</tspan>`).join("");
   const clipId = `${namespace}-note-text-clip-${svgIdFragment(note.id)}`;
-  return `<g data-markdown-note-fallback="${escapeAttribute(note.id)}" clip-path="url(#${clipId})"><defs><clipPath id="${escapeAttribute(clipId)}"><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" /></clipPath></defs><text x="${number(x)}" y="${number(y)}" fill="${escapeAttribute(noteTextColor(note))}" font-family="Arial, Helvetica, sans-serif" font-size="${number(fontSize)}"${style?.fontWeight ? ` font-weight="${style.fontWeight}"` : ""}${style?.fontStyle ? ` font-style="${style.fontStyle}"` : ""} xml:space="preserve">${tspans}</text></g>`;
+  return `<g data-markdown-note-fallback="${escapeAttribute(note.id)}" clip-path="url(#${clipId})"><defs><clipPath id="${escapeAttribute(clipId)}"><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" /></clipPath></defs><text x="${number(x)}" y="${number(y)}" fill="${escapeAttribute(noteTextColor(note))}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${number(fontSize)}"${style?.fontWeight ? ` font-weight="${style.fontWeight}"` : ""}${style?.fontStyle ? ` font-style="${style.fontStyle}"` : ""} xml:space="preserve">${tspans}</text></g>`;
 }
 
 function opacityAttr(opacity: number) {

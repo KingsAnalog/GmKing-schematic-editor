@@ -16,8 +16,8 @@ export interface SchematicPanelLayoutAccess {
   setRightDockState?(state: {
     activeView: "analysis" | "netlist";
   }): void;
-  getSidebarTab?(): "library" | "properties";
-  setSidebarTab?(tab: "library" | "properties"): void;
+  getSidebarTab?(): "library" | "properties" | "layers";
+  setSidebarTab?(tab: "library" | "properties" | "layers"): void;
   getLogHeight?(): number;
   setLogHeight?(height: number): void;
   isNarrow?(): boolean;
