@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { fixtureDocument } from "../support/fixtureDocument";
 import { afterEach, describe, expect, it } from "vitest";
 import { mountReadonlySchematicViewer } from "../../../src/schematic/viewer";
@@ -19,57 +20,30 @@ describe("readonly schematic viewer lifecycle", () => {
       disconnect() { disconnectCount += 1; }
       unobserve() {}
     };
-    const container = new FakeContainer();
+    const container = document.createElement("div");
     const viewer = mountReadonlySchematicViewer(
-      container as unknown as HTMLElement,
+      container,
       contentWithNote("first")
     );
 
     expect(observeCount).toBe(1);
-    expect(container.html).toContain('data-note-id="first"');
-    expect(container.html).not.toContain("joint-paper");
-    expect(container.svg.attributes.get("width")).toBe("100%");
-    expect(container.svg.attributes.get("height")).toBe("100%");
+    expect(container.innerHTML).toContain('data-note-id="first"');
+    expect(container.innerHTML).not.toContain("joint-paper");
+    expect(container.querySelector("svg")?.getAttribute("width")).toBe("100%");
+    expect(container.querySelector("svg")?.getAttribute("height")).toBe("100%");
 
     viewer.update(contentWithNote("second"));
     viewer.fit();
-    expect(container.html).toContain('data-note-id="second"');
-    expect(container.svg.attributes.get("viewBox")).toBeTruthy();
+    expect(container.innerHTML).toContain('data-note-id="second"');
+    expect(container.querySelector("svg")?.getAttribute("viewBox")).toBeTruthy();
 
     viewer.destroy();
     viewer.destroy();
     expect(disconnectCount).toBe(1);
-    expect(container.html).toBe("");
-    expect(container.classes.has("schematic-readonly-viewer")).toBe(false);
+    expect(container.innerHTML).toBe("");
+    expect(container.classList.contains("schematic-readonly-viewer")).toBe(false);
   });
 });
-
-class FakeSvg {
-  readonly attributes = new Map<string, string>();
-  readonly classList = { add: (_name: string) => undefined };
-  setAttribute(name: string, value: string) {
-    this.attributes.set(name, value);
-  }
-}
-
-class FakeContainer {
-  readonly classes = new Set<string>();
-  readonly svg = new FakeSvg();
-  readonly classList = {
-    add: (name: string) => this.classes.add(name),
-    remove: (name: string) => this.classes.delete(name)
-  };
-  html = "";
-
-  set innerHTML(value: string) { this.html = value; }
-  get innerHTML() { return this.html; }
-  set textContent(value: string) { this.html = value; }
-  get textContent() { return this.html; }
-
-  querySelector(selector: string) {
-    return selector === "svg" && this.html.includes("<svg") ? this.svg : null;
-  }
-}
 
 function contentWithNote(id: string): SchematicContent {
   return fixtureDocument({

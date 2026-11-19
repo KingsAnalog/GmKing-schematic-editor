@@ -60,7 +60,7 @@ export class SchematicAnalysisController {
 
   bind() {
     if (this.bindingController) return;
-    const realm = this.root.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const realm = this.root.ownerDocument.defaultView;
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.bindingController = new AbortControllerCtor();
     const { signal } = this.bindingController;

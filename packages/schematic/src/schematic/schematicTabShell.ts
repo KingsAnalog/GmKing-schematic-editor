@@ -1,5 +1,6 @@
-import { renderSchematicToolbar } from "./schematicToolbarWeb";
-import { renderSchematicEditorSidebarProjection } from "./schematicEditorUiProjection";
+import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
+import { buildSchematicToolbar } from "./schematicToolbarWeb";
+import { buildSchematicEditorSidebar } from "./schematicEditorUiProjection";
 export {
   SCHEMATIC_NETWORK_COLOR_PRESETS,
   SCHEMATIC_SYMBOL_COLOR_PRESETS
@@ -11,6 +12,15 @@ export type { SchematicEditorMountElements } from "./editorHandle";
 let nextShellNamespace = 1;
 
 export function renderSchematicTabShell(): string {
+  return buildTabShell(markupUi).html;
+}
+
+export function mountSchematicTab(root: HTMLElement) {
+  root.replaceChildren(buildTabShell(domUi(root.ownerDocument)));
+}
+
+function buildTabShell<T extends object>(ui: UiBuilder<T>) {
+  const { el } = ui;
   const namespace = `schematic-shell-${nextShellNamespace++}`;
   const importInputId = `${namespace}-document-import-input`;
   const analysisIds = {
@@ -19,99 +29,182 @@ export function renderSchematicTabShell(): string {
     outputP: `${namespace}-analysis-output-p`,
     outputN: `${namespace}-analysis-output-n`
   };
-  return `
-    <main class="schematic-shell schematic-editor-root" data-schematic-shell>
-      ${renderSchematicEditorSidebarProjection()}
-      <div class="schematic-panel-resizer" role="separator" aria-label="Resize or reveal controls panel" aria-orientation="vertical" aria-valuemin="0" tabindex="0" title="Drag to resize or collapse controls" data-schematic-panel-resizer="left"></div>
-      <section class="schematic-workspace" aria-label="Schematic drawing area">
-        <div class="schematic-document-tabs" aria-label="Open schematics" data-schematic-document-tabs>
-          <div class="schematic-document-tab-list" role="tablist" aria-label="Schematic documents" data-schematic-document-tab-list></div>
-          <button type="button" class="schematic-document-tab-new" data-schematic-document-new aria-label="New schematic" title="New schematic">+</button>
-          <button type="button" class="schematic-document-tab-action" data-schematic-document-import aria-label="Import schematic" title="Import schematic" aria-controls="${importInputId}">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 3v12"></path>
-              <path d="m7 10 5 5 5-5"></path>
-              <path d="M5 21h14"></path>
-            </svg>
-          </button>
-          <button type="button" class="schematic-document-tab-action" data-schematic-document-paste aria-label="Paste schematic JSON from clipboard" title="Paste schematic JSON from clipboard">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M9 5h6"></path>
-              <path d="M9 3h6v4H9z"></path>
-              <path d="M7 5H5v16h14V5h-2"></path>
-              <path d="M12 10v7"></path>
-              <path d="m9 14 3 3 3-3"></path>
-            </svg>
-          </button>
-          <button type="button" class="schematic-document-tab-action" data-schematic-document-export aria-label="Export schematic" title="Export schematic">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 21V9"></path>
-              <path d="m7 14 5-5 5 5"></path>
-              <path d="M5 3h14"></path>
-            </svg>
-          </button>
-          <input id="${importInputId}" type="file" accept=".json,application/json" data-schematic-document-import-input hidden />
-          <div class="schematic-close-snackbar" data-schematic-close-snackbar role="status" aria-live="polite" aria-atomic="true" hidden>
-            <span data-schematic-close-message></span>
-            <button type="button" data-schematic-close-undo>Undo</button>
-          </div>
-          <div class="schematic-storage-error-notice" data-schematic-storage-error role="alert" aria-atomic="true" hidden>
-            <span data-schematic-storage-error-message></span>
-            <button type="button" data-schematic-storage-retry>Retry save</button>
-            <button type="button" class="schematic-storage-error-dismiss" data-schematic-storage-error-dismiss aria-label="Dismiss storage error" title="Dismiss"></button>
-          </div>
-        </div>
-        <div class="schematic-toolbar">${renderSchematicToolbar(namespace)}</div>
-        <div class="schematic-paper" tabindex="0" aria-label="Schematic canvas" data-schematic-paper></div>
-        <div class="schematic-status" aria-live="polite" data-schematic-status>Select a tool or press i to add an instance.</div>
-      </section>
-      <div class="schematic-panel-resizer" role="separator" aria-label="Resize or reveal analysis panel" aria-orientation="vertical" aria-valuemin="0" tabindex="0" title="Drag to resize or collapse analysis" data-schematic-panel-resizer="right"></div>
-      <aside class="analysis-panel" aria-label="Symbolic analysis" data-schematic-analysis-panel>
-        <div class="analysis-panel-heading">
-          <h2>Symbolic Analysis</h2>
-        </div>
-        <p class="analysis-note">Uses component values from the Property Editor.</p>
-        <div data-selection-summary class="selection-summary">No object selected.</div>
-        <div class="net-pick-row">
-          <label for="${analysisIds.inputP}">Input +</label>
-          <select id="${analysisIds.inputP}" data-net-select="inputP"></select>
-          <button type="button" data-pick-net="inputP">Pick</button>
-        </div>
-        <div class="net-pick-row">
-          <label for="${analysisIds.inputN}">Input -</label>
-          <select id="${analysisIds.inputN}" data-net-select="inputN"></select>
-          <button type="button" data-pick-net="inputN">Pick</button>
-        </div>
-        <div class="net-pick-row">
-          <label for="${analysisIds.outputP}">Output +</label>
-          <select id="${analysisIds.outputP}" data-net-select="outputP"></select>
-          <button type="button" data-pick-net="outputP">Pick</button>
-        </div>
-        <div class="net-pick-row">
-          <label for="${analysisIds.outputN}">Output -</label>
-          <select id="${analysisIds.outputN}" data-net-select="outputN"></select>
-          <button type="button" data-pick-net="outputN">Pick</button>
-        </div>
-        <div class="analysis-actions">
-          <button type="button" data-analysis="compute">Compute H(s), Zin(s), Zout(s)</button>
-        </div>
-        <div class="analysis-progress" data-analysis-progress hidden role="progressbar" aria-label="Symbolic analysis progress">
-          <div class="analysis-progress-bar"></div>
-          <span data-analysis-progress-text>Solving symbolic MNA...</span>
-        </div>
-        <div data-analysis-diagnostics class="analysis-diagnostics"></div>
-        <div class="analysis-results">
-          <h3>Transfer Function</h3>
-          <output data-analysis-transfer></output>
-          <h3>Input Impedance</h3>
-          <output data-analysis-zin></output>
-          <h3>Output Impedance</h3>
-          <output data-analysis-zout></output>
-        </div>
-      </aside>
-      <button type="button" class="schematic-panel-backdrop" aria-label="Close side panel" data-schematic-panel-backdrop hidden></button>
-    </main>
-  `;
+  return el("main", { class: "schematic-shell schematic-editor-root", "data-schematic-shell": true },
+    buildSchematicEditorSidebar(el),
+    el("div", {
+      class: "schematic-panel-resizer",
+      role: "separator",
+      "aria-label": "Resize or reveal controls panel",
+      "aria-orientation": "vertical",
+      "aria-valuemin": "0",
+      tabindex: "0",
+      title: "Drag to resize or collapse controls",
+      "data-schematic-panel-resizer": "left"
+    }),
+    el("section", { class: "schematic-workspace", "aria-label": "Schematic drawing area" },
+      el("div", { class: "schematic-document-tabs", "aria-label": "Open schematics", "data-schematic-document-tabs": true },
+        el("div", {
+          class: "schematic-document-tab-list",
+          role: "tablist",
+          "aria-label": "Schematic documents",
+          "data-schematic-document-tab-list": true
+        }),
+        el("button", {
+          type: "button",
+          class: "schematic-document-tab-new",
+          "data-schematic-document-new": true,
+          "aria-label": "New schematic",
+          title: "New schematic"
+        }, "+"),
+        el("button", {
+          type: "button",
+          class: "schematic-document-tab-action",
+          "data-schematic-document-import": true,
+          "aria-label": "Import schematic",
+          title: "Import schematic",
+          "aria-controls": importInputId
+        },
+          el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
+            el("path", { d: "M12 3v12" }),
+            el("path", { d: "m7 10 5 5 5-5" }),
+            el("path", { d: "M5 21h14" })
+          )
+        ),
+        el("button", {
+          type: "button",
+          class: "schematic-document-tab-action",
+          "data-schematic-document-paste": true,
+          "aria-label": "Paste schematic JSON from clipboard",
+          title: "Paste schematic JSON from clipboard"
+        },
+          el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
+            el("path", { d: "M9 5h6" }),
+            el("path", { d: "M9 3h6v4H9z" }),
+            el("path", { d: "M7 5H5v16h14V5h-2" }),
+            el("path", { d: "M12 10v7" }),
+            el("path", { d: "m9 14 3 3 3-3" })
+          )
+        ),
+        el("button", {
+          type: "button",
+          class: "schematic-document-tab-action",
+          "data-schematic-document-export": true,
+          "aria-label": "Export schematic",
+          title: "Export schematic"
+        },
+          el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
+            el("path", { d: "M12 21V9" }),
+            el("path", { d: "m7 14 5-5 5 5" }),
+            el("path", { d: "M5 3h14" })
+          )
+        ),
+        el("input", {
+          id: importInputId,
+          type: "file",
+          accept: ".json,application/json",
+          "data-schematic-document-import-input": true,
+          hidden: true
+        }),
+        el("div", {
+          class: "schematic-close-snackbar",
+          "data-schematic-close-snackbar": true,
+          role: "status",
+          "aria-live": "polite",
+          "aria-atomic": "true",
+          hidden: true
+        },
+          el("span", { "data-schematic-close-message": true }),
+          el("button", { type: "button", "data-schematic-close-undo": true }, "Undo")
+        ),
+        el("div", {
+          class: "schematic-storage-error-notice",
+          "data-schematic-storage-error": true,
+          role: "alert",
+          "aria-atomic": "true",
+          hidden: true
+        },
+          el("span", { "data-schematic-storage-error-message": true }),
+          el("button", { type: "button", "data-schematic-storage-retry": true }, "Retry save"),
+          el("button", {
+            type: "button",
+            class: "schematic-storage-error-dismiss",
+            "data-schematic-storage-error-dismiss": true,
+            "aria-label": "Dismiss storage error",
+            title: "Dismiss"
+          })
+        )
+      ),
+      el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
+      el("div", { class: "schematic-paper", tabindex: "0", "aria-label": "Schematic canvas", "data-schematic-paper": true }),
+      el("div", { class: "schematic-status", "aria-live": "polite", "data-schematic-status": true },
+        "Select a tool or press i to add an instance."
+      )
+    ),
+    el("div", {
+      class: "schematic-panel-resizer",
+      role: "separator",
+      "aria-label": "Resize or reveal analysis panel",
+      "aria-orientation": "vertical",
+      "aria-valuemin": "0",
+      tabindex: "0",
+      title: "Drag to resize or collapse analysis",
+      "data-schematic-panel-resizer": "right"
+    }),
+    el("aside", { class: "analysis-panel", "aria-label": "Symbolic analysis", "data-schematic-analysis-panel": true },
+      el("div", { class: "analysis-panel-heading" }, el("h2", {}, "Symbolic Analysis")),
+      el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
+      el("div", { "data-selection-summary": true, class: "selection-summary" }, "No object selected."),
+      el("div", { class: "net-pick-row" },
+        el("label", { for: analysisIds.inputP }, "Input +"),
+        el("select", { id: analysisIds.inputP, "data-net-select": "inputP" }),
+        el("button", { type: "button", "data-pick-net": "inputP" }, "Pick")
+      ),
+      el("div", { class: "net-pick-row" },
+        el("label", { for: analysisIds.inputN }, "Input -"),
+        el("select", { id: analysisIds.inputN, "data-net-select": "inputN" }),
+        el("button", { type: "button", "data-pick-net": "inputN" }, "Pick")
+      ),
+      el("div", { class: "net-pick-row" },
+        el("label", { for: analysisIds.outputP }, "Output +"),
+        el("select", { id: analysisIds.outputP, "data-net-select": "outputP" }),
+        el("button", { type: "button", "data-pick-net": "outputP" }, "Pick")
+      ),
+      el("div", { class: "net-pick-row" },
+        el("label", { for: analysisIds.outputN }, "Output -"),
+        el("select", { id: analysisIds.outputN, "data-net-select": "outputN" }),
+        el("button", { type: "button", "data-pick-net": "outputN" }, "Pick")
+      ),
+      el("div", { class: "analysis-actions" },
+        el("button", { type: "button", "data-analysis": "compute" }, "Compute H(s), Zin(s), Zout(s)")
+      ),
+      el("div", {
+        class: "analysis-progress",
+        "data-analysis-progress": true,
+        hidden: true,
+        role: "progressbar",
+        "aria-label": "Symbolic analysis progress"
+      },
+        el("div", { class: "analysis-progress-bar" }),
+        el("span", { "data-analysis-progress-text": true }, "Solving symbolic MNA...")
+      ),
+      el("div", { "data-analysis-diagnostics": true, class: "analysis-diagnostics" }),
+      el("div", { class: "analysis-results" },
+        el("h3", {}, "Transfer Function"),
+        el("output", { "data-analysis-transfer": true }),
+        el("h3", {}, "Input Impedance"),
+        el("output", { "data-analysis-zin": true }),
+        el("h3", {}, "Output Impedance"),
+        el("output", { "data-analysis-zout": true })
+      )
+    ),
+    el("button", {
+      type: "button",
+      class: "schematic-panel-backdrop",
+      "aria-label": "Close side panel",
+      "data-schematic-panel-backdrop": true,
+      hidden: true
+    })
+  );
 }
 
 export function querySchematicEditorMountElements(root: HTMLElement): SchematicEditorMountElements | null {

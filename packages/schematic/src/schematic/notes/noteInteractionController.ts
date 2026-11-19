@@ -22,7 +22,7 @@ import {
 import { noteFontSizePx } from "./noteSizing";
 
 export interface NoteInteractionLayer {
-  getNoteElement(noteId: string): unknown | null;
+  getNoteElement(noteId: string): unknown;
   mountEditor(note: SchematicNote): boolean;
   focusEditor(note: SchematicNote): void;
   readEditor(note: SchematicNote): { text: string };

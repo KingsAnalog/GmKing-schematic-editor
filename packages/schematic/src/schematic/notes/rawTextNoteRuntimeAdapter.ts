@@ -14,12 +14,15 @@ class RawTextNoteRuntime implements SchematicNoteRuntime {
   private textarea: HTMLTextAreaElement | null = null;
   private destroyed = false;
   private readonly previousWhiteSpace: string;
+  private readonly hadRawMarkdownClass: boolean;
 
   constructor(private readonly options: SchematicNoteRuntimeOptions) {
     this.text = normalizeText(options.markdown);
     this.editable = options.editable;
     this.previousWhiteSpace = options.host.style.whiteSpace;
-    options.host.style.whiteSpace = "pre-wrap";
+    this.hadRawMarkdownClass = options.host.classList.contains("schematic-note-raw-markdown-content");
+    options.host.classList.add("schematic-note-raw-markdown-content");
+    options.host.style.whiteSpace = "";
     options.signal?.addEventListener("abort", this.handleAbort, { once: true });
     this.render();
   }
@@ -72,7 +75,8 @@ class RawTextNoteRuntime implements SchematicNoteRuntime {
     if (this.destroyed) return null;
     const clone = this.options.host.ownerDocument.createElement("div");
     clone.className = "schematic-note-plain-content schematic-note-raw-markdown-content";
-    clone.style.whiteSpace = "pre-wrap";
+    const whiteSpace = this.options.host.ownerDocument.defaultView?.getComputedStyle(this.options.host).whiteSpace;
+    if (whiteSpace) clone.style.whiteSpace = whiteSpace;
     clone.textContent = this.read() || " ";
     return clone;
   }
@@ -94,6 +98,7 @@ class RawTextNoteRuntime implements SchematicNoteRuntime {
     this.textarea?.removeEventListener("input", this.handleInput);
     this.textarea = null;
     this.options.host.classList.remove("is-markdown-editable");
+    this.options.host.classList.toggle("schematic-note-raw-markdown-content", this.hadRawMarkdownClass);
     this.options.host.style.whiteSpace = this.previousWhiteSpace;
     this.options.host.replaceChildren();
   }

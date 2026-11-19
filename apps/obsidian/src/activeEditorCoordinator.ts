@@ -1,3 +1,4 @@
+import { createSchematicSvgElement } from "@edahelper/schematic/viewer";
 import { Notice } from "obsidian";
 import { isolateHistory, redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { Transaction } from "@codemirror/state";
@@ -382,8 +383,6 @@ export class SchematicActiveEditorCoordinator {
       editorRoot.classList.remove("schematic-editor-block");
       editorRoot.style.removeProperty(SCHEMATIC_HEIGHT_LIMIT_PROPERTY);
       delete editorRoot.dataset.schematicSession;
-      editorRoot.style.width = "100%";
-      editorRoot.style.height = "100%";
     }
     widgetRoot.className = "schematic-editor-block is-active";
     widgetRoot.dataset.schematicSession = session().id;
@@ -460,15 +459,15 @@ export class SchematicActiveEditorCoordinator {
         return true;
       },
       undo: () => {
-        undo(active.view as never);
+        undo(active.view);
         return null;
       },
       redo: () => {
-        redo(active.view as never);
+        redo(active.view);
         return null;
       },
-      canUndo: () => undoDepth(active.view.state as never) > 0,
-      canRedo: () => redoDepth(active.view.state as never) > 0,
+      canUndo: () => undoDepth(active.view.state) > 0,
+      canRedo: () => redoDepth(active.view.state) > 0,
       onViewChange() {},
       ownsKeyboardTarget: (target) => (
         this.active === active
@@ -664,7 +663,7 @@ export class SchematicActiveEditorCoordinator {
     container.className = "schematic-static-svg";
     const rendering = renderSchematicBlockSvg(session.projection.content, `${session.id}-static`);
     updateSchematicBlockHeight(root, rendering);
-    container.innerHTML = rendering.svg;
+    container.replaceChildren(createSchematicSvgElement(container.ownerDocument, rendering.svg));
     root.appendChild(container);
   }
 

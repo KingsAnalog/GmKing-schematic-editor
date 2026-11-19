@@ -65,7 +65,7 @@ class RootUnionFind {
 export function validateNetLabelName(value: string) {
   const name = value.trim();
   if (!name) return { valid: false as const, name, message: "Label name is required." };
-  if (!/^[A-Za-z0-9_!<>\[\]:+\-]+$/.test(name)) {
+  if (!/^[A-Za-z0-9_!<>[\]:+-]+$/.test(name)) {
     return {
       valid: false as const,
       name,
@@ -164,7 +164,7 @@ export function resolveSchematicNets(
   });
 
   const firstRootByExplicitName = new Map<string, string>();
-  const firstGroundRoot = groundRoots.values().next().value as string | undefined;
+  const firstGroundRoot = groundRoots.values().next().value;
   if (firstGroundRoot) firstRootByExplicitName.set("0", firstGroundRoot);
   validNameByRoot.forEach((name, root) => {
     const existing = firstRootByExplicitName.get(name);

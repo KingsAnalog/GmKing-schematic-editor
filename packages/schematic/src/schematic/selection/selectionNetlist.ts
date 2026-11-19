@@ -100,7 +100,7 @@ function renderInstance(entry: { component: ComponentInstance; cellName: string;
 }
 
 function netlistToken(value: string) {
-  const token = value.trim().replace(/[^A-Za-z0-9_!<>\[\]:+\-]/g, "_");
+  const token = value.trim().replace(/[^A-Za-z0-9_!<>[\]:+-]/g, "_");
   return token || "instance";
 }
 

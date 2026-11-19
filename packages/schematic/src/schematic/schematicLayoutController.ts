@@ -83,7 +83,7 @@ export class SchematicLayoutController {
     private readonly root: HTMLElement,
     options: SchematicLayoutControllerOptions = {}
   ) {
-    const realm = root.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const realm = root.ownerDocument.defaultView;
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.lifecycle = new AbortControllerCtor();
     this.elementConstructor = realm?.Element ?? null;

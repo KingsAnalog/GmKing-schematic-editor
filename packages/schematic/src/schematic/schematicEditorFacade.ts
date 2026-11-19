@@ -31,7 +31,7 @@ export function mountSchematicEditorFacade<Editor extends SchematicEditorLifecyc
     const destroyEditor = editor.destroy.bind(editor);
     let destroyResult: ReturnType<Editor["destroy"]> | undefined;
     let destroyed = false;
-    editor.destroy = (() => {
+    editor.destroy = () => {
       if (destroyed) return destroyResult;
       destroyed = true;
       try {
@@ -40,7 +40,7 @@ export function mountSchematicEditorFacade<Editor extends SchematicEditorLifecyc
       } finally {
         layout?.destroy();
       }
-    }) as Editor["destroy"];
+    };
     layout?.init();
     editor.init();
     return editor;

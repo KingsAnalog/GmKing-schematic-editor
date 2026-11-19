@@ -1,4 +1,4 @@
-# Schematic Editor
+# GmKing
 
 Draw electronic circuits with connected wires, editable symbols, labels, notes, Undo/Redo, and SVG/PNG clipboard export.
 
@@ -8,7 +8,7 @@ Draw electronic circuits with connected wires, editable symbols, labels, notes, 
 
 ## Run
 
-Node.js 22+ and npm 10+:
+Node.js 22.13+ and npm 10+:
 
 ```sh
 npm ci
@@ -16,6 +16,8 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:8001`. After library changes, run `npm run build:lib` and reload. `npm run build` builds all three packages; `npm run typecheck`, `npm test`, and `npm run test:browser` verify them. The browser check needs Chrome/Chromium or Edge.
+
+`npm run lint` runs the official Obsidian ESLint rules across the workspace. Outstanding findings are reported; lint currently runs as an advisory CI step.
 
 ## Obsidian
 

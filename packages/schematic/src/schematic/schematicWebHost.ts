@@ -3,10 +3,7 @@ import tempDeleteIcon from "./icons/temp-delete.svg?raw";
 import { SchematicAnalysisController } from "./analysis/analysisController";
 import { SchematicContextMenuController } from "./contextMenuController";
 import type { SchematicEditorHandle } from "./editorHandle";
-import {
-  mountSchematicEditorFacade,
-  type SchematicEditorFactory
-} from "./schematicEditorFacade";
+import { mountSchematicEditorFacade } from "./schematicEditorFacade";
 import type { SchematicEditorMountElements } from "./schematicTabShell";
 import { readSchematicDocumentFromClipboard } from "./schematicClipboardWebAdapter";
 import {
@@ -39,14 +36,14 @@ export class SchematicWebHost<Editor extends SchematicEditorHandle> {
     if (this.editor) return this.editor;
     const editor = mountSchematicEditorFacade(
       this.root,
-      ((mountElements) => this.createEditor(mountElements, this.services)) as SchematicEditorFactory<Editor>
+      (mountElements) => this.createEditor(mountElements, this.services)
     );
     if (!editor) return null;
 
     const destroyEditor = editor.destroy.bind(editor);
     let destroyResult: ReturnType<Editor["destroy"]> | undefined;
     let destroyed = false;
-    editor.destroy = (() => {
+    editor.destroy = () => {
       if (destroyed) return destroyResult;
       destroyed = true;
       try {
@@ -55,7 +52,7 @@ export class SchematicWebHost<Editor extends SchematicEditorHandle> {
       } finally {
         this.editor = null;
       }
-    }) as Editor["destroy"];
+    };
 
     this.editor = editor;
     return editor;
@@ -81,7 +78,7 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
   if (!ownerWindow) {
     throw new Error("The schematic Web host requires a mounted document with a defaultView.");
   }
-  const realm = ownerWindow as Window & typeof globalThis;
+  const realm = ownerWindow;
   const createId = () => createWebId(realm.crypto);
   const storage = options.storage === undefined ? localStorageFor(ownerWindow) : options.storage;
   const workspace = options.workspace ?? createSchematicWorkspacePersistence(storage,

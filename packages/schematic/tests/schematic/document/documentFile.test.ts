@@ -888,7 +888,7 @@ describe("Blob download helper", () => {
     expect(link).toMatchObject({
       href: "blob:schematic",
       download: "adc.sch.json",
-      style: { display: "none" }
+      hidden: true
     });
     expect(appendChild).toHaveBeenCalledWith(link);
     expect(click).toHaveBeenCalledOnce();

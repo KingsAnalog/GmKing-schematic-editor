@@ -610,6 +610,9 @@ describe("SchematicNoteLayer Markdown runtime lifecycle", () => {
 describe("SchematicNoteLayer portable raw-text runtime", () => {
   beforeEach(() => {
     vi.stubGlobal("document", {
+      defaultView: {
+        getComputedStyle: () => ({ whiteSpace: "pre-wrap" })
+      },
       createElement: (tagName: string) => new FakeElement(tagName)
     });
   });
@@ -632,7 +635,8 @@ describe("SchematicNoteLayer portable raw-text runtime", () => {
     const content = element.querySelector("[data-note-content]") as FakeElement;
     const textarea = content.querySelector("[data-note-editor]") as FakeElement;
     expect(textarea.value).toBe(note.text);
-    expect(content.style.whiteSpace).toBe("pre-wrap");
+    expect(content.classList.contains("schematic-note-raw-markdown-content")).toBe(true);
+    expect(content.style.whiteSpace).toBe("");
 
     layer.focusEditor(note);
     expect(layer.insertEditorText(note, "!")).toBe(true);

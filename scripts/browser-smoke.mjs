@@ -64,6 +64,10 @@ class CdpClient {
   async handleMessage(raw) {
     const message = JSON.parse(await websocketMessageText(raw));
     if (!message.id) {
+      // Headless reloads can stop at the editor's unsaved-changes prompt.
+      if (message.method === "Page.javascriptDialogOpening" && message.params.type === "beforeunload") {
+        await this.send("Page.handleJavaScriptDialog", { accept: true });
+      }
       if (message.method === "Runtime.exceptionThrown") console.error("[browser exception]", message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
       return;
     }

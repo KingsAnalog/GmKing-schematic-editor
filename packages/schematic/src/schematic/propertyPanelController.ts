@@ -1855,7 +1855,7 @@ export class SchematicPropertyPanelController {
 
   private closestInRoot<T extends Element>(event: Event, selector: string): T | null {
     const target = event.target as (Element & { closest?: Element["closest"] }) | null;
-    const element = target?.closest?.(selector) as T | null | undefined;
+    const element = target?.closest?.<T>(selector);
     if (!element || !this.root.contains(element)) return null;
     return element;
   }

@@ -20,9 +20,10 @@ describe("Obsidian bundle boundary", () => {
     expect(inputs.some((input) => input.includes("node_modules/json-stringify-pretty-compact/"))).toBe(true);
 
     const bundledPackages = [...new Set(inputs.flatMap(packageNameFromInput))].sort();
-    expect(bundledPackages).toEqual(["@joint/core", "json-stringify-pretty-compact"]);
+    expect(bundledPackages).toEqual(["@joint/core", "dompurify", "json-stringify-pretty-compact"]);
 
     const licenses = await readFile(new URL("../THIRD_PARTY_LICENSES.md", import.meta.url), "utf8");
+    expect(licenses).toContain("DOMPurify (`dompurify` 3.4.18)");
     expect(licenses).toContain("@joint/core` 4.2.4");
     expect(licenses).toContain("json-stringify-pretty-compact` 4.0.0");
     expect(licenses).toContain("https://www.npmjs.com/package/@joint/core/v/4.2.4");

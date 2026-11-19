@@ -20,5 +20,5 @@ export async function readSchematicDocumentFromClipboard(
 
 function systemClipboard(): SchematicClipboardTextReader | null {
   if (typeof navigator === "undefined") return null;
-  return (navigator.clipboard as SchematicClipboardTextReader | undefined) ?? null;
+  return navigator.clipboard ?? null;
 }

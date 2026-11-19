@@ -5,6 +5,7 @@ The MIT license covers this project's own code, not its dependencies.
 | Dependency | License | Use |
 | --- | --- | --- |
 | JointJS (`@joint/core`) | MPL-2.0 | Interactive schematic renderer |
+| DOMPurify | Apache-2.0 OR MPL-2.0 | SVG preview sanitization |
 | CodeMirror and Lezer packages | MIT | Text editing; provided by the Obsidian host in the plugin |
 | Milkdown and ProseMirror packages | MIT | Web Markdown notes |
 | Nerdamer | MIT | Web symbolic analysis |

@@ -5,21 +5,26 @@ export interface SchematicDocumentTabItem {
   title: string;
 }
 
+/** Async callbacks own error reporting; DOM events dispatch them without waiting. */
+type SchematicTabAction<Args extends unknown[] = []> =
+  | ((...args: Args) => void)
+  | ((...args: Args) => Promise<void>);
+
 export interface SchematicDocumentTabsOptions {
-  onActivate(id: string): void;
-  onClose(id: string): void;
-  onCreate(): void;
-  onReorder?(id: string, insertionIndex: number): void;
-  onRename?(id: string, title: string): void;
+  onActivate: SchematicTabAction<[id: string]>;
+  onClose: SchematicTabAction<[id: string]>;
+  onCreate: SchematicTabAction;
+  onReorder?: SchematicTabAction<[id: string, insertionIndex: number]>;
+  onRename?: SchematicTabAction<[id: string, title: string]>;
   onImport?(file: File): void;
   onPasteFromClipboard?(): void;
   onExport?(): void;
-  onRetrySave?(): void;
+  onRetrySave?: SchematicTabAction;
 }
 
 export interface SchematicCloseSnackbarOptions {
   message: string;
-  onUndo(): void;
+  onUndo: SchematicTabAction;
   timeoutMs?: number;
 }
 
@@ -31,7 +36,7 @@ export interface SchematicDocumentTabsRuntime {
 export class SchematicDocumentTabs {
   private bound = false;
   private closeSnackbarTimer: number | null = null;
-  private closeUndo: (() => void) | null = null;
+  private closeUndo: SchematicCloseSnackbarOptions["onUndo"] | null = null;
   private renameInput: HTMLInputElement | null = null;
   private pendingDrag: { id: string; pointerId: number; startX: number; handle: HTMLElement } | null = null;
   private draggedTabId: string | null = null;
@@ -52,7 +57,7 @@ export class SchematicDocumentTabs {
   bind() {
     if (this.bound || this.bindingController) return;
     this.bound = true;
-    const realm = this.root.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const realm = this.root.ownerDocument.defaultView;
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.bindingController = new AbortControllerCtor();
     const { signal } = this.bindingController;
@@ -197,11 +202,11 @@ export class SchematicDocumentTabs {
     const target = event.target as HTMLElement | null;
     const close = target?.closest<HTMLButtonElement>("[data-schematic-document-close]");
     if (close?.dataset.schematicDocumentClose) {
-      this.options.onClose(close.dataset.schematicDocumentClose);
+      void this.options.onClose(close.dataset.schematicDocumentClose);
       return;
     }
     if (target?.closest("[data-schematic-document-new]")) {
-      this.options.onCreate();
+      void this.options.onCreate();
       return;
     }
     if (target?.closest("[data-schematic-document-import]")) {
@@ -223,11 +228,11 @@ export class SchematicDocumentTabs {
     if (target?.closest("[data-schematic-close-undo]")) {
       const onUndo = this.closeUndo;
       this.hideCloseSnackbar();
-      onUndo?.();
+      void onUndo?.();
       return;
     }
     if (target?.closest("[data-schematic-storage-retry]")) {
-      this.options.onRetrySave?.();
+      void this.options.onRetrySave?.();
       return;
     }
     if (target?.closest("[data-schematic-storage-error-dismiss]")) {
@@ -242,7 +247,7 @@ export class SchematicDocumentTabs {
       event.preventDefault();
       return;
     }
-    this.options.onActivate(id);
+    void this.options.onActivate(id);
   }
 
   private handleDoubleClick(event: MouseEvent) {
@@ -260,7 +265,7 @@ export class SchematicDocumentTabs {
       event.preventDefault();
       event.stopPropagation();
       this.suppressAuxClickUntil = Date.now() + 750;
-      this.options.onClose(id);
+      void this.options.onClose(id);
       return;
     }
     if (event.button !== 0) return;
@@ -280,7 +285,7 @@ export class SchematicDocumentTabs {
     event.preventDefault();
     event.stopPropagation();
     if (Date.now() <= this.suppressAuxClickUntil) return;
-    this.options.onClose(id);
+    void this.options.onClose(id);
   }
 
   private handlePointerMove(event: PointerEvent) {
@@ -329,7 +334,7 @@ export class SchematicDocumentTabs {
       ? tabs.length
       : targetIndex + (indicator?.placement === "after" ? 1 : 0);
     this.finishDrag();
-    if (indicator) this.options.onReorder?.(id, insertionIndex);
+    if (indicator) void this.options.onReorder?.(id, insertionIndex);
   }
 
   private handlePointerCancel(event: PointerEvent) {
@@ -417,7 +422,7 @@ export class SchematicDocumentTabs {
     event.preventDefault();
     const next = tabs[nextIndex];
     const id = next?.dataset.schematicDocumentTab;
-    if (id) this.options.onActivate(id);
+    if (id) void this.options.onActivate(id);
     this.scheduleFrame(() => {
       if (id) this.findTabById(id)?.focus();
     });
@@ -465,7 +470,7 @@ export class SchematicDocumentTabs {
       close.title = `Close ${title}`;
     }
     if (commit && id && nextTitle && nextTitle !== originalTitle) {
-      this.options.onRename?.(id, nextTitle);
+      void this.options.onRename?.(id, nextTitle);
     }
     if (restoreFocus && id) {
       this.scheduleFrame(() => this.findTabById(id)?.focus());

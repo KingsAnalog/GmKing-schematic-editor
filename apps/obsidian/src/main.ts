@@ -1,3 +1,4 @@
+import { createSchematicSvgElement } from "@edahelper/schematic/viewer";
 import {
   Modal,
   Plugin,
@@ -151,7 +152,7 @@ export default class SchematicEditorPlugin extends Plugin {
         container.className = "schematic-static-svg";
         const rendering = renderSchematicBlockSvg(projection.content, namespace);
         updateSchematicBlockHeight(root, rendering);
-        container.innerHTML = rendering.svg;
+        container.replaceChildren(createSchematicSvgElement(container.ownerDocument, rendering.svg));
         root.appendChild(container);
         root.addEventListener("contextmenu", (event) => {
           event.preventDefault();

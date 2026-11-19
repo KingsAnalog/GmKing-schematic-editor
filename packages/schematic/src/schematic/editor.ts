@@ -1012,7 +1012,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.host.ownerDocument.addEventListener("pointerdown", (event) => {
       if (!this.contextMenuController.containsTarget(event.target)) this.contextMenuController.close();
       if (this.transientToolSession.mode === "place" && this.options.paperEl.contains(event.target as Node)) return;
-      if (!this.instanceSelector.contains(event.target as Node)) {
+      if (!this.instanceSelector.contains(event.target)) {
         if (this.transientToolSession.mode === "place") this.instanceSelector.settle();
         else {
           this.instanceSelector.closeDropdown();

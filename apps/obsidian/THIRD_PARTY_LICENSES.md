@@ -14,6 +14,14 @@ The complete MPL 2.0 text is available at
 <https://www.mozilla.org/MPL/2.0/>. The JointJS and embedded jQuery license
 notices are also retained at the end of `main.js`.
 
+## DOMPurify (`dompurify` 3.4.18)
+
+Copyright Cure53 and other contributors. The plugin bundles DOMPurify under the
+Mozilla Public License 2.0. The upstream distribution also offers Apache-2.0.
+
+- [Corresponding source](https://github.com/cure53/DOMPurify/tree/3.4.18)
+- [Mozilla Public License 2.0](https://github.com/cure53/DOMPurify/blob/3.4.18/LICENSE-MPL)
+
 ## `json-stringify-pretty-compact` 4.0.0
 
 The MIT License (MIT)

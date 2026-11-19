@@ -163,7 +163,9 @@ export class SchematicViewportController {
     for (const pointerId of this.activeTouchPoints.keys()) {
       try {
         this.options.host.releasePointerCapture?.(pointerId);
-      } catch {}
+      } catch {
+        // The browser may already have released this pointer during cancellation.
+      }
     }
     this.activeTouchPoints.clear();
     this.suppressNextBlankClick = false;
@@ -186,7 +188,9 @@ export class SchematicViewportController {
     });
     try {
       this.options.host.setPointerCapture?.(event.pointerId);
-    } catch {}
+    } catch {
+      // Capture can fail if the pointer is no longer active; keep handling delivered events.
+    }
     if (this.touchPointPair()) {
       event.preventDefault();
       this.beginTouchPinch();
@@ -251,7 +255,9 @@ export class SchematicViewportController {
     this.activeTouchPoints.delete(event.pointerId);
     try {
       this.options.host.releasePointerCapture?.(event.pointerId);
-    } catch {}
+    } catch {
+      // Pointer-up may arrive after the browser has already released capture.
+    }
     if (!gesture || !wasGesturePointer) return false;
     event.preventDefault();
     if (gesture.moved) {

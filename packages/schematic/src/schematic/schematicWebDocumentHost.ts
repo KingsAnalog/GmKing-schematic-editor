@@ -164,7 +164,7 @@ implements SchematicDocumentHostPort<EditorState> {
       session.id,
       "The new schematic could not be opened."
     )) {
-      this.removeSnapshotBestEffort(session.id);
+      void this.removeSnapshotBestEffort(session.id);
       return;
     }
     this.sessions = nextSessions;
@@ -212,7 +212,7 @@ implements SchematicDocumentHostPort<EditorState> {
       nextActiveId,
       "The tab list could not be saved, so the schematic was not closed."
     )) {
-      if (replacement) this.removeSnapshotBestEffort(replacement.id);
+      if (replacement) void this.removeSnapshotBestEffort(replacement.id);
       return;
     }
 
@@ -228,7 +228,7 @@ implements SchematicDocumentHostPort<EditorState> {
       } catch {
         // The in-memory tabs remain authoritative until a later successful save.
       }
-      if (replacement) this.removeSnapshotBestEffort(replacement.id);
+      if (replacement) void this.removeSnapshotBestEffort(replacement.id);
       this.showStorageError(
         "The schematic storage entry could not be removed, so the tab was kept open.",
         error
@@ -303,7 +303,7 @@ implements SchematicDocumentHostPort<EditorState> {
       entry.value.id,
       "The tab list could not be saved, so the closed schematic was not restored."
     )) {
-      this.removeSnapshotBestEffort(entry.value.id);
+      void this.removeSnapshotBestEffort(entry.value.id);
       this.showRecentlyClosedSnackbar(entry.value.title);
       return;
     }
@@ -321,7 +321,7 @@ implements SchematicDocumentHostPort<EditorState> {
         } catch {
           // The current in-memory tab set remains intact until a later save succeeds.
         }
-        this.removeSnapshotBestEffort(entry.value.id);
+        void this.removeSnapshotBestEffort(entry.value.id);
         this.showStorageError(
           "The blank replacement tab could not be removed, so the closed schematic was not restored.",
           error
@@ -467,7 +467,7 @@ implements SchematicDocumentHostPort<EditorState> {
       session.id,
       "The imported schematic could not be added to the tab list."
     )) {
-      this.removeSnapshotBestEffort(session.id);
+      void this.removeSnapshotBestEffort(session.id);
       return;
     }
     this.sessions = nextSessions;

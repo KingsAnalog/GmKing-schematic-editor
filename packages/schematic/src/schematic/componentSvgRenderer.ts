@@ -8,7 +8,7 @@ import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 
 const PORT_MARKER_SIZE = 3 * SYMBOL_STROKE_WIDTH;
 
-export interface ComponentSvgRenderOptions extends ComponentRenderOptions {}
+export type ComponentSvgRenderOptions = ComponentRenderOptions;
 
 /** Serializes the shared component visual model without creating a JointJS cell. */
 export function renderComponentSvg(

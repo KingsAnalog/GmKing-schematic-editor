@@ -1,3 +1,5 @@
+import { domUi } from "./schematicUiElements";
+import { createSchematicSvgElement } from "./schematicSvgDom";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { getSchematicTemplateDef, isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER, schematicTemplateBounds, type SchematicTemplateId } from "./templates";
 import { resolveComponentVisualModel } from "./componentVisualModel";
@@ -32,6 +34,7 @@ let nextInstanceSelectorId = 1;
 
 export class InstanceSelector {
   private readonly idNamespace = `schematic-instance-${nextInstanceSelectorId++}`;
+  private readonly previewIcons = new Map<string, SVGSVGElement>();
   private query = "";
   private panel: PanelMode = "closed";
   private activeIndex = 0;
@@ -69,50 +72,42 @@ export class InstanceSelector {
     this.activeIndex = 0;
     this.dropdownIndex = 0;
     this.keyboard = "idle";
-    target.innerHTML = `
-      <div class="instance-combobox" data-instance-combobox>
-        <div class="instance-selector" data-instance-selector>
-          <div class="instance-current-symbol" data-instance-current-symbol>${paletteItemPreview(selectedItem, { symbolTemplate: this.events.symbolTemplate?.() })}</div>
-          <div class="instance-query-wrap">
-            <input
-              id="${this.idNamespace}-query"
-              type="text"
-              spellcheck="false"
-              autocomplete="off"
-              role="combobox"
-              aria-label="Add instance"
-              aria-autocomplete="list"
-              aria-expanded="false"
-              aria-controls="${this.idNamespace}-options"
-              data-instance-query
-              value="${escapeAttribute(selectedLabel)}"
-            />
-            <div class="instance-query-overlay" aria-hidden="true" data-instance-query-overlay>
-              <span data-instance-query-mirror></span><span data-instance-query-caret></span><span data-instance-query-selection></span><span data-instance-query-after></span><span data-instance-query-ghost></span>
-            </div>
-            <button
-              type="button"
-              class="instance-dropdown-button"
-              aria-label="Show all components"
-              aria-expanded="false"
-              aria-controls="${this.idNamespace}-dropdown"
-              data-instance-dropdown-button
-            >
-              <span aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-        <div id="${this.idNamespace}-dropdown" class="instance-dropdown" role="listbox" data-instance-dropdown hidden></div>
-        <div id="${this.idNamespace}-options" class="instance-options" role="listbox" data-instance-options hidden></div>
-      </div>
-    `;
+    const { el } = domUi(target.ownerDocument);
+    const queryId = `${this.idNamespace}-query`;
+    const dropdownId = `${this.idNamespace}-dropdown`;
+    const optionsId = `${this.idNamespace}-options`;
+    target.replaceChildren(el("div", { class: "instance-combobox", "data-instance-combobox": true },
+      el("div", { class: "instance-selector", "data-instance-selector": true },
+        el("div", { class: "instance-current-symbol", "data-instance-current-symbol": true }),
+        el("div", { class: "instance-query-wrap" },
+          el("input", {
+            id: queryId, type: "text", spellcheck: "false", autocomplete: "off", role: "combobox",
+            "aria-label": "Add instance", "aria-autocomplete": "list", "aria-expanded": "false",
+            "aria-controls": optionsId, "data-instance-query": true, value: selectedLabel
+          }),
+          el("div", { class: "instance-query-overlay", "aria-hidden": "true", "data-instance-query-overlay": true },
+            el("span", { "data-instance-query-mirror": true }),
+            el("span", { "data-instance-query-caret": true }),
+            el("span", { "data-instance-query-selection": true }),
+            el("span", { "data-instance-query-after": true }),
+            el("span", { "data-instance-query-ghost": true })
+          ),
+          el("button", {
+            type: "button", class: "instance-dropdown-button", "aria-label": "Show all components",
+            "aria-expanded": "false", "aria-controls": dropdownId, "data-instance-dropdown-button": true
+          }, el("span", { "aria-hidden": "true" }))
+        )
+      ),
+      el("div", { id: dropdownId, class: "instance-dropdown", role: "listbox", "data-instance-dropdown": true, hidden: true }),
+      el("div", { id: optionsId, class: "instance-options", role: "listbox", "data-instance-options": true, hidden: true })
+    ));
     this.update();
   }
 
   bind() {
     if (this.bound) return;
     this.bound = true;
-    const realm = this.root.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const realm = this.root.ownerDocument.defaultView;
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.bindingController = new AbortControllerCtor();
     const { signal } = this.bindingController;
@@ -350,45 +345,39 @@ export class InstanceSelector {
     if (dropdownButton) dropdownButton.setAttribute("aria-expanded", String(dropdownOpen));
     if (dropdown) {
       dropdown.hidden = !dropdownOpen;
-      dropdown.innerHTML = INSTANCE_PALETTE_ORDER.map((item, index) => {
+      dropdown.replaceChildren(...INSTANCE_PALETTE_ORDER.map((item, index) => {
         const active = index === this.dropdownIndex;
         const selected = item === this.events.activeItem();
-        return `
-          <button
-            type="button"
-            id="${this.dropdownOptionId(item)}"
-            role="option"
-            class="instance-dropdown-option${active ? " is-active" : ""}${selected ? " is-selected" : ""}"
-            aria-selected="${active}"
-            data-dropdown-palette-item="${item}"
-            data-instance-dropdown-option
-          >${escapeHtml(paletteDisplayName(item))}</button>
-        `;
-      }).join("");
+        const button = dropdown.ownerDocument.createElement("button");
+        button.type = "button";
+        button.id = this.dropdownOptionId(item);
+        button.setAttribute("role", "option");
+        button.className = `instance-dropdown-option${active ? " is-active" : ""}${selected ? " is-selected" : ""}`;
+        button.setAttribute("aria-selected", String(active));
+        button.dataset.dropdownPaletteItem = item;
+        button.dataset.instanceDropdownOption = "";
+        button.textContent = paletteDisplayName(item);
+        return button;
+      }));
     }
     if (!target) return;
     const candidates = this.candidates();
     if (this.activeIndex >= candidates.length) this.activeIndex = Math.max(0, candidates.length - 1);
     target.hidden = !optionsOpen || dropdownOpen;
-    target.innerHTML = candidates.length
-      ? candidates.map((item, index) => {
-          const active = index === this.activeIndex;
-          const selected = item === this.events.activeItem();
-          return `
-            <button
-              type="button"
-              id="${this.matchOptionId(item)}"
-              role="option"
-              class="instance-option${isSchematicTemplateId(item) ? " is-template" : ""}${active ? " is-active" : ""}${selected ? " is-selected" : ""}"
-              aria-selected="${active}"
-              data-palette-item="${item}"
-            >
-              ${paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate?.() })}
-              <span>${escapeHtml(paletteDisplayName(item))}</span>
-            </button>
-          `;
-        }).join("")
-      : `<div class="instance-option-empty">No matching instance</div>`;
+    const { el } = domUi(target.ownerDocument);
+    const options = candidates.map((item, index) => {
+      const active = index === this.activeIndex;
+      const button = el("button", {
+        type: "button", id: this.matchOptionId(item), role: "option", class: "instance-option",
+        "aria-selected": String(active), "data-palette-item": item
+      }, this.previewIcon(item), el("span", {}, paletteDisplayName(item)));
+      button.classList.toggle("is-template", isSchematicTemplateId(item));
+      button.classList.toggle("is-active", active);
+      button.classList.toggle("is-selected", item === this.events.activeItem());
+      return button;
+    });
+    if (!options.length) options.push(el("div", { class: "instance-option-empty" }, "No matching instance"));
+    target.replaceChildren(...options);
     if (!input) return;
     input.setAttribute("aria-expanded", String(optionsOpen || dropdownOpen));
     if (dropdownOpen && INSTANCE_PALETTE_ORDER[this.dropdownIndex]) {
@@ -661,10 +650,24 @@ export class InstanceSelector {
     this.events.onStatusChange();
   }
 
+  private previewIcon(item: InstancePaletteItem): SVGSVGElement {
+    const symbolTemplate = this.events.symbolTemplate?.();
+    const key = `${symbolTemplate ?? ""}:${item}`;
+    let icon = this.previewIcons.get(key);
+    if (!icon) {
+      icon = createSchematicSvgElement(this.ownerDocument, paletteItemPreview(item, { symbolTemplate }));
+      this.previewIcons.set(key, icon);
+    }
+    return this.ownerDocument.importNode(icon, true);
+  }
+
   private updateCurrent() {
     const symbol = this.root.querySelector<HTMLElement>("[data-instance-current-symbol]");
     const activeItem = this.events.activeItem();
-    if (symbol) symbol.innerHTML = activeItem ? paletteItemPreview(activeItem, { symbolTemplate: this.events.symbolTemplate?.() }) : "";
+    if (symbol) {
+      if (activeItem) symbol.replaceChildren(this.previewIcon(activeItem));
+      else symbol.replaceChildren();
+    }
     const input = this.queryInput();
     if (!input) return;
     input.setAttribute("aria-expanded", String(this.panel !== "closed"));

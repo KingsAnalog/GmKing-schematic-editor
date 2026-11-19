@@ -4,9 +4,8 @@ import type {
   SchematicEditorHandle,
   SchematicEditorMountElements
 } from "./editorHandle";
-import {
-  renderSchematicEditorSidebarProjection
-} from "./schematicEditorUiProjection";
+import { domUi } from "./schematicUiElements";
+import { buildSchematicEditorSidebar } from "./schematicEditorUiProjection";
 import type {
   SchematicEditorHostBridge,
   SchematicEditorRuntimeServices
@@ -73,12 +72,11 @@ export function createSchematicEditor(
 }
 
 export function mountDefaultSchematicEditorUi(root: HTMLElement): SchematicEditorUiElements {
-  root.innerHTML = `
-    <div class="schematic-editor-surface">
-      ${renderSchematicEditorSidebarProjection()}
-      <div class="schematic-paper" data-schematic-paper tabindex="0" aria-label="Schematic canvas"></div>
-    </div>
-  `;
+  const { el } = domUi(root.ownerDocument);
+  root.replaceChildren(el("div", { class: "schematic-editor-surface" },
+    buildSchematicEditorSidebar(el),
+    el("div", { class: "schematic-paper", "data-schematic-paper": true, tabindex: 0, "aria-label": "Schematic canvas" })
+  ));
   const paperEl = requiredElement(root, "[data-schematic-paper]");
   const paletteEl = requiredElement(root, "[data-schematic-palette]");
   const propertyEl = requiredElement(root, "[data-schematic-property-editor]");

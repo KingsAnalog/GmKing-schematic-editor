@@ -453,11 +453,6 @@ export class SchematicNoteLayer {
   async renderDetachedMarkdown(markdown: string) {
     const shell = this.ownerDocument.createElement("div");
     shell.className = "schematic-note is-markdown schematic-note-static-render";
-    shell.style.left = "-100000px";
-    shell.style.top = "0";
-    shell.style.width = "320px";
-    shell.style.height = "auto";
-    shell.style.visibility = "hidden";
     const content = this.ownerDocument.createElement("div");
     content.className = "schematic-note-content";
     content.dataset.noteContent = "";

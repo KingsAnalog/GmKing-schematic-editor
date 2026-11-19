@@ -2,6 +2,8 @@
 
 .schematic-context-menu {
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 1000;
   min-width: 150px;
   padding: 4px;

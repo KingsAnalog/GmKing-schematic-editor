@@ -1,3 +1,5 @@
+import { createSchematicSvgElement } from "./schematicSvgDom";
+export { createSchematicSvgElement } from "./schematicSvgDom";
 import { renderSchematicDocumentSvg, type SchematicDocumentSvgRender } from "./documentSvgRenderer";
 import type { SchematicContent, SchematicDocument } from "./types";
 
@@ -33,9 +35,8 @@ export function mountReadonlySchematicViewer(
       presentationMode: true,
       backgroundColor: "#ffffff"
     });
-    container.innerHTML = currentRender.svg;
-    const svg = container.querySelector<SVGSVGElement>("svg");
-    if (!svg) return;
+    const svg = createSchematicSvgElement(container.ownerDocument, currentRender.svg);
+    container.replaceChildren(svg);
     svg.classList.add("schematic-readonly-svg");
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "100%");

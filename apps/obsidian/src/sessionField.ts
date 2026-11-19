@@ -108,7 +108,7 @@ export function createSchematicSessionField(options: SchematicSessionFieldOption
     update(previous, transaction) {
       const livePreview = options.forceLivePreview ?? readLivePreview(transaction.state);
       const syntaxTreeIdentity = syntaxTree(
-        transaction.state as unknown as Parameters<typeof syntaxTree>[0]
+        transaction.state
       );
       if (
         !transaction.docChanged
@@ -171,7 +171,7 @@ export function collectSchematicBlockCandidates(
 
 export function collectSyntaxTreeFencedCodeRanges(state: EditorState): SchematicFencedCodeRange[] {
   const nodes: SchematicSyntaxNodeRange[] = [];
-  syntaxTree(state as unknown as Parameters<typeof syntaxTree>[0]).iterate({
+  syntaxTree(state).iterate({
     enter(node) {
       if (
         node.name === "FencedCode"
@@ -274,7 +274,7 @@ function buildFieldValue(
   );
   const livePreview = options.forceLivePreview ?? readLivePreview(state);
   const syntaxTreeIdentity = syntaxTree(
-    state as unknown as Parameters<typeof syntaxTree>[0]
+    state
   );
   const reconciledIds = new Set(sessions.map((session) => session.id));
   const nextPendingSyntaxSessionIds = new Set(

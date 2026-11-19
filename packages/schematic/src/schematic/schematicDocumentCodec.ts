@@ -368,7 +368,7 @@ function decodeComponent(value: unknown, path: string): ComponentInstance {
   };
   if (hasOwn(source, "scale")) {
     if (!supportsComponentScale(type, source.scale)) invalid(`${path}.scale`, "a supported component size (0.5, 1 or 2)");
-    component.scale = source.scale as ComponentInstance["scale"];
+    component.scale = source.scale;
   }
   validateComponentValueEnums(component, path);
   if (hasOwn(source, "appearance")) {

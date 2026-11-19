@@ -95,7 +95,7 @@ export function safeMarkdownNoteHref(rawHref: string) {
 export function markdownImageLiteral(attrs: { alt?: unknown; src?: unknown; title?: unknown }) {
   const alt = typeof attrs.alt === "string" ? attrs.alt : "";
   const src = typeof attrs.src === "string" ? attrs.src : "";
-  const title = typeof attrs.title === "string" && attrs.title ? ` \"${attrs.title}\"` : "";
+  const title = typeof attrs.title === "string" && attrs.title ? ` "${attrs.title}"` : "";
   return `![${alt}](${src}${title})`;
 }
 

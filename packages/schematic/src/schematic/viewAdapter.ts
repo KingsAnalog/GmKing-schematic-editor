@@ -185,11 +185,15 @@ export function localPointFromClient(paper: SchematicViewPaper, host: SchematicV
     try {
       const objectPoint = converter({ x: clientX, y: clientY });
       if (isFinitePoint(objectPoint)) return objectPoint;
-    } catch {}
+    } catch {
+      // Some paper adapters only accept the numeric-coordinate overload below.
+    }
     try {
       const numberPoint = converter(clientX, clientY);
       if (isFinitePoint(numberPoint)) return numberPoint;
-    } catch {}
+    } catch {
+      // Fall back to the host bounds and current view when conversion is unavailable.
+    }
   }
 
   const rect = host.getBoundingClientRect();

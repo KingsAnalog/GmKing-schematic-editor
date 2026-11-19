@@ -65,12 +65,8 @@ function waitForMathJaxOrAbort(ownerWindow: Window, signal?: AbortSignal) {
 
 function createMathStage(ownerDocument: Document, mathHtml: string) {
   const stage = ownerDocument.createElement("span");
+  stage.className = "schematic-math-stage";
   stage.textContent = mathHtml;
-  stage.style.position = "absolute";
-  stage.style.left = "-10000px";
-  stage.style.top = "0";
-  stage.style.visibility = "hidden";
-  stage.style.pointerEvents = "none";
   ownerDocument.body.appendChild(stage);
   return stage;
 }

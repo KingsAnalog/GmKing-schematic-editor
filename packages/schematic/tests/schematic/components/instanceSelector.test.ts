@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { findInstancePaletteMatches, InstanceSelector } from "../../../src/schematic/instanceSelector";
 
@@ -47,11 +48,10 @@ describe("schematic instance palette search", () => {
 });
 
 function selectorFixture() {
-  const target = { innerHTML: "" };
-  const root = {
-    querySelector: (selector: string) => selector === "[data-palette-items]" ? target : null
-  };
-  const selector = new InstanceSelector(root as unknown as HTMLElement, {
+  const root = document.createElement("div");
+  const target = root.appendChild(document.createElement("div"));
+  target.dataset.paletteItems = "";
+  const selector = new InstanceSelector(root, {
     currentItem: () => "resistor",
     activeItem: () => null,
     isPlacementMode: () => false,

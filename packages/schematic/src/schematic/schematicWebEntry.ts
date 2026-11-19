@@ -1,3 +1,4 @@
+export { mountSchematicTab } from "./schematicTabShell";
 import { renderSchematicTabShell } from "./schematicTabShell";
 import { SchematicWebEditorHostController } from "./schematicWebEditorHostController";
 import { mountSchematicWebHost, createSchematicWebHostServices, type SchematicWebHostOptions } from "./schematicWebHost";
