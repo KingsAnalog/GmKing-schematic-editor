@@ -355,6 +355,12 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
         })
       )
     ),
+    el("div", { class: "property-mos-params", "data-property-mos-params": true, hidden: true },
+      mosParamRow(el, "w", "W", "1u"),
+      mosParamRow(el, "l", "L", "0.15u"),
+      mosParamRow(el, "m", "M", "1"),
+      mosParamRow(el, "nf", "NF", "1")
+    ),
     el("label", { class: "property-row", "data-property-mos-gate-style-row": true, hidden: true },
       el("span", {}, "Gate style"),
       el("input", { class: "property-toggle", type: "checkbox", "aria-label": "Gate style", "data-property-mos-gate-style": true })
@@ -386,6 +392,25 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
       )
     ),
     el("div", { class: "property-pin-list", "data-property-pin-visibility-row": true, hidden: true })
+  );
+}
+
+function mosParamRow<T extends object>(
+  el: UiBuilder<T>["el"],
+  param: "w" | "l" | "m" | "nf",
+  label: string,
+  placeholder: string
+) {
+  return el("label", { class: "property-row", "data-property-mos-param-row": true },
+    el("span", {}, label),
+    el("input", {
+      type: "text",
+      spellcheck: "false",
+      autocomplete: "off",
+      placeholder,
+      "data-property-mos-param": param,
+      "aria-label": `MOS ${label}`
+    })
   );
 }
 

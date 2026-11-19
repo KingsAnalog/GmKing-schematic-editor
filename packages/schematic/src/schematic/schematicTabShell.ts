@@ -289,11 +289,34 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           el("output", { "data-analysis-zout": true })
         )
       ),
-      el("section", { class: "right-dock-panel", "data-right-panel": "netlist", role: "tabpanel", hidden: true },
-        el("p", { class: "analysis-note" }, t("right.netlistPlaceholder", "Netlist view arrives in R2."))
+      el("section", { class: "right-dock-panel netlist-panel", "data-right-panel": "netlist", role: "tabpanel", hidden: true },
+        el("div", { class: "netlist-toolbar" },
+          el("div", { class: "netlist-format", role: "group", "aria-label": "Netlist format" },
+            el("button", {
+              type: "button",
+              class: "netlist-format-button is-active",
+              "data-netlist-format": "spice",
+              "aria-pressed": "true"
+            }, "SPICE"),
+            el("button", {
+              type: "button",
+              class: "netlist-format-button",
+              "data-netlist-format": "spectre",
+              "aria-pressed": "false"
+            }, "Spectre")
+          ),
+          el("select", { class: "netlist-process", "data-netlist-process": true, "aria-label": "Process" },
+            el("option", { value: "sky130" }, "sky130")
+          ),
+          el("button", { type: "button", "data-netlist-copy": true }, "Copy"),
+          el("button", { type: "button", "data-netlist-download": true }, "Download")
+        ),
+        el("div", { class: "netlist-status", "data-netlist-status": true }, "Ready"),
+        el("pre", { class: "netlist-code", "data-netlist-code": true })
       ),
-      el("section", { class: "right-dock-panel", "data-right-panel": "diagnostics", role: "tabpanel", hidden: true },
-        el("p", { class: "analysis-note" }, t("right.diagnosticsPlaceholder", "Diagnostics view arrives in R2."))
+      el("section", { class: "right-dock-panel diagnostics-panel", "data-right-panel": "diagnostics", role: "tabpanel", hidden: true },
+        el("div", { class: "netlist-status", "data-netlist-diagnostics-summary": true }, "No diagnostics."),
+        el("div", { class: "netlist-diagnostics", "data-netlist-diagnostics-list": true })
       )
     ),
     el("button", {

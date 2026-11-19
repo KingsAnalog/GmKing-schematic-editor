@@ -19,7 +19,8 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:persistence": "node scripts/persistence-smoke.mjs",
     "test:interactions": "node scripts/interaction-smoke.mjs",
-    "test:r1": "npm run build:lib && npm run build:web && node scripts/r1-smoke.mjs"
+    "test:r1": "npm run build:lib && npm run build:web && node scripts/r1-smoke.mjs",
+    "test:r2": "npm run build:lib && npm run build:web && node scripts/r2-smoke.mjs"
   },
   "devDependencies": {
     "@codemirror/state": "6.7.1",

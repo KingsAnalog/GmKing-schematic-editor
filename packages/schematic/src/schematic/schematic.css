@@ -1218,6 +1218,17 @@
   display: none;
 }
 
+.property-mos-params {
+  display: grid;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.property-mos-params[hidden] {
+  display: none;
+}
+
 .schematic-sidebar-panel[data-sidebar-panel="properties"] {
   overflow: hidden;
 }
@@ -1541,6 +1552,189 @@
 
 .right-dock-panel[hidden] {
   display: none;
+}
+
+.netlist-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.netlist-format {
+  display: inline-flex;
+  border: 1px solid var(--schematic-border);
+}
+
+.netlist-format-button {
+  padding: 4px 8px;
+  border: 0;
+  border-right: 1px solid var(--schematic-border);
+  background: transparent;
+  color: var(--schematic-ui-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.netlist-format-button:last-child {
+  border-right: 0;
+}
+
+.netlist-format-button.is-active {
+  background: var(--schematic-ui-active);
+  color: var(--schematic-ink);
+  font-weight: 600;
+}
+
+.netlist-process {
+  height: 26px;
+  padding: 2px 6px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.netlist-toolbar > button {
+  height: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.netlist-toolbar > button:hover {
+  background: var(--schematic-ui-hover);
+}
+
+.netlist-toolbar > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.netlist-status {
+  padding: 6px 8px;
+  border: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ui-muted);
+  font-size: 0.74rem;
+}
+
+.netlist-status[data-state="ready"] {
+  border-color: #b8d8c2;
+  color: #22633a;
+}
+
+.netlist-status[data-state="warning"] {
+  border-color: #e6d29a;
+  color: #7a5a00;
+}
+
+.netlist-status[data-state="blocked"] {
+  border-color: #e0b4b4;
+  color: #8f2424;
+}
+
+.netlist-code {
+  min-height: 120px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--schematic-ui-line);
+  background: #fbfbfa;
+  color: var(--schematic-ink);
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.netlist-line {
+  display: flex;
+  gap: 8px;
+  min-width: max-content;
+}
+
+.netlist-line-number {
+  min-width: 22px;
+  color: var(--schematic-ui-muted);
+  text-align: right;
+  user-select: none;
+}
+
+.netlist-line-text {
+  white-space: pre;
+}
+
+.netlist-diagnostics {
+  display: grid;
+  gap: 6px;
+}
+
+.netlist-diagnostic {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--schematic-ui-line);
+  background: transparent;
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.74rem;
+  text-align: left;
+}
+
+button.netlist-diagnostic {
+  cursor: pointer;
+}
+
+button.netlist-diagnostic:hover {
+  background: var(--schematic-ui-hover);
+}
+
+.netlist-diagnostic-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.netlist-diagnostic-severity {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.netlist-diagnostic[data-severity="error"] .netlist-diagnostic-severity {
+  color: #b91c1c;
+}
+
+.netlist-diagnostic[data-severity="warning"] .netlist-diagnostic-severity {
+  color: #a16207;
+}
+
+.netlist-diagnostic-code {
+  color: var(--schematic-ui-muted);
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 0.66rem;
+}
+
+.netlist-diagnostic-message {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-code {
+  background: #1b1a17;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .netlist-status[data-state="ready"] {
+  border-color: #3f6049;
+  color: #9fd6b1;
 }
 
 /* Log drawer ------------------------------------------------------------- */

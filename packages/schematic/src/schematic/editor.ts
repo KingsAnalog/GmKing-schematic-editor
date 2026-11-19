@@ -12,6 +12,7 @@ import { InstanceBrowser } from "./instanceBrowser";
 import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog } from "./eventLog";
+import { NetlistPanelController } from "./netlist/panel";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
 import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator";
@@ -261,6 +262,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly instanceBrowser: InstanceBrowser;
   private readonly rightDock: RightDockController | null;
   private readonly eventLog: SchematicEventLog;
+  private readonly netlistPanel: NetlistPanelController | null;
+  private netlistRefreshTimer: number | null = null;
   private lastLoggedStatus = "";
   private lastHadSelection = false;
   private readonly contextMenuController;
@@ -735,6 +738,11 @@ export class SchematicEditor implements SchematicHostedEditor {
       initialHeight: layout?.getLogHeight?.() ?? 230,
       onHeightChange: (height) => layout?.setLogHeight?.(height)
     });
+    this.netlistPanel = analysisEl
+      ? new NetlistPanelController(analysisEl, {
+          onSelect: (componentId) => this.selectNetlistDiagnostic(componentId)
+        })
+      : null;
 
     const toolbarRoot = this.options.paperEl.closest(".schematic-shell");
     this.toolbarController = toolbarRoot
@@ -785,6 +793,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.instanceBrowser.mount();
     this.rightDock?.mount();
     this.eventLog.mount();
+    this.netlistPanel?.mount();
+    this.netlistPanel?.refresh(this.document);
     this.renderPalette();
     this.bindEvents();
     this.syncToolUi();
@@ -817,6 +827,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.instanceBrowser.destroy();
     this.rightDock?.destroy();
     this.eventLog.destroy();
+    if (this.netlistRefreshTimer !== null) this.host.clearTimeout(this.netlistRefreshTimer);
+    this.netlistPanel?.destroy();
     this.toolbarController?.destroy();
     this.propertyPanelController.destroy();
     this.activeRenderRuntime.surface.destroy();
@@ -1054,6 +1066,68 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.instanceSelector.bind();
     this.toolbarController?.bind();
     this.propertyPanelController.bind();
+    this.bindMosParamEvents();
+  }
+
+  private bindMosParamEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    if (!root) return;
+    root.addEventListener("change", (event) => {
+      const input = (event.target as HTMLElement | null)?.closest<HTMLInputElement>("[data-property-mos-param]");
+      if (input) this.commitMosParam(input);
+    }, { signal });
+    root.addEventListener("keydown", (event) => {
+      const input = (event.target as HTMLElement | null)?.closest<HTMLInputElement>("[data-property-mos-param]");
+      if (!input) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.commitMosParam(input);
+        input.blur();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.syncMosParams(true);
+        input.blur();
+      }
+    }, { signal });
+  }
+
+  private commitMosParam(input: HTMLInputElement) {
+    const parameter = input.dataset.propertyMosParam;
+    const component = this.selectedMosComponent();
+    if (!parameter || !component) return;
+    const key = `mos:${parameter}`;
+    const value = input.value.trim();
+    if ((component.values[key] ?? "") === value) return;
+    this.transact((draft) => {
+      const target = draft.components.find(item => item.id === component.id);
+      if (!target) return;
+      if (value) target.values[key] = value;
+      else delete target.values[key];
+    }, { origin: "editor", reason: "mos-param" });
+    this.selectionSession.setMixed([component.id], []);
+    this.finishSelectionChange();
+  }
+
+  private selectedMosComponent() {
+    const components = this.selectedTransformObjects().components;
+    if (components.length !== 1) return null;
+    const component = components[0];
+    return component.type === "nmos" || component.type === "pmos" ? component : null;
+  }
+
+  private syncMosParams(force = false) {
+    const container = this.options.propertyEl?.querySelector<HTMLElement>("[data-property-mos-params]");
+    if (!container) return;
+    const component = this.selectedMosComponent();
+    container.hidden = !component;
+    if (!component) return;
+    container.querySelectorAll<HTMLInputElement>("[data-property-mos-param]").forEach((input) => {
+      const parameter = input.dataset.propertyMosParam;
+      if (!parameter) return;
+      if (!force && this.host.ownerDocument.activeElement === input) return;
+      input.value = component.values[`mos:${parameter}`] ?? "";
+    });
   }
 
   private bindGlobalDocumentWindowInteractions() {
@@ -3683,11 +3757,29 @@ export class SchematicEditor implements SchematicHostedEditor {
     };
     this.toolbarController?.sync(toolbarState);
     this.renderSelectionSummary(resolution);
+    this.scheduleNetlistRefresh();
+  }
+
+  private scheduleNetlistRefresh() {
+    if (!this.netlistPanel) return;
+    if (this.netlistRefreshTimer !== null) this.host.clearTimeout(this.netlistRefreshTimer);
+    this.netlistRefreshTimer = this.host.setTimeout(() => {
+      this.netlistRefreshTimer = null;
+      this.netlistPanel?.refresh(this.document);
+    }, 250);
+  }
+
+  private selectNetlistDiagnostic(componentId: string) {
+    if (!this.document.components.some(component => component.id === componentId)) return;
+    this.selectionSession.setMixed([componentId], []);
+    this.finishSelectionChange();
+    this.focusCanvas();
   }
 
   private renderSelectionSummary(resolution?: NetResolution) {
     const projection = this.currentSelectionUiProjection(resolution);
     this.propertyPanelController.sync(projection.propertyPanel);
+    this.syncMosParams();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
     if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();
     this.lastHadSelection = hasSelection;
