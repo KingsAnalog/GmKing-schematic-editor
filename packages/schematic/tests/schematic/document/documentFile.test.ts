@@ -213,6 +213,7 @@ describe("single schematic document file codec", () => {
       "connections",
       "junctionAppearances",
       "netLabels",
+      "layers",
       "notes"
     ]);
     expect(schematic).not.toHaveProperty("junctions");

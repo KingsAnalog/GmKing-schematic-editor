@@ -12,6 +12,8 @@ import type { ToolMode } from "./toolState";
 import type { SchematicDocument } from "./types";
 import { inductorCouplingCellAttrs } from "./inductorCouplingRenderer";
 import { inductorCouplingFlipsReferenceLabel } from "./inductorCouplingGeometry";
+import { isShapeInstance, resolveShapeGeometry } from "./shapeModel";
+import { shapeCellAttrs } from "./shapeRenderer";
 
 export interface SchematicStyleCell {
   readonly id?: unknown;
@@ -125,6 +127,13 @@ export function applySchematicCellSelectionStyles({
       const instance = document.components.find((component) => component.id === componentId);
       if (!instance) continue;
       const selected = selectedIds.has(componentId) || hoverIds.has(componentId);
+      if (isShapeInstance(instance)) {
+        cell.attr({
+          body: shapeCellAttrs(resolveShapeGeometry(instance), { selected })
+        });
+        cell.attr({ root: { "data-layer": "shape" } });
+        continue;
+      }
       cell.attr(componentCellAttrs(instance, {
         symbolTemplate: document.symbolTemplate,
         selected,

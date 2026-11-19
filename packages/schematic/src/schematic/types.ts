@@ -204,6 +204,13 @@ export interface NetLabel {
 
 export type SchematicNoteFormat = "plain" | "markdown";
 
+export interface SchematicLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+}
+
 export interface SchematicNote {
   rotation?: 0 | 90 | 180 | 270;
   id: string;
@@ -257,6 +264,7 @@ export interface SchematicContent extends SymbolTemplateContext {
   junctionAppearances: JunctionAppearance[];
   netLabels: NetLabel[];
   notes: SchematicNote[];
+  layers?: SchematicLayer[];
 }
 
 /** Runtime document shape. `junctions` is derived and omitted from durable content. */

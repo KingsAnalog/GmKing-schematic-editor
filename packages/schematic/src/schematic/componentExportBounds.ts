@@ -2,9 +2,12 @@ import { resolveComponentVisualModel, type ComponentRenderOptions } from "./comp
 import { measureSymbolText } from "./symbolContentModel";
 import { componentCellPosition, componentVisualBounds, unionRects, type Rect } from "./view-geometry";
 import type { ComponentInstance, Point } from "./types";
+import { isShapeInstance } from "./shapeModel";
+import { shapeExportBounds } from "./shapeSvgRenderer";
 
 /** Export bounds include text; selection and pin geometry keep their existing frame. */
 export function componentExportBounds(instance: ComponentInstance, options: ComponentRenderOptions = {}): Rect {
+  if (isShapeInstance(instance)) return shapeExportBounds(instance);
   const model = resolveComponentVisualModel(instance, options);
   const rects = [componentVisualBounds(instance)];
   const position = componentCellPosition(instance);

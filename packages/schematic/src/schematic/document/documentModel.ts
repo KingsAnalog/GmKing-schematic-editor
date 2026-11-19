@@ -3,6 +3,7 @@ import { DEFAULT_SYMBOL_TEMPLATE, resolveSymbolTemplate } from "../symbolTemplat
 import { applyNormalizedDocumentWires } from "./documentWires";
 import { cloneConnections, emptyConnections, connectGeometry } from "../connectionGraph";
 import { normalizeMarkdownNoteWidth } from "../notes/noteSizing";
+import { defaultLayers } from "../layers";
 import { snapPoint } from "../geometry";
 import {
   deriveSchematicTopology,
@@ -39,7 +40,8 @@ export function createEmptySchematicDocument(): SchematicDocument {
     connections: emptyConnections(),
     junctionAppearances: [],
     netLabels: [],
-    notes: []
+    notes: [],
+    layers: defaultLayers()
   };
 }
 
@@ -86,7 +88,8 @@ export function contentFromDocument(document: SchematicDocument): SchematicConte
     ...(couplings.length > 0 ? { inductorCouplings: couplings } : {}),
     junctionAppearances: snapshot.junctionAppearances,
     netLabels: snapshot.netLabels,
-    notes: snapshot.notes
+    notes: snapshot.notes,
+    layers: snapshot.layers ?? defaultLayers()
   };
 }
 
@@ -138,6 +141,7 @@ export function assignRestoredSchematicDocument(target: SchematicDocument, sourc
   target.junctionAppearances = normalizeJunctionAppearances(source.junctionAppearances);
   target.netLabels = source.netLabels.map(normalizeNetLabel);
   target.notes = source.notes.map(normalizeSchematicNote);
+  target.layers = (source.layers ?? defaultLayers()).map(layer => ({ ...layer }));
   normalizeComponentValues(target);
   normalizeComponentVariants(target);
   normalizeComponentAppearances(target);

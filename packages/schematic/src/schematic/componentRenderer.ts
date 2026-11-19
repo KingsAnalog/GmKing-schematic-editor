@@ -12,6 +12,8 @@ import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
+import { isShapeInstance } from "./shapeModel";
+import { makeShapeCell } from "./shapeRenderer";
 import {
   symbolContentCellAttrs,
   symbolContentDefaultAttrs,
@@ -446,6 +448,7 @@ export function makeComponentCell(
   instance: ComponentInstance,
   options: ComponentRenderOptions = {}
 ) {
+  if (isShapeInstance(instance)) return makeShapeCell(instance);
   const model = resolveComponentVisualModel(instance, options);
   const frame = model.frameBox;
   const position = {

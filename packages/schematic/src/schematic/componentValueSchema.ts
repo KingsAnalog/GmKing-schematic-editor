@@ -69,6 +69,13 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   ...[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY].map(key => integer(key, 0, RECTANGLE_MAX_PIN_COUNT)),
   { key: SPNT_POSITION_VALUE_KEY, supports: only("spntSwitch"), valid: (value, component) => validSpntPosition(component, value), expected: "a switch position from 0 (open) to the number of throws" },
   { key: "vsource:", prefix: true, supports: only("voltageSource"), valid: (value, _component, key) => validVoltageSourceFieldValue(key, value), expected: "a valid voltage source setting" },
+  {
+    key: "shape:",
+    prefix: true,
+    supports: component => component.type === "annotation" && typeof component.values["shape:kind"] === "string",
+    valid: value => value.length <= 4096,
+    expected: "a shape setting string"
+  },
   ...["pinVisible:", "pinSymbolVisible:", "pinMode:"].map(key => ({
     ...enumeration(key, key === "pinMode:" ? ["positive", "negative", "output"] : booleanValues),
     prefix: true

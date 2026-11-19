@@ -6,6 +6,7 @@ import { pointKey } from "./geometry";
 import { renderSchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
+import { isShapeInstance } from "./shapeModel";
 import { svgIdFragment } from "./svgId";
 import type { Rect } from "./view-geometry";
 import type { SchematicContent, SchematicDocument } from "./types";
@@ -53,10 +54,15 @@ export function renderSchematicDocumentSvg(
   const netLabelStatuses = Object.fromEntries(
     Array.from(topology.netResolution.labelStates, ([id, state]) => [id, state.status])
   );
+  const hiddenLayers = new Set(
+    (document.layers ?? []).filter(layer => layer.visible === false).map(layer => layer.id)
+  );
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,
-      components: document.components,
+      components: document.components.filter(component =>
+        !isShapeInstance(component) || !hiddenLayers.has(component.values["shape:layerId"] ?? "")
+      ),
       inductorCouplings: document.inductorCouplings,
       wires: document.wires,
       connections: document.connections,

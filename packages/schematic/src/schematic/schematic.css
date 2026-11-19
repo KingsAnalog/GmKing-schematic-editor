@@ -1231,43 +1231,163 @@
   display: none;
 }
 
-.layer-list {
-  display: grid;
-  gap: 2px;
-  padding: 6px 0;
+.layer-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0 6px;
 }
 
-.layer-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 0 2px;
+.layer-toolbar button,
+.shape-tools-grid button,
+.shape-z-actions button,
+.shape-delete {
+  min-height: 26px;
+  padding: 2px 7px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
   color: var(--schematic-ink);
-  font-size: 0.82rem;
+  font: inherit;
+  font-size: 0.7rem;
   cursor: pointer;
 }
 
-.layer-row input {
+.layer-toolbar button:hover,
+.shape-tools-grid button:hover,
+.shape-z-actions button:hover,
+.shape-delete:hover {
+  background: var(--schematic-ui-hover);
+}
+
+.layer-stack {
+  display: grid;
+  gap: 3px;
+  padding: 2px 0 8px;
+}
+
+.layer-stack-row {
+  display: grid;
+  grid-template-columns: 16px 16px minmax(0, 1fr) 22px 22px;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+.layer-stack-row.is-active {
+  border-color: var(--schematic-focus);
+  background: var(--schematic-ui-active);
+}
+
+.layer-stack-row input[type="checkbox"] {
   width: 14px;
   height: 14px;
   margin: 0;
 }
 
-.schematic-shell.is-layer-hidden-component [data-layer="component"],
-.schematic-shell.is-layer-hidden-shape [data-layer="shape"],
-.schematic-shell.is-layer-hidden-wire [data-layer="wire"],
-.schematic-shell.is-layer-hidden-junction [data-layer="junction"],
-.schematic-shell.is-layer-hidden-label [data-layer="label"] {
+.layer-stack-row > button {
+  min-width: 0;
+  height: 24px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.layer-select {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shape-tools {
+  display: grid;
+  gap: 5px;
+  padding: 8px 0;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.shape-tools-title,
+.shape-form-title {
+  color: var(--schematic-ui-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.shape-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.shape-form {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.shape-form[hidden] {
   display: none;
 }
 
-.schematic-shell.is-layer-hidden-pin .joint-port {
-  display: none;
+.shape-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: var(--schematic-ui-muted);
 }
 
-.schematic-shell.is-layer-hidden-note [data-note-id] {
-  display: none;
+.shape-row input,
+.shape-row select,
+.shape-row textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.shape-row input,
+.shape-row select {
+  height: 26px;
+  padding: 1px 4px;
+}
+
+.shape-row textarea {
+  min-height: 52px;
+  padding: 4px;
+  resize: vertical;
+}
+
+.shape-row-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.shape-z-actions {
+  display: flex;
+  gap: 4px;
+  align-items: end;
+}
+
+.shape-delete {
+  margin-top: 4px;
+  border-color: #e0b4b4;
+  color: #8f2424;
+}
+
+.schematic-shell.is-drawing-shape .schematic-paper {
+  cursor: crosshair;
 }
 
 .schematic-sidebar-panel[data-sidebar-panel="properties"] {

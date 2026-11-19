@@ -2,7 +2,7 @@ import { createSchematicSvgElement } from "./schematicSvgDom";
 import { escapeHtml } from "./uiUtils";
 
 type UiTag = "aside" | "button" | "div" | "h2" | "h3" | "input" | "label" | "main" | "option"
-  | "output" | "p" | "pre" | "section" | "select" | "span" | "strong" | "sub" | "svg" | "path";
+  | "output" | "p" | "pre" | "section" | "select" | "span" | "strong" | "sub" | "svg" | "path" | "textarea";
 type Attribute = `data-${string}` | `aria-${string}` | "accept" | "autocomplete" | "class" | "d"
   | "disabled" | "focusable" | "for" | "hidden" | "id" | "max" | "min" | "placeholder" | "readonly" | "role"
   | "spellcheck" | "step" | "style" | "tabindex" | "title" | "type" | "value" | "viewBox";

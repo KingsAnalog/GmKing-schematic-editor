@@ -7,7 +7,6 @@ import { MAX_NOTE_FONT_SIZE_PX, MIN_NOTE_FONT_SIZE_PX } from "./notes/noteSizing
 import { NOTE_WIDTH_INPUT_MAX, NOTE_WIDTH_INPUT_MIN } from "./notes/noteProperties";
 import { PAPER_COLOR_PRESETS, NOTE_BACKGROUND_COLOR_PRESETS } from "../shared/color";
 import { SYMBOL_TEMPLATES } from "./symbolTemplateModel";
-import { SCHEMATIC_LAYERS, type SchematicLayerId } from "./layers";
 
 const SCHEMATIC_COLOR_PRESETS = PAPER_COLOR_PRESETS.filter((preset) => preset.color !== DEFAULT_COMPONENT_COLOR);
 
@@ -120,28 +119,82 @@ export function buildSchematicEditorSidebar<T extends object>(
       el("div", { class: "palette-title" },
         el("div", { class: "palette-title-copy" },
           el("strong", {}, t("sidebar.layers", "Layers")),
-          el("span", {}, "Visibility only; netlist is unchanged.")
+          el("span", {}, "Higher layers draw above lower layers.")
         )
       ),
-      el("div", { class: "layer-list", "data-layer-list": true },
-        ...SCHEMATIC_LAYERS.map(layer => layerToggle(el, layer.id, layer.label))
+      el("div", { class: "layer-toolbar" },
+        el("button", { type: "button", "data-layer-add": true }, "+ Layer"),
+        el("button", { type: "button", "data-layer-delete": true }, "Delete")
+      ),
+      el("div", { class: "layer-stack", "data-layer-list": true }),
+      el("div", { class: "shape-tools" },
+        el("div", { class: "shape-tools-title" }, "Draw shape"),
+        el("div", { class: "shape-tools-grid" },
+          el("button", { type: "button", "data-shape-add": "rectangle" }, "Rectangle"),
+          el("button", { type: "button", "data-shape-add": "triangle" }, "Triangle"),
+          el("button", { type: "button", "data-shape-add": "ellipse" }, "Ellipse"),
+          el("button", { type: "button", "data-shape-add": "polyline" }, "Polyline"),
+          el("button", { type: "button", "data-shape-add": "polygon" }, "Polygon"),
+          el("button", { type: "button", "data-shape-add": "arc" }, "Arc")
+        )
+      ),
+      el("div", { class: "shape-form", "data-shape-form": true, hidden: true },
+        el("div", { class: "shape-form-title" }, "Selected shape"),
+        el("label", { class: "shape-row" },
+          el("span", {}, "Kind"),
+          el("select", { "data-shape-field": "kind" },
+            el("option", { value: "rectangle" }, "Rectangle"),
+            el("option", { value: "triangle" }, "Triangle"),
+            el("option", { value: "ellipse" }, "Ellipse"),
+            el("option", { value: "polyline" }, "Polyline"),
+            el("option", { value: "polygon" }, "Polygon"),
+            el("option", { value: "arc" }, "Arc")
+          )
+        ),
+        el("label", { class: "shape-row" },
+          el("span", {}, "Layer"),
+          el("select", { "data-shape-field": "layer" })
+        ),
+        el("div", { class: "shape-row-pair" },
+          el("label", { class: "shape-row" }, el("span", {}, "W"), el("input", { type: "number", min: "8", "data-shape-field": "width" })),
+          el("label", { class: "shape-row" }, el("span", {}, "H"), el("input", { type: "number", min: "8", "data-shape-field": "height" }))
+        ),
+        el("label", { class: "shape-row", "data-shape-radius-row": true },
+          el("span", {}, "Radius"),
+          el("input", { type: "number", min: "0", "data-shape-field": "radius" })
+        ),
+        el("div", { class: "shape-row-pair", "data-shape-arc-rows": true },
+          el("label", { class: "shape-row" }, el("span", {}, "Start"), el("input", { type: "number", "data-shape-field": "startAngle" })),
+          el("label", { class: "shape-row" }, el("span", {}, "End"), el("input", { type: "number", "data-shape-field": "endAngle" }))
+        ),
+        el("label", { class: "shape-row", "data-shape-points-row": true },
+          el("span", {}, "Points"),
+          el("textarea", { spellcheck: "false", "data-shape-field": "points" })
+        ),
+        el("div", { class: "shape-row-pair" },
+          el("label", { class: "shape-row" }, el("span", {}, "Fill"), el("input", { type: "text", spellcheck: "false", "data-shape-field": "fill" })),
+          el("label", { class: "shape-row" }, el("span", {}, "Stroke"), el("input", { type: "text", spellcheck: "false", "data-shape-field": "stroke" }))
+        ),
+        el("div", { class: "shape-row-pair" },
+          el("label", { class: "shape-row" }, el("span", {}, "Width"), el("input", { type: "number", min: "0", step: "0.5", "data-shape-field": "strokeWidth" })),
+          el("label", { class: "shape-row" }, el("span", {}, "Dash"),
+            el("select", { "data-shape-field": "dash" },
+              el("option", { value: "solid" }, "Solid"),
+              el("option", { value: "dashed" }, "Dashed"),
+              el("option", { value: "dotted" }, "Dotted")
+            )
+          )
+        ),
+        el("div", { class: "shape-row-pair" },
+          el("label", { class: "shape-row" }, el("span", {}, "Z"), el("input", { type: "number", "data-shape-field": "z" })),
+          el("div", { class: "shape-z-actions" },
+            el("button", { type: "button", "data-shape-z": "up" }, "Raise"),
+            el("button", { type: "button", "data-shape-z": "down" }, "Lower")
+          )
+        ),
+        el("button", { type: "button", class: "shape-delete", "data-shape-delete": true }, "Delete shape")
       )
     )
-  );
-}
-
-function layerToggle<T extends object>(
-  el: UiBuilder<T>["el"],
-  layer: SchematicLayerId,
-  label: string
-) {
-  return el("label", { class: "layer-row" },
-    el("input", {
-      type: "checkbox",
-      "data-layer-toggle": layer,
-      "aria-label": label
-    }),
-    el("span", {}, label)
   );
 }
 

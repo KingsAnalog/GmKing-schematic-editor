@@ -12,6 +12,7 @@ import {
 } from "./document/documentModel";
 import { normalizeWirePath } from "./wire/wireGeometry";
 import { isHexColor } from "../shared/color";
+import { defaultLayers } from "./layers";
 import type {
   ComponentAppearance,
   ComponentInstance,
@@ -23,6 +24,7 @@ import type {
   SchematicContent,
   SchematicConnections,
   SchematicDocument,
+  SchematicLayer,
   SchematicNote,
   Wire,
   WireAppearance
@@ -47,7 +49,8 @@ const SCHEMATIC_KEYS = [
   "connections",
   "junctionAppearances",
   "netLabels",
-  "notes"
+  "notes",
+  "layers"
 ] as const;
 
 export type SchematicDocumentFileSource = {
@@ -91,7 +94,8 @@ export function createSchematicFile(document: SchematicDocumentFileSource): Sche
       connections: cloneConnections(document.connections),
       junctionAppearances: document.junctionAppearances.map(snapshotJunctionAppearance),
       netLabels: document.netLabels.map(snapshotNetLabel),
-      notes: document.notes.map(snapshotNote)
+      notes: document.notes.map(snapshotNote),
+      layers: (document.layers ?? defaultLayers()).map(snapshotLayer)
     }
   };
 }
@@ -122,6 +126,7 @@ function formatSchematicFileJson(file: SchematicFile) {
     `    "connections": ${stringifyInline(file.schematic.connections)},`,
     formatInlineSchematicCollection("junctionAppearances", file.schematic.junctionAppearances, true),
     formatInlineSchematicCollection("netLabels", file.schematic.netLabels, true),
+    formatInlineSchematicCollection("layers", file.schematic.layers ?? defaultLayers(), true),
     ...formatSchematicNotes(file.schematic.notes),
     "  }",
     "}"
@@ -296,7 +301,7 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     );
   }
   const source = requireObject(envelope.schematic, "$.schematic");
-  requireExactKeys(source, SCHEMATIC_KEYS, "$.schematic", ["inductorCouplings", "symbolTemplate"]);
+  requireExactKeys(source, SCHEMATIC_KEYS, "$.schematic", ["inductorCouplings", "symbolTemplate", "layers"]);
   let symbolTemplate;
   try {
     symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
@@ -324,8 +329,13 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     .map((label, index) => decodeNetLabel(label, `$.schematic.netLabels[${index}]`));
   const notes = requireArray(source.notes, "$.schematic.notes")
     .map((note, index) => decodeNote(note, `$.schematic.notes[${index}]`));
+  const layers = hasOwn(source, "layers")
+    ? requireArray(source.layers, "$.schematic.layers")
+        .map((layer, index) => decodeLayer(layer, `$.schematic.layers[${index}]`))
+    : defaultLayers();
 
   assertUniqueObjectIds({ components, wires, inductorCouplings, netLabels, notes });
+  assertUniqueLayerIds(layers);
   assertValidInductorCouplings(inductorCouplings, components);
   assertValidLabelAttachments(netLabels, wires);
   return {
@@ -336,7 +346,8 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     ...(inductorCouplings.length > 0 ? { inductorCouplings } : {}),
     junctionAppearances,
     netLabels,
-    notes
+    notes,
+    layers
   };
 }
 
@@ -803,6 +814,34 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
       point: snapshotPoint(label.attachment.point)
     }
   };
+}
+
+function snapshotLayer(layer: SchematicLayer): SchematicLayer {
+  return {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible !== false,
+    locked: layer.locked === true
+  };
+}
+
+function decodeLayer(value: unknown, path: string): SchematicLayer {
+  const source = requireObject(value, path);
+  requireExactKeys(source, ["id", "name", "visible", "locked"], path);
+  return {
+    id: requireNonEmptyString(source.id, `${path}.id`),
+    name: requireNonEmptyString(source.name, `${path}.name`),
+    visible: requireBoolean(source.visible, `${path}.visible`),
+    locked: requireBoolean(source.locked, `${path}.locked`)
+  };
+}
+
+function assertUniqueLayerIds(layers: readonly SchematicLayer[]) {
+  const ids = new Set<string>();
+  layers.forEach((layer, index) => {
+    if (ids.has(layer.id)) invalid(`$.schematic.layers[${index}].id`, "a unique layer id");
+    ids.add(layer.id);
+  });
 }
 
 function snapshotNote(note: SchematicNote): SchematicNote {
