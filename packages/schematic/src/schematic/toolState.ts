@@ -45,7 +45,8 @@ export type SchematicKeyboardShortcutIntent =
     })
   | (SchematicKeyboardShortcutIntentBase & { kind: "rotate"; preventDefault: true; stopPropagation: false })
   | (SchematicKeyboardShortcutIntentBase & { kind: "mirror"; preventDefault: true; stopPropagation: false; axis: "x" | "y" })
-  | (SchematicKeyboardShortcutIntentBase & { kind: "fit"; preventDefault: true; stopPropagation: false });
+  | (SchematicKeyboardShortcutIntentBase & { kind: "fit"; preventDefault: true; stopPropagation: false })
+  | (SchematicKeyboardShortcutIntentBase & { kind: "toggle-log"; preventDefault: true; stopPropagation: true });
 
 export type SchematicEscapeKeyProjectionInput = {
   key: string;
@@ -191,7 +192,10 @@ export type SchematicToolbarCommandIntent =
   | { kind: "fit" }
   | { kind: "reset" }
   | { kind: "undo" }
-  | { kind: "redo" };
+  | { kind: "redo" }
+  | { kind: "open-library" }
+  | { kind: "open-right-view"; view: "analysis" | "netlist" | "diagnostics" }
+  | { kind: "toggle-log" };
 
 const TOOL_MODE_SET = new Set<string>(TOOL_MODES);
 const DELETE_TOOL_ENTRY_STATUS: Record<DeleteToolMode, string> = {
@@ -221,6 +225,10 @@ export function projectSchematicKeyboardShortcut(
 ): SchematicKeyboardShortcutIntent {
   const key = snapshot.key.toLowerCase();
   const modifierKey = !!snapshot.ctrlKey || !!snapshot.metaKey;
+
+  if (modifierKey && snapshot.shiftKey && key === "l") {
+    return { kind: "toggle-log", preventDefault: true, stopPropagation: true };
+  }
 
   if (modifierKey && key === "z") {
     return snapshot.shiftKey
@@ -350,6 +358,16 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
       return { kind: "undo" };
     case "redo":
       return { kind: "redo" };
+    case "library":
+      return { kind: "open-library" };
+    case "analysis":
+      return { kind: "open-right-view", view: "analysis" };
+    case "netlist":
+      return { kind: "open-right-view", view: "netlist" };
+    case "diagnostics":
+      return { kind: "open-right-view", view: "diagnostics" };
+    case "log":
+      return { kind: "toggle-log" };
     default:
       return { kind: "none" };
   }

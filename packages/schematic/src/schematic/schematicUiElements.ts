@@ -4,7 +4,7 @@ import { escapeHtml } from "./uiUtils";
 type UiTag = "aside" | "button" | "div" | "h2" | "h3" | "input" | "label" | "main" | "option"
   | "output" | "p" | "section" | "select" | "span" | "strong" | "svg" | "path";
 type Attribute = `data-${string}` | `aria-${string}` | "accept" | "autocomplete" | "class" | "d"
-  | "disabled" | "focusable" | "for" | "hidden" | "id" | "max" | "min" | "readonly" | "role"
+  | "disabled" | "focusable" | "for" | "hidden" | "id" | "max" | "min" | "placeholder" | "readonly" | "role"
   | "spellcheck" | "step" | "style" | "tabindex" | "title" | "type" | "value" | "viewBox";
 type Attributes = Partial<Record<Attribute, string | boolean | number>>;
 

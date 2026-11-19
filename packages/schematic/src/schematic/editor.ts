@@ -8,6 +8,10 @@ import {
   type CellGeometryInteractionLiveResult
 } from "./cellGeometryInteractionCoordinator";
 import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
+import { InstanceBrowser } from "./instanceBrowser";
+import { SidebarLibrary } from "./sidebarLibrary";
+import { RightDockController, type RightDockView } from "./rightDock";
+import { SchematicEventLog } from "./eventLog";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
 import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator";
@@ -253,6 +257,12 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly deleteCommitCoordinator: SchematicDeleteCommitCoordinator;
   private readonly noteLayer: SchematicNoteLayer;
   private readonly instanceSelector: InstanceSelector;
+  private readonly sidebarLibrary: SidebarLibrary;
+  private readonly instanceBrowser: InstanceBrowser;
+  private readonly rightDock: RightDockController | null;
+  private readonly eventLog: SchematicEventLog;
+  private lastLoggedStatus = "";
+  private lastHadSelection = false;
   private readonly contextMenuController;
   private readonly propertyPanelController: SchematicPropertyPanelController;
   private readonly analysisController;
@@ -696,6 +706,24 @@ export class SchematicEditor implements SchematicHostedEditor {
       closeAfterActivation: this.hostBridge.closeInstanceSearchAfterActivation,
       onPanelVisibilityChange: (open) => this.hostBridge.onInstanceSearchVisibilityChange?.(open)
     });
+    this.sidebarLibrary = new SidebarLibrary(this.options.paletteEl, {
+      symbolTemplate: () => this.document.symbolTemplate,
+      onPick: (item) => {
+        this.beginPlacement(item);
+        this.focusCanvas();
+      }
+    });
+    this.instanceBrowser = new InstanceBrowser(this.options.shellEl, {
+      symbolTemplate: () => this.document.symbolTemplate,
+      onPick: (item) => {
+        this.beginPlacement(item);
+        this.focusCanvas();
+      },
+      onClose: () => this.focusCanvas()
+    });
+    const { analysisEl } = this.options;
+    this.rightDock = analysisEl ? new RightDockController(analysisEl) : null;
+    this.eventLog = new SchematicEventLog(this.options.shellEl);
     const toolbarRoot = this.options.paperEl.closest(".schematic-shell");
     this.toolbarController = toolbarRoot
       ? new SchematicToolbarController(toolbarRoot, {
@@ -741,6 +769,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.initialized = true;
     this.activeRenderRuntime.host.hidden = false;
     this.activeRenderRuntime.surface.paper.unfreeze?.();
+    this.sidebarLibrary.mount();
+    this.instanceBrowser.mount();
+    this.rightDock?.mount();
+    this.eventLog.mount();
     this.renderPalette();
     this.bindEvents();
     this.syncToolUi();
@@ -769,6 +801,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.propertyInteractions.dispose();
     this.noteInteractionController.dispose();
     this.instanceSelector.destroy();
+    this.sidebarLibrary.destroy();
+    this.instanceBrowser.destroy();
+    this.rightDock?.destroy();
+    this.eventLog.destroy();
     this.toolbarController?.destroy();
     this.propertyPanelController.destroy();
     this.activeRenderRuntime.surface.destroy();
@@ -957,6 +993,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private renderPalette() {
     this.instanceSelector.render();
+    this.sidebarLibrary.refresh();
   }
 
   private changeSymbolTemplate(templateId: SymbolTemplateId) {
@@ -1344,6 +1381,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (!ownsKeyboardTarget) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
+    if (key === "escape" && this.instanceBrowser.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.instanceBrowser.close();
+      return;
+    }
+    if (key === "escape" && this.eventLog.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.eventLog.close();
+      return;
+    }
     if (key === "escape" && this.shapeResizeSession.isActive) {
       event.preventDefault();
       event.stopPropagation();
@@ -1446,6 +1495,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       case "fit":
         this.fit();
         return;
+      case "toggle-log":
+        this.eventLog.toggle();
+        return;
     }
   }
 
@@ -1479,6 +1531,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private runCommand(command: string) {
+    this.eventLog.info("command", command);
     const intent = projectSchematicToolbarCommandIntent(command);
     this.applySchematicToolbarCommandIntent(intent);
   }
@@ -1523,6 +1576,15 @@ export class SchematicEditor implements SchematicHostedEditor {
         break;
       case "redo":
         this.redo();
+        break;
+      case "open-library":
+        this.openLibraryPanel();
+        break;
+      case "open-right-view":
+        this.openRightView(intent.view);
+        break;
+      case "toggle-log":
+        this.eventLog.toggle();
         break;
       case "none":
         break;
@@ -1722,7 +1784,36 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private openInstancePalette() {
-    this.beginPlacement(this.placementToolController.selectedItem, { armPaletteKeyboard: true, prefillQuery: true });
+    this.instanceBrowser.open();
+  }
+
+  private openLibraryPanel() {
+    if (this.options.layout) this.options.layout.openPanel("left");
+    else this.options.shellEl.classList.add("is-left-panel-visible");
+    this.sidebarLibrary.showLibrary();
+  }
+
+  private openRightView(view: RightDockView) {
+    if (!this.rightDock) return;
+    const layout = this.options.layout;
+    const visible = layout
+      ? layout.isPanelVisible("right")
+      : this.options.shellEl.classList.contains("is-right-panel-visible");
+    const { analysisEl } = this.options;
+    if (visible && this.rightDock.activeView() === view) {
+      if (layout) layout.closePanel("right");
+      else {
+        this.options.shellEl.classList.remove("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "true");
+      }
+      return;
+    }
+    this.rightDock.setView(view);
+    if (layout) layout.openPanel("right");
+    else {
+      this.options.shellEl.classList.add("is-right-panel-visible");
+      analysisEl?.setAttribute("aria-hidden", "false");
+    }
   }
 
   private toggleInstanceTool() {
@@ -3578,6 +3669,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   private renderSelectionSummary(resolution?: NetResolution) {
     const projection = this.currentSelectionUiProjection(resolution);
     this.propertyPanelController.sync(projection.propertyPanel);
+    const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
+    if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();
+    this.lastHadSelection = hasSelection;
     const target = this.options.selectionSummaryEl;
     if (!target) return;
     renderSchematicSelectionSummary(target, projection.summary);
@@ -3668,6 +3762,10 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private writeStatus(message: string) {
     this.statusMessage = message;
+    if (message && message !== this.lastLoggedStatus) {
+      this.lastLoggedStatus = message;
+      this.eventLog?.info("status", message);
+    }
     if (this.options.statusEl) this.options.statusEl.textContent = message;
     this.hostBridge.onStatusChange?.(message);
   }

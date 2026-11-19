@@ -997,3 +997,795 @@
     gap: 5px;
   }
 }
+
+/* ============================================================
+   R1: sidebar tabs, device library, instance browser, right dock,
+   log drawer. These styles are scoped to the web shell so the
+   default/embedded host keeps its existing overlay layout.
+   ============================================================ */
+
+.schematic-shell {
+  --schematic-ui-panel: var(--schematic-paper, #ffffff);
+  --schematic-ui-hover: #eef5fb;
+  --schematic-ui-active: #e2f0fb;
+  --schematic-ui-line: var(--schematic-soft-rule, #d5d5d0);
+  --schematic-ui-muted: var(--schematic-muted, #565656);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell {
+  --schematic-ui-panel: #211f1b;
+  --schematic-ui-hover: #2c2a25;
+  --schematic-ui-active: #34322c;
+}
+
+.schematic-shell > .schematic-palette,
+.schematic-shell.is-layout-narrow > .schematic-palette {
+  display: flex;
+  flex-direction: column;
+  background: var(--schematic-ui-panel);
+}
+
+.schematic-shell > .schematic-palette > .symbol-template-panel {
+  flex: 0 0 auto;
+}
+
+.schematic-sidebar-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  min-height: 36px;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+.schematic-sidebar-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: var(--schematic-ui-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.schematic-sidebar-tab:hover {
+  background: var(--schematic-ui-hover);
+  color: var(--schematic-ink);
+}
+
+.schematic-sidebar-tab.is-active {
+  border-color: var(--schematic-ui-line);
+  border-bottom-color: var(--schematic-ui-panel);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font-weight: 600;
+}
+
+.schematic-sidebar-tab:focus-visible {
+  outline: 2px solid var(--schematic-focus);
+  outline-offset: -2px;
+}
+
+.schematic-sidebar-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.schematic-sidebar-panel[hidden] {
+  display: none;
+}
+
+.schematic-sidebar-panel .palette-title {
+  flex: 0 0 auto;
+  padding: 9px 10px;
+}
+
+.schematic-sidebar-panel .palette-title-copy > span {
+  display: block;
+}
+
+.library-picker {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+  color: var(--schematic-ui-muted);
+  font-size: 0.78rem;
+}
+
+.library-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 2px 6px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.library-cell-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 5px 6px 12px;
+  overflow: auto;
+}
+
+.library-group-label {
+  padding: 9px 6px 3px;
+  color: var(--schematic-ui-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.library-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--schematic-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-cell:hover,
+.library-cell:focus-visible {
+  border-color: var(--schematic-ui-line);
+  background: var(--schematic-ui-hover);
+  outline: none;
+}
+
+.library-cell-preview {
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 26px;
+  color: var(--schematic-ink);
+}
+
+.library-cell-preview svg,
+.browser-cell-preview svg {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.library-cell-preview .palette-symbol-preview text,
+.browser-cell-preview .palette-symbol-preview text,
+.browser-symbol-preview .palette-symbol-preview text {
+  display: none !important;
+}
+
+.browser-symbol-preview .palette-symbol-preview {
+  width: min(100%, 420px);
+  height: auto;
+  max-height: 360px;
+  overflow: visible;
+}
+
+.library-cell-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.library-cell-name {
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-cell-meta {
+  color: var(--schematic-ui-muted);
+  font-size: 0.68rem;
+}
+
+.schematic-sidebar-panel .palette-grid[hidden] {
+  display: none;
+}
+
+.schematic-sidebar-panel[data-sidebar-panel="properties"] {
+  overflow: hidden;
+}
+
+.schematic-sidebar-panel[data-sidebar-panel="properties"] .property-editor {
+  height: 100%;
+  overflow: auto;
+}
+
+/* Instance browser ------------------------------------------------------- */
+
+.schematic-instance-browser {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+
+.schematic-instance-browser[hidden] {
+  display: none;
+}
+
+.schematic-instance-browser-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(15 23 42 / 36%);
+  cursor: default;
+}
+
+.schematic-instance-browser-dialog {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 100%);
+  height: min(720px, 100%);
+  max-height: 82vh;
+  overflow: hidden;
+  border: 1px solid var(--schematic-border);
+  border-radius: 8px;
+  background: var(--schematic-ui-panel);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 28%);
+}
+
+.schematic-instance-browser-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+}
+
+.schematic-instance-browser-header h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.schematic-instance-browser-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--schematic-ui-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.schematic-instance-browser-close:hover {
+  border-color: var(--schematic-ui-line);
+  background: var(--schematic-ui-hover);
+  color: var(--schematic-ink);
+}
+
+.schematic-instance-browser-columns {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 190px minmax(250px, 1fr) 320px;
+  min-height: 0;
+}
+
+.instance-browser-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--schematic-ui-line);
+}
+
+.instance-browser-column:last-child {
+  border-right: 0;
+}
+
+.instance-browser-column h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+  color: var(--schematic-ui-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.browser-search {
+  flex: 0 0 auto;
+  height: 30px;
+  margin: 8px 10px;
+  padding: 3px 8px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.browser-search:focus {
+  border-color: var(--schematic-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(0 95 158 / 14%);
+}
+
+.browser-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 2px 6px 10px;
+  overflow: auto;
+}
+
+.browser-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--schematic-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.browser-option:hover,
+.browser-option:focus-visible {
+  background: var(--schematic-ui-hover);
+  outline: none;
+}
+
+.browser-option.is-active {
+  border-color: #b9d7ea;
+  background: var(--schematic-ui-active);
+}
+
+.browser-option.is-selected .browser-option-name {
+  font-weight: 600;
+}
+
+.browser-option-name {
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-option-count,
+.browser-option-meta {
+  color: var(--schematic-ui-muted);
+  font-size: 0.7rem;
+}
+
+.browser-cell-option {
+  justify-content: flex-start;
+  gap: 9px;
+}
+
+.browser-cell-preview {
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 30px;
+}
+
+.browser-cell-preview svg {
+  width: 100%;
+  height: 100%;
+}
+
+.browser-cell-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.browser-empty {
+  padding: 18px 8px;
+  color: var(--schematic-ui-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.browser-symbol {
+  border-right: 0;
+}
+
+.browser-symbol-preview {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  min-height: 0;
+  padding: 16px;
+  color: var(--schematic-ink);
+}
+
+.browser-symbol-preview svg {
+  width: 100%;
+  height: 100%;
+  max-height: 360px;
+}
+
+.browser-symbol-name {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.browser-symbol-meta {
+  flex: 0 0 auto;
+  padding: 4px 16px 14px;
+  color: var(--schematic-ui-muted);
+  font-size: 0.74rem;
+}
+
+.schematic-instance-browser-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.browser-hint,
+.browser-count {
+  color: var(--schematic-ui-muted);
+  font-size: 0.72rem;
+}
+
+.browser-count {
+  margin-left: auto;
+}
+
+.browser-place {
+  padding: 6px 14px;
+  border: 1px solid var(--schematic-focus);
+  background: var(--schematic-focus);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.browser-place:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Right dock ------------------------------------------------------------- */
+
+.schematic-shell > .analysis-panel.right-dock {
+  display: flex;
+  flex-direction: column;
+  align-content: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--schematic-ui-panel);
+}
+
+.right-dock-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  min-height: 36px;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--schematic-ui-line);
+}
+
+.right-dock-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: var(--schematic-ui-muted);
+  font: inherit;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.right-dock-tab:hover {
+  background: var(--schematic-ui-hover);
+  color: var(--schematic-ink);
+}
+
+.right-dock-tab.is-active {
+  border-color: var(--schematic-ui-line);
+  border-bottom-color: var(--schematic-ui-panel);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font-weight: 600;
+}
+
+.right-dock-tab:focus-visible {
+  outline: 2px solid var(--schematic-focus);
+  outline-offset: -2px;
+}
+
+.right-dock-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.right-dock-panel[hidden] {
+  display: none;
+}
+
+.right-dock-panel > .analysis-panel-heading {
+  margin: 0;
+}
+
+/* Log drawer ------------------------------------------------------------- */
+
+.schematic-log-drawer {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  bottom: 36px;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  height: 230px;
+  max-height: calc(100% - 80px);
+  border-top: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+  box-shadow: 0 -8px 26px rgb(0 0 0 / 13%);
+}
+
+.schematic-log-drawer[hidden] {
+  display: none;
+}
+
+.schematic-log-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+}
+
+.schematic-log-header strong {
+  font-size: 0.8rem;
+}
+
+.schematic-log-header select,
+.schematic-log-header input,
+.schematic-log-header button {
+  height: 26px;
+  padding: 2px 7px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.74rem;
+}
+
+.schematic-log-header input {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.schematic-log-header button {
+  cursor: pointer;
+}
+
+.schematic-log-header button:hover {
+  background: var(--schematic-ui-hover);
+}
+
+.schematic-log-close {
+  width: 26px;
+  padding: 0 !important;
+  font-size: 1rem !important;
+}
+
+.schematic-log-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 4px 8px 8px;
+  overflow: auto;
+  font-size: 0.74rem;
+}
+
+.schematic-log-row {
+  display: grid;
+  grid-template-columns: 68px 48px 72px minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 2px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+  line-height: 1.35;
+}
+
+.schematic-log-time,
+.schematic-log-source {
+  color: var(--schematic-ui-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.schematic-log-level {
+  font-weight: 600;
+}
+
+.schematic-log-row[data-level="warn"] .schematic-log-level {
+  color: #a16207;
+}
+
+.schematic-log-row[data-level="error"] .schematic-log-level {
+  color: #b91c1c;
+}
+
+.schematic-log-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.schematic-log-empty {
+  padding: 16px 8px;
+  color: var(--schematic-ui-muted);
+  text-align: center;
+}
+
+.schematic-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-top: 1px solid var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+.schematic-statusbar .schematic-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  border-top: 0;
+}
+
+.schematic-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.schematic-status-count {
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+}
+
+.schematic-status-count[hidden] {
+  display: none;
+}
+
+.schematic-status-log {
+  padding: 3px 8px;
+  border: 1px solid var(--schematic-border);
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.schematic-status-log:hover,
+.schematic-status-log[aria-expanded="true"] {
+  background: var(--schematic-ui-hover);
+}
+
+/* Responsive ------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .schematic-instance-browser {
+    padding: 8px;
+  }
+
+  .schematic-instance-browser-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .schematic-instance-browser-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 1fr) 220px;
+  }
+
+  .instance-browser-column.browser-symbol {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--schematic-ui-line);
+  }
+
+  .browser-symbol-preview {
+    max-height: 150px;
+  }
+
+  .browser-symbol-name {
+    padding-top: 4px;
+  }
+}
+
+@media (max-width: 560px) {
+  .schematic-instance-browser-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 190px 220px 200px;
+    overflow: auto;
+  }
+
+  .instance-browser-column.browser-symbol {
+    grid-column: auto;
+  }
+
+  .schematic-instance-browser-footer {
+    flex-wrap: wrap;
+  }
+
+  .browser-count {
+    margin-left: 0;
+  }
+
+  .schematic-log-row {
+    grid-template-columns: 58px 42px minmax(0, 1fr);
+  }
+
+  .schematic-log-source {
+    display: none;
+  }
+}

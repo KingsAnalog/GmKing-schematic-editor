@@ -1,4 +1,5 @@
 import { markupUi, type UiBuilder } from "./schematicUiElements";
+import { t } from "./schematicI18n";
 import { DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
 import { FUNCTION_BLOCK_TIME_DOMAIN_OPTIONS } from "./functionBlockModel";
 import { DEFAULT_COMPONENT_COLOR } from "./componentPropertyModel";
@@ -16,7 +17,12 @@ export function renderSchematicEditorSidebarProjection() {
   return buildSchematicEditorSidebar(markupUi.el).html;
 }
 
-export function buildSchematicEditorSidebar<T extends object>(el: UiBuilder<T>["el"]) {
+export function buildSchematicEditorSidebar<T extends object>(
+  el: UiBuilder<T>["el"],
+  namespace = "schematic-sidebar"
+) {
+  const libraryPanelId = `${namespace}-library`;
+  const propertiesPanelId = `${namespace}-properties`;
   return el("aside", { class: "schematic-palette", "aria-label": "Schematic controls", "data-schematic-palette": true },
     el("section", { class: "symbol-template-panel", "aria-label": "Schematic symbol template" },
       el("label", { class: "symbol-template-control" },
@@ -31,23 +37,66 @@ export function buildSchematicEditorSidebar<T extends object>(el: UiBuilder<T>["
       ),
       el("div", { class: "property-error", "data-symbol-template-error": true, role: "status", hidden: true })
     ),
-    el("section", { class: "palette-panel", "aria-label": "Add instance palette" },
+    el("div", { class: "schematic-sidebar-tabs", role: "tablist", "aria-label": "Schematic sidebar" },
+      el("button", {
+        type: "button",
+        class: "schematic-sidebar-tab is-active",
+        role: "tab",
+        "data-sidebar-tab": "library",
+        "aria-selected": "true",
+        "aria-controls": libraryPanelId
+      }, t("sidebar.library", "Library")),
+      el("button", {
+        type: "button",
+        class: "schematic-sidebar-tab",
+        role: "tab",
+        "data-sidebar-tab": "properties",
+        "aria-selected": "false",
+        "aria-controls": propertiesPanelId,
+        tabindex: "-1"
+      }, t("sidebar.properties", "Properties"))
+    ),
+    el("section", {
+      id: libraryPanelId,
+      class: "schematic-sidebar-panel",
+      "data-sidebar-panel": "library",
+      role: "tabpanel",
+      "aria-label": t("sidebar.library", "Library")
+    },
       el("div", { class: "palette-title" },
         el("div", { class: "palette-title-copy" },
-          el("strong", {}, "Add Instance"),
-          el("span", {}, "i opens, Esc cancels")
+          el("strong", {}, t("sidebar.cells", "Cells")),
+          el("span", {}, "i opens the browser; Esc cancels")
         )
       ),
-      el("div", { class: "palette-grid", "data-palette-items": true })
+      el("label", { class: "library-picker" },
+        el("span", {}, t("sidebar.libraryLabel", "Library")),
+        el("select", {
+          class: "library-select",
+          "data-library-select": true,
+          "aria-label": t("sidebar.libraryLabel", "Library")
+        })
+      ),
+      el("div", { class: "library-cell-list", "data-library-cells": true }),
+      el("div", { class: "palette-grid", "data-palette-items": true, hidden: true })
     ),
-    el("section", { class: "property-editor", "aria-label": "Property Editor", "data-schematic-property-editor": true },
-      el("h2", {}, "Property Editor"),
-      el("div", { class: "property-empty", "data-property-empty": true }, "No object selected."),
-      netProperties(el),
-      labelToolProperties(el),
-      componentProperties(el),
-      couplingProperties(el),
-      noteProperties(el)
+    el("section", {
+      id: propertiesPanelId,
+      class: "schematic-sidebar-panel",
+      "data-sidebar-panel": "properties",
+      role: "tabpanel",
+      "aria-label": t("sidebar.properties", "Properties"),
+      hidden: true
+    },
+      el("section", { class: "property-editor", "aria-label": "Property Editor", "data-schematic-property-editor": true },
+        el("h2", {}, "Property Editor"),
+        el("div", { class: "property-empty", "data-property-empty": true }, "No object selected."),
+        netProperties(el),
+        labelToolProperties(el),
+        componentProperties(el),
+        couplingProperties(el),
+        noteProperties(el)
+      )
     )
   );
 }

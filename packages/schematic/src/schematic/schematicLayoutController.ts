@@ -21,7 +21,7 @@ const DEFAULT_STATE: SchematicLayoutState = {
   rightCollapsed: true
 };
 const LEFT_WIDTH_RANGE = { min: 210, max: 520 };
-const RIGHT_WIDTH_RANGE = { min: 260, max: 680 };
+const RIGHT_WIDTH_RANGE = { min: 320, max: 900 };
 const NARROW_CONTAINER_WIDTH = 1080;
 const STORAGE_KEY = "adc-helper/schematic-layout";
 const KEYBOARD_RESIZE_STEP = 20;
@@ -29,6 +29,14 @@ const KEYBOARD_RESIZE_STEP = 20;
 export interface SchematicPanelResizeResult {
   width: number;
   collapsed: boolean;
+}
+
+/** Minimal surface the editor uses to open the left or right panel. */
+export interface SchematicPanelLayoutAccess {
+  openPanel(side: SchematicPanelSide): void;
+  closePanel(side: SchematicPanelSide): void;
+  togglePanel(side: SchematicPanelSide): void;
+  isPanelVisible(side: SchematicPanelSide): boolean;
 }
 
 export function resolveSchematicPanelResize(
@@ -62,7 +70,7 @@ export function projectSchematicLayout(
   };
 }
 
-export class SchematicLayoutController {
+export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   private readonly lifecycle: AbortController;
   private readonly elementConstructor: typeof Element | null;
   private readonly storage: Pick<Storage, "getItem" | "setItem"> | null;
@@ -117,6 +125,40 @@ export class SchematicLayoutController {
 
   getState(): SchematicLayoutState {
     return { ...this.state };
+  }
+
+  openPanel(side: SchematicPanelSide) {
+    if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
+      this.drawer = side;
+    } else if (side === "left") {
+      this.state.leftCollapsed = false;
+    } else {
+      this.state.rightCollapsed = false;
+    }
+    this.persist();
+    this.render();
+  }
+
+  closePanel(side: SchematicPanelSide) {
+    if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
+      if (this.drawer === side) this.drawer = null;
+    } else if (side === "left") {
+      this.state.leftCollapsed = true;
+    } else {
+      this.state.rightCollapsed = true;
+    }
+    this.persist();
+    this.render();
+  }
+
+  togglePanel(side: SchematicPanelSide) {
+    if (this.isPanelVisible(side)) this.closePanel(side);
+    else this.openPanel(side);
+  }
+
+  isPanelVisible(side: SchematicPanelSide) {
+    const projection = projectSchematicLayout(this.containerWidth, this.state, this.drawer);
+    return side === "left" ? projection.leftVisible : projection.rightVisible;
   }
 
   destroy() {

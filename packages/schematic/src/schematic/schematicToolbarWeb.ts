@@ -1,5 +1,11 @@
 import type { UiBuilder } from "./schematicUiElements";
+import { t } from "./schematicI18n";
+import analysisIcon from "./icons/analysis.svg?raw";
+import checkIcon from "./icons/check.svg?raw";
 import deleteIcon from "./icons/delete.svg?raw";
+import libraryIcon from "./icons/library.svg?raw";
+import logIcon from "./icons/log.svg?raw";
+import netlistIcon from "./icons/netlist.svg?raw";
 import fitIcon from "./icons/fit.svg?raw";
 import instanceIcon from "./icons/instance.svg?raw";
 import labelIcon from "./icons/label.svg?raw";
@@ -33,6 +39,7 @@ function toolbarButton<T extends object>(
 
 export function buildSchematicToolbar<T extends object>(ui: UiBuilder<T>, namespace: string) {
   return [
+    toolbarButton(ui, "library", t("toolbar.library", "Library"), "", namespaceSvgIds(libraryIcon, `${namespace}-library`)),
     toolbarButton(ui, "instance", "Instance", "i", namespaceSvgIds(instanceIcon, `${namespace}-instance`), "tool"),
     toolbarButton(ui, "wire", "Wire", "w", namespaceSvgIds(wireIcon, `${namespace}-wire`), "tool"),
     toolbarButton(ui, "label", "Net Label", "L", namespaceSvgIds(labelIcon, `${namespace}-label`), "tool"),
@@ -46,7 +53,11 @@ export function buildSchematicToolbar<T extends object>(ui: UiBuilder<T>, namesp
     toolbarButton(ui, "fit", "Fit", "f", namespaceSvgIds(fitIcon, `${namespace}-fit`)),
     toolbarButton(ui, "reset", "Reset", "", namespaceSvgIds(resetIcon, `${namespace}-reset`)),
     toolbarButton(ui, "undo", "Undo", "u", namespaceSvgIds(undoIcon, `${namespace}-undo`)),
-    toolbarButton(ui, "redo", "Redo", "Shift+u", namespaceSvgIds(redoIcon, `${namespace}-redo`))
+    toolbarButton(ui, "redo", "Redo", "Shift+u", namespaceSvgIds(redoIcon, `${namespace}-redo`)),
+    toolbarButton(ui, "analysis", t("toolbar.analysis", "Analysis"), "", namespaceSvgIds(analysisIcon, `${namespace}-analysis`)),
+    toolbarButton(ui, "netlist", t("toolbar.netlist", "Netlist"), "", namespaceSvgIds(netlistIcon, `${namespace}-netlist`)),
+    toolbarButton(ui, "diagnostics", t("toolbar.check", "Check"), "", namespaceSvgIds(checkIcon, `${namespace}-check`)),
+    toolbarButton(ui, "log", t("toolbar.log", "Log"), "", namespaceSvgIds(logIcon, `${namespace}-log`))
   ];
 }
 

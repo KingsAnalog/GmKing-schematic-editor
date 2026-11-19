@@ -1,4 +1,5 @@
 import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
+import { t } from "./schematicI18n";
 import { buildSchematicToolbar } from "./schematicToolbarWeb";
 import { buildSchematicEditorSidebar } from "./schematicEditorUiProjection";
 export {
@@ -30,7 +31,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
     outputN: `${namespace}-analysis-output-n`
   };
   return el("main", { class: "schematic-shell schematic-editor-root", "data-schematic-shell": true },
-    buildSchematicEditorSidebar(el),
+    buildSchematicEditorSidebar(el, namespace),
     el("div", {
       class: "schematic-panel-resizer",
       role: "separator",
@@ -136,8 +137,58 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       ),
       el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
       el("div", { class: "schematic-paper", tabindex: "0", "aria-label": "Schematic canvas", "data-schematic-paper": true }),
-      el("div", { class: "schematic-status", "aria-live": "polite", "data-schematic-status": true },
-        "Select a tool or press i to add an instance."
+      el("div", {
+        class: "schematic-log-drawer",
+        "data-schematic-log": true,
+        "aria-label": t("log.title", "Log"),
+        hidden: true
+      },
+        el("div", { class: "schematic-log-header" },
+          el("strong", {}, t("log.title", "Log")),
+          el("select", { "data-log-level": true, "aria-label": t("log.filter", "Filter") },
+            el("option", { value: "all" }, t("log.all", "All")),
+            el("option", { value: "info" }, t("log.info", "Info")),
+            el("option", { value: "warn" }, t("log.warn", "Warn")),
+            el("option", { value: "error" }, t("log.error", "Error"))
+          ),
+          el("input", {
+            type: "search",
+            "data-log-search": true,
+            placeholder: t("log.search", "Search log"),
+            "aria-label": t("log.search", "Search log")
+          }),
+          el("button", { type: "button", "data-log-copy": true }, t("log.copy", "Copy")),
+          el("button", { type: "button", "data-log-clear": true }, t("log.clear", "Clear")),
+          el("button", {
+            type: "button",
+            class: "schematic-log-close",
+            "data-log-close": true,
+            "aria-label": "Close log"
+          }, "×")
+        ),
+        el("div", {
+          class: "schematic-log-list",
+          "data-log-list": true,
+          role: "log",
+          "aria-live": "polite"
+        })
+      ),
+      el("div", { class: "schematic-statusbar" },
+        el("div", {
+          class: "schematic-status",
+          "aria-live": "polite",
+          "data-schematic-status": true
+        }, "Select a tool or press i to add an instance."),
+        el("div", { class: "schematic-status-actions" },
+          el("span", { class: "schematic-status-count", "data-diagnostic-count": true, hidden: true }),
+          el("button", {
+            type: "button",
+            class: "schematic-status-log",
+            "data-log-toggle": true,
+            "aria-expanded": "false",
+            title: t("log.title", "Log")
+          }, t("status.log", "Log"))
+        )
       )
     ),
     el("div", {
@@ -150,8 +201,39 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       title: "Drag to resize or collapse analysis",
       "data-schematic-panel-resizer": "right"
     }),
-    el("aside", { class: "analysis-panel", "aria-label": "Symbolic analysis", "data-schematic-analysis-panel": true },
-      el("div", { class: "analysis-panel-heading" }, el("h2", {}, "Symbolic Analysis")),
+    el("aside", {
+      class: "analysis-panel right-dock",
+      "aria-label": "Schematic inspector",
+      "data-schematic-analysis-panel": true,
+      "data-right-dock": true
+    },
+      el("div", { class: "right-dock-tabs", role: "tablist", "aria-label": "Inspector views" },
+        el("button", {
+          type: "button",
+          class: "right-dock-tab is-active",
+          role: "tab",
+          "data-right-view": "analysis",
+          "aria-selected": "true"
+        }, t("right.analysis", "Analysis")),
+        el("button", {
+          type: "button",
+          class: "right-dock-tab",
+          role: "tab",
+          "data-right-view": "netlist",
+          "aria-selected": "false",
+          tabindex: "-1"
+        }, t("right.netlist", "Netlist")),
+        el("button", {
+          type: "button",
+          class: "right-dock-tab",
+          role: "tab",
+          "data-right-view": "diagnostics",
+          "aria-selected": "false",
+          tabindex: "-1"
+        }, t("right.diagnostics", "Diagnostics"))
+      ),
+      el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
+      el("div", { class: "analysis-panel-heading" }, el("h2", {}, t("right.analysisTitle", "Symbolic Analysis"))),
       el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
       el("div", { "data-selection-summary": true, class: "selection-summary" }, "No object selected."),
       el("div", { class: "net-pick-row" },
@@ -195,6 +277,15 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
         el("output", { "data-analysis-zin": true }),
         el("h3", {}, "Output Impedance"),
         el("output", { "data-analysis-zout": true })
+      )
+      ),
+      el("section", { class: "right-dock-panel", "data-right-panel": "netlist", role: "tabpanel", hidden: true },
+        el("div", { class: "analysis-panel-heading" }, el("h2", {}, t("right.netlist", "Netlist"))),
+        el("p", { class: "analysis-note" }, t("right.netlistPlaceholder", "Netlist view arrives in R2."))
+      ),
+      el("section", { class: "right-dock-panel", "data-right-panel": "diagnostics", role: "tabpanel", hidden: true },
+        el("div", { class: "analysis-panel-heading" }, el("h2", {}, t("right.diagnostics", "Diagnostics"))),
+        el("p", { class: "analysis-note" }, t("right.diagnosticsPlaceholder", "Diagnostics view arrives in R2."))
       )
     ),
     el("button", {

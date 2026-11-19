@@ -25,6 +25,7 @@ export function mountSchematicEditorFacade<Editor extends SchematicEditorLifecyc
   const layout = canMountLayout(mountElements.shellEl)
     ? new SchematicLayoutController(mountElements.shellEl)
     : null;
+  if (layout) mountElements.layout = layout;
   let editor: Editor | null = null;
   try {
     editor = createEditor(mountElements);
