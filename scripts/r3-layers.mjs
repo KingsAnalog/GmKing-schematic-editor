@@ -323,6 +323,24 @@ try {
   await waitFor(page, () => !!document.querySelector("[model-id='output-branch']")
     && window.layersSmoke.editor.getContent().notes.some(note => note.id === "output-note"), "RC fixture did not import");
 
+  const fileImport = await evaluate(page, () => ({
+    content: window.layersSmoke.editor.getContent(),
+    activeTab: document.querySelector("[data-schematic-document-tab][aria-selected='true']").dataset.schematicDocumentTab,
+    tabCount: document.querySelectorAll("[data-schematic-document-tab]").length
+  }));
+  await evaluate(page, source => Object.defineProperty(navigator, "clipboard", {
+    configurable: true, value: { readText: async () => source }
+  }), rcFixture);
+  await clickSelector(page, "[data-schematic-document-paste]");
+  await waitFor(page, expected => {
+    const active = document.querySelector("[data-schematic-document-tab][aria-selected='true']");
+    return active?.dataset.schematicDocumentTab !== expected.activeTab
+      && document.querySelectorAll("[data-schematic-document-tab]").length === expected.tabCount + 1;
+  }, "Paste schematic JSON did not open a new document", { args: [fileImport] });
+  const clipboardContent = await evaluate(page, () => window.layersSmoke.editor.getContent());
+  assert(JSON.stringify(fileImport.content) === JSON.stringify(clipboardContent),
+    "clipboard and file import produced different schematic content", clipboardContent.layers);
+
   const selectInLayers = async id => {
     await clickSelector(page, "[data-sidebar-tab='layers']");
     await clickSelector(page, `[data-layer-object-select='${id}']`);
@@ -464,7 +482,20 @@ try {
     return select.value === "layer-2" && width > 0 && left >= 0 && right <= innerWidth;
   }, "mobile Layer selector was clipped or hidden");
 
-  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, ok: true }));
+  const mobileTabCount = await evaluate(page, () => document.querySelectorAll("[data-schematic-document-tab]").length);
+  await evaluate(page, () => document.querySelector("[data-schematic-panel-backdrop]").click());
+  await waitFor(page, () => {
+    const button = document.querySelector("[data-schematic-document-paste]");
+    const { x, y, width, height } = button.getBoundingClientRect();
+    return button.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+  }, "mobile clipboard button is covered");
+  await clickSelector(page, "[data-schematic-document-paste]");
+  await waitFor(page, count => document.querySelectorAll("[data-schematic-document-tab]").length === count + 1
+    && window.layersSmoke.editor.getContent().layers.length === 3
+    && !window.layersSmoke.editor.getContent().netLabels.some(label => label.name === "TEST"),
+    "clipboard import did not open a layered document on mobile", { args: [mobileTabCount] });
+
+  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, clipboardImport: true, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

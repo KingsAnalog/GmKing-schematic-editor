@@ -75,8 +75,8 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           type: "button",
           class: "schematic-document-tab-action",
           "data-schematic-document-paste": true,
-          "aria-label": "Paste schematic JSON from clipboard",
-          title: "Paste schematic JSON from clipboard"
+          "aria-label": "Paste schematic JSON from clipboard into a new tab",
+          title: "Paste schematic JSON from clipboard into a new tab"
         },
           el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
             el("path", { d: "M9 5h6" }),

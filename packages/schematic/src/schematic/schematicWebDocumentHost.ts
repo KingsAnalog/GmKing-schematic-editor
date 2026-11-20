@@ -8,7 +8,6 @@ import { uniqueSchematicTabTitle } from "./schematicTabTitle";
 import type {
   ImportedSchematicDocumentFile,
   SchematicClipboardPort,
-  SchematicDocumentFileLike,
   SchematicDocumentFilePort,
   SchematicDocumentHostBridge,
   SchematicDocumentHostPort,
@@ -61,8 +60,11 @@ implements SchematicDocumentHostPort<EditorState> {
       onCreate: () => this.runAction(() => this.create()),
       onReorder: (id, insertionIndex) => this.runAction(() => this.reorder(id, insertionIndex)),
       onRename: (id, title) => this.runAction(() => this.rename(id, title)),
-      onImport: (file) => { void this.importFile(file); },
-      onPasteFromClipboard: () => { void this.pasteFromClipboard(); },
+      onImport: (file) => this.importDocument(() => this.options.documentFiles.read(file), "Import failed"),
+      onImportFromClipboard: () => this.importDocument(async () => ({
+        title: "Imported schematic",
+        document: await this.options.clipboard.readDocument()
+      }), "Clipboard import failed"),
       onExport: () => this.exportActive(),
       onRetrySave: () => this.runAction(() => this.retrySave())
     });
@@ -424,23 +426,29 @@ implements SchematicDocumentHostPort<EditorState> {
     this.options.bridge.applyClipboardDocument(imported);
   }
 
-  private async importFile(file: SchematicDocumentFileLike) {
+  private async importDocument(read: () => Promise<ImportedSchematicDocumentFile>, errorPrefix: string) {
     const requestId = ++this.importRequestId;
+    const isCurrent = () => !this.destroyed && !this.options.bridge.isDestroyed() && requestId === this.importRequestId;
     let imported: ImportedSchematicDocumentFile;
     try {
-      imported = await this.options.documentFiles.read(file);
+      imported = await read();
     } catch (error) {
-      if (this.destroyed || requestId !== this.importRequestId || this.options.bridge.isDestroyed()) return;
-      this.options.bridge.setStatus(error instanceof Error ? `Import failed: ${error.message}` : "Import failed.");
+      if (isCurrent()) {
+        this.options.bridge.setStatus(error instanceof Error ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`);
+      }
       return;
     }
-    if (this.destroyed || requestId !== this.importRequestId || this.options.bridge.isDestroyed()) return;
+    if (!isCurrent()) return;
 
-    this.options.bridge.finishActiveEdits();
-    if (!await this.persistActive(
-      "The active schematic could not be saved, so the imported schematic was not opened."
-    )) return;
+    await this.runAction(async () => {
+      if (!isCurrent()) return;
+      this.options.bridge.finishActiveEdits();
+      const saved = await this.persistActive("The active schematic could not be saved, so the imported schematic was not opened.");
+      if (saved && isCurrent()) await this.openImportedDocument(imported);
+    });
+  }
 
+  private async openImportedDocument(imported: ImportedSchematicDocumentFile) {
     const title = uniqueSchematicTabTitle(
       imported.title,
       this.sessions.map((session) => session.title)
@@ -459,7 +467,15 @@ implements SchematicDocumentHostPort<EditorState> {
       storageStatus: "new",
       editorState: this.options.bridge.createEditorState(imported.document)
     };
-    if (!await this.persistSession(session, "The imported schematic could not be written to storage.")) return;
+    if (!await this.persistSession(session, "The imported schematic could not be written to storage.")) {
+      this.options.bridge.destroySession(session);
+      return;
+    }
+    if (this.destroyed) {
+      this.options.bridge.destroySession(session);
+      void this.removeSnapshotBestEffort(session.id);
+      return;
+    }
 
     const nextSessions = [...this.sessions, session];
     if (!await this.persistManifestSnapshot(
@@ -467,13 +483,18 @@ implements SchematicDocumentHostPort<EditorState> {
       session.id,
       "The imported schematic could not be added to the tab list."
     )) {
+      this.options.bridge.destroySession(session);
       void this.removeSnapshotBestEffort(session.id);
+      return;
+    }
+    if (this.destroyed) {
+      this.options.bridge.destroySession(session);
       return;
     }
     this.sessions = nextSessions;
     this.renderTabs();
     await this.activate(session.id, { skipCurrentSave: true, persistManifest: false });
-    this.options.bridge.fit();
+    if (!this.destroyed) this.options.bridge.fit();
   }
 
   private async activate(

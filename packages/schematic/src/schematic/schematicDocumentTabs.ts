@@ -16,8 +16,8 @@ export interface SchematicDocumentTabsOptions {
   onCreate: SchematicTabAction;
   onReorder?: SchematicTabAction<[id: string, insertionIndex: number]>;
   onRename?: SchematicTabAction<[id: string, title: string]>;
-  onImport?(file: File): void;
-  onPasteFromClipboard?(): void;
+  onImport?: SchematicTabAction<[file: File]>;
+  onImportFromClipboard?: SchematicTabAction;
   onExport?(): void;
   onRetrySave?: SchematicTabAction;
 }
@@ -218,7 +218,7 @@ export class SchematicDocumentTabs {
       return;
     }
     if (target?.closest("[data-schematic-document-paste]")) {
-      this.options.onPasteFromClipboard?.();
+      this.options.onImportFromClipboard?.();
       return;
     }
     if (target?.closest("[data-schematic-document-export]")) {

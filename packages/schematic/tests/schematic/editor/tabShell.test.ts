@@ -67,7 +67,7 @@ describe("renderSchematicTabShell", () => {
     expect(exportIndex).toBeGreaterThan(pasteIndex);
     expect(shell).toContain('data-schematic-document-import aria-label="Import schematic" title="Import schematic"');
     expect(shell).toContain(
-      'data-schematic-document-paste aria-label="Paste schematic JSON from clipboard" title="Paste schematic JSON from clipboard"'
+      'data-schematic-document-paste aria-label="Paste schematic JSON from clipboard into a new tab" title="Paste schematic JSON from clipboard into a new tab"'
     );
     expect(shell).toContain('data-schematic-document-export aria-label="Export schematic" title="Export schematic"');
     expect(shell).toMatch(

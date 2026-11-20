@@ -433,7 +433,7 @@ describe("SchematicDocumentTabs", () => {
     expect(closed).toEqual(["doc"]);
   });
 
-  it("routes import, clipboard paste, and export through dedicated controls", () => {
+  it("routes file import, clipboard import, and export through dedicated controls", () => {
     const fixture = createFixture();
     const imported: File[] = [];
     let pasted = 0;
@@ -442,8 +442,8 @@ describe("SchematicDocumentTabs", () => {
       onActivate: () => {},
       onClose: () => {},
       onCreate: () => {},
-      onImport: (file) => imported.push(file),
-      onPasteFromClipboard: () => {
+      onImport: (file) => { imported.push(file); },
+      onImportFromClipboard: () => {
         pasted += 1;
       },
       onExport: () => {

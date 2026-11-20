@@ -148,6 +148,59 @@ describe("SchematicWebDocumentHost", () => {
     expect(fixture.bridge.switchSession).toHaveBeenCalled();
   });
 
+  it("imports the tab bar clipboard document with all layers and object state", async () => {
+    const imported = createEmptySchematicDocument();
+    imported.layers!.push({ id: "annotations", name: "Annotations", visible: false, locked: true });
+    imported.notes.push({ id: "note", layerId: "annotations", x: 0, y: 0, width: 160, format: "plain", text: "Imported" });
+    imported.layerObjectStates = { note: { visible: false, z: 3 } };
+    const fixture = createFixture(undefined, Promise.resolve(imported));
+    await fixture.host.init();
+    const originalId = fixture.host.activeDocumentId;
+    await fixture.tabsOptions.onImportFromClipboard?.();
+
+    const importedId = fixture.host.activeDocumentId;
+    expect(importedId).not.toBe(originalId);
+    expect(fixture.workspace.persistDocument).toHaveBeenCalledWith(importedId, { document: imported });
+    expect(fixture.workspace.persistManifest).toHaveBeenLastCalledWith({
+      activeDocumentId: importedId,
+      documents: [
+        { id: originalId, title: "Schematic 1" },
+        { id: importedId, title: "Imported schematic" }
+      ]
+    });
+    expect(fixture.bridge.fit).toHaveBeenCalledOnce();
+    expect(fixture.bridge.applyClipboardDocument).not.toHaveBeenCalled();
+  });
+
+  it("preserves the current document and reports clipboard import errors", async () => {
+    let rejectClipboard!: (reason: Error) => void;
+    const clipboard = new Promise<SchematicDocument>((_, reject) => { rejectClipboard = reject; });
+    const fixture = createFixture(undefined, clipboard);
+    await fixture.host.init();
+    const originalId = fixture.host.activeDocumentId;
+    const pending = fixture.tabsOptions.onImportFromClipboard?.();
+    rejectClipboard(new Error("Invalid JSON"));
+    await pending;
+
+    expect(fixture.host.activeDocumentId).toBe(originalId);
+    expect(fixture.bridge.switchSession).not.toHaveBeenCalled();
+    expect(fixture.bridge.setStatus).toHaveBeenCalledWith("Clipboard import failed: Invalid JSON");
+  });
+
+  it("ignores an earlier clipboard import when a file is opened first", async () => {
+    let resolveClipboard!: (document: SchematicDocument) => void;
+    const clipboard = new Promise<SchematicDocument>(resolve => { resolveClipboard = resolve; });
+    const fixture = createFixture(undefined, clipboard);
+    await fixture.host.init();
+    const pending = fixture.tabsOptions.onImportFromClipboard?.();
+    await fixture.tabsOptions.onImport?.({ name: "test.json" } as File);
+    const activeFile = fixture.host.activeDocumentId;
+    resolveClipboard(createEmptySchematicDocument());
+    await pending;
+    expect(fixture.host.activeDocumentId).toBe(activeFile);
+    expect(fixture.bridge.switchSession).toHaveBeenCalledOnce();
+  });
+
   it("invalidates pending Clipboard work and releases every host-owned lifecycle once", async () => {
     let resolveClipboard!: (document: SchematicDocument) => void;
     const clipboardResult = new Promise<SchematicDocument>((resolve) => {
@@ -155,15 +208,15 @@ describe("SchematicWebDocumentHost", () => {
     });
     const fixture = createFixture(undefined, clipboardResult);
     await fixture.host.init();
-    await fixture.tabsOptions.onPasteFromClipboard?.();
+    const pendingImport = fixture.tabsOptions.onImportFromClipboard?.();
 
     fixture.host.destroy();
     fixture.host.destroy();
     resolveClipboard(createEmptySchematicDocument());
-    await clipboardResult;
-    await Promise.resolve();
+    await pendingImport;
 
     expect(fixture.tabs.destroy).toHaveBeenCalledTimes(1);
+    expect(fixture.bridge.switchSession).not.toHaveBeenCalled();
     expect(fixture.bridge.applyClipboardDocument).not.toHaveBeenCalled();
     expect(fixture.bridge.destroySession).toHaveBeenCalledTimes(1);
   });
