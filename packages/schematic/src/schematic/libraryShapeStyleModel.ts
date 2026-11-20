@@ -107,10 +107,15 @@ const VALUE_KEYS: Readonly<Record<LibraryShapeStyleProperty, string>> = {
   endArrowSize: LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY
 };
 
-export type LibraryShapeType = Extract<ComponentType, "rectangle" | "triangle" | "polyline">;
+export type OpenLibraryShapeType = Extract<ComponentType, "polyline" | "arc">;
+export type LibraryShapeType = "rectangle" | "triangle" | OpenLibraryShapeType;
+
+export function isOpenLibraryShapeType(type: string): type is OpenLibraryShapeType {
+  return type === "polyline" || type === "arc";
+}
 
 export function isLibraryShapeType(type: string): type is LibraryShapeType {
-  return type === "rectangle" || type === "triangle" || type === "polyline";
+  return type === "rectangle" || type === "triangle" || isOpenLibraryShapeType(type);
 }
 
 export function supportsLibraryShapeStyle(type: ComponentType, property: LibraryShapeStyleProperty) {
@@ -123,7 +128,7 @@ export function supportsLibraryShapeStyle(type: ComponentType, property: Library
     case "endArrowSize": return type === "polyline";
     case "fillEnabled":
     case "fillColor":
-    case "fillOpacity": return type !== "polyline";
+    case "fillOpacity": return !isOpenLibraryShapeType(type);
     default: return true;
   }
 }
@@ -155,7 +160,7 @@ export function libraryShapeStyle(
       ? normalizeLibraryShapeCornerRadius(values[LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY])
         ?? DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius
       : DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius,
-    fillEnabled: component.type !== "polyline" && values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
+    fillEnabled: !isOpenLibraryShapeType(component.type) && values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
     startArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_START_ARROW_VALUE_KEY]) : "none",
     endArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_END_ARROW_VALUE_KEY]) : "none",
     startArrowSize: readArrowSize(values[LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY]),

@@ -28,6 +28,12 @@ export function componentExportBounds(instance: ComponentInstance, options: Comp
     rects.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
   };
 
+  if (instance.type === "arc") {
+    const { x, y, width, height } = rects[0];
+    const padding = model.symbolStrokeWidth * model.artworkScale / 2;
+    return { x: x - padding, y: y - padding, width: width + 2 * padding, height: height + 2 * padding };
+  }
+
   if (instance.type === "polyline") {
     [
       { path: model.path, padding: model.symbolStrokeWidth / 2 },

@@ -1,4 +1,4 @@
-import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { isLibraryShapeType, isOpenLibraryShapeType } from "./libraryShapeStyleModel";
 import { t } from "./schematicI18n";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER } from "./templates";
@@ -142,7 +142,7 @@ export function deviceItemName(item: InstancePaletteItem): string {
 
 export function deviceItemLabel(item: InstancePaletteItem): string {
   if (isSchematicTemplateId(item)) return "Template";
-  if (item === "polyline") return t("library.openShape", "Open shape");
+  if (isOpenLibraryShapeType(item)) return t("library.openShape", "Open shape");
   if (isLibraryShapeType(item)) return t("library.closedShape", "Closed shape");
   return getComponentDef(item).label;
 }

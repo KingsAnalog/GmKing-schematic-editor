@@ -11,7 +11,7 @@ import { PREVIEW_COMPONENT_ID } from "./previewIds";
 import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
 import { polylineFrameSymbol } from "./symbols/polylineSymbols";
-import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { isLibraryShapeType, isOpenLibraryShapeType } from "./libraryShapeStyleModel";
 import { t } from "./schematicI18n";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
@@ -216,7 +216,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
       width: model.frameBox.width,
       height: model.frameBox.height,
       fill: "rgba(255, 255, 255, 0)",
-      pointerEvents: model.preview || model.def.type === "polyline" ? "none" : "all",
+      pointerEvents: model.preview || isOpenLibraryShapeType(model.def.type) ? "none" : "all",
       cursor: model.preview ? "default" : "move",
       stroke: !model.preview && model.selected ? "#005f9e" : "none",
       strokeWidth: !model.preview && model.selected ? 1.5 : 0,
@@ -491,6 +491,10 @@ export function makeComponentCell(
   const attrs = componentCellAttrsFromModel(model);
   const libraryShape = isLibraryShapeType(instance.type);
   const polyline = model.def.bodyPolyline;
+  const openShape = isOpenLibraryShapeType(instance.type) ? instance.type : null;
+  const points = polyline ?? model.def.bodyArc;
+  const hitSelector = `${openShape}Hit`;
+  const handlesSelector = `${openShape}Handles`;
   const shapeSelectors = [
     "root", "frame", "symbolBody", "deleteCross",
     ...RECTANGLE_RESIZE_HANDLE_SELECTORS,
@@ -499,29 +503,36 @@ export function makeComponentCell(
   const cellAttrs = libraryShape
     ? Object.fromEntries(shapeSelectors.map(selector => [selector, attrs[selector]]))
     : attrs;
-  const polylineMarkup = polyline?.map((point, index) => {
-    const selector = `polylineVertex${index}`;
-    const half = RECTANGLE_RESIZE_HANDLE_SIZE / 2;
+  const vertexLabels = openShape === "arc"
+    ? [t("arc.dragStart", "Drag start point"), t("arc.dragEnd", "Drag end point"), t("arc.dragThrough", "Drag point on arc")]
+    : [];
+  const vertexMarkup = points?.map((point, index) => {
+    const selector = `${openShape}Vertex${index}`;
+    const isArc = openShape === "arc";
+    const isThroughPoint = isArc && index === 2;
+    const size = isArc ? (isThroughPoint ? 7 : 10) : RECTANGLE_RESIZE_HANDLE_SIZE;
+    const half = size / 2;
+    const x = model.def.size.width / 2 - frame.x + (instance.mirrored ? -point.x : point.x);
+    const y = model.def.size.height / 2 - frame.y + point.y;
     cellAttrs[selector] = {
-      x: frame.width / 2 + (instance.mirrored ? -point.x : point.x) - half,
-      y: frame.height / 2 + point.y - half,
-      width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
+      x: x - half, y: y - half, width: size, height: size,
+      ...(isThroughPoint ? { transform: `rotate(45 ${x} ${y})` } : isArc ? { rx: half, ry: half } : {}),
       fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, cursor: "move",
-      "data-polyline-vertex": index, "data-component-id": instance.id,
-      "aria-label": `${t("polyline.vertex", "Drag vertex")} ${index + 1}`
+      [`data-${openShape}-vertex`]: index, "data-component-id": instance.id,
+      "aria-label": vertexLabels[index] ?? `${t("polyline.vertex", "Drag vertex")} ${index + 1}`
     };
     return { tagName: "rect", selector };
   });
-  if (polyline && polylineMarkup) {
-    cellAttrs.symbolMarker = attrs.symbolMarker;
-    cellAttrs.polylineHit = {
-      d: polylineFrameSymbol(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
-        polyline.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale }))),
+  if (vertexMarkup) {
+    if (polyline) cellAttrs.symbolMarker = attrs.symbolMarker;
+    cellAttrs[hitSelector] = {
+      d: polyline ? polylineFrameSymbol(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
+        polyline.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale }))) : model.path,
       transform: attrs.symbolBody.transform, fill: "none",
       stroke: "transparent", strokeWidth: Math.max(12 / model.artworkScale, model.symbolStrokeWidth),
       pointerEvents: model.preview ? "none" : "stroke", cursor: "move"
     };
-    cellAttrs.polylineHandles = { display: model.resizeHandles ? "inline" : "none" };
+    cellAttrs[handlesSelector] = { display: model.resizeHandles ? "inline" : "none" };
   }
   const ElementClass = libraryShape ? LibraryShapeElement : SymbolElement;
   const element = new ElementClass({
@@ -529,13 +540,13 @@ export function makeComponentCell(
     position,
     size: { width: frame.width, height: frame.height },
     attrs: cellAttrs,
-    ...(polylineMarkup ? { markup: [
+    ...(vertexMarkup ? { markup: [
       { tagName: "rect", selector: "frame" },
       { tagName: "path", selector: "symbolBody" },
-      { tagName: "path", selector: "symbolMarker" },
-      { tagName: "path", selector: "polylineHit" },
+      ...(polyline ? [{ tagName: "path", selector: "symbolMarker" }] : []),
+      { tagName: "path", selector: hitSelector },
       { tagName: "path", selector: "deleteCross" },
-      { tagName: "g", selector: "polylineHandles", children: polylineMarkup }
+      { tagName: "g", selector: handlesSelector, children: vertexMarkup }
     ] } : {}),
     ports: {
       groups: {
@@ -559,7 +570,7 @@ export function makeComponentCell(
     }
   });
   element.set("componentId", instance.id);
-  if (polyline) element.set("polyline", true);
+  if (openShape) element.set("openShape", openShape);
   element.set("preview", model.preview);
   element.rotate(instance.rotation, true, { x: instance.x, y: instance.y });
   return element;

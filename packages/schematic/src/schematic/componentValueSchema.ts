@@ -1,5 +1,6 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
 import { TRIANGLE_VERTICES, TRIANGLE_MAX_COORDINATE, triangleVertexKey, triangleSettings, validTriangleSettings } from "./triangleComponentModel";
+import { ARC_POINTS_VALUE_KEY, parseArcPoints } from "./arcComponentModel";
 import { parsePolylinePoints, POLYLINE_MAX_POINTS, POLYLINE_POINTS_VALUE_KEY } from "./polylineComponentModel";
 import { GRID_SIZE } from "./types";
 import { COMPONENT_CLOCK_OPTIONS, COMPONENT_CLOCK_VALUE_KEY, supportsOptionalClock } from "./clockModel";
@@ -74,6 +75,8 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration(INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS.map(option => option.id), only("inductor")),
   { key: POLYLINE_POINTS_VALUE_KEY, supports: only("polyline"), valid: value => parsePolylinePoints(value) !== null,
     expected: `2 to ${POLYLINE_MAX_POINTS} valid local points without consecutive duplicates` },
+  { key: ARC_POINTS_VALUE_KEY, supports: only("arc"), valid: value => parseArcPoints(value) !== null,
+    expected: "three local points with distinct endpoints within the supported arc bounds" },
   enumeration(LIBRARY_SHAPE_START_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
   enumeration(LIBRARY_SHAPE_END_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
   enumeration(LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_ARROW_SIZES, only("polyline")),

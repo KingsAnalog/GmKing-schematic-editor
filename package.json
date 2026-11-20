@@ -22,6 +22,7 @@
     "test:r1": "npm run build:lib && npm run build:web && node scripts/r1-smoke.mjs",
     "test:r2": "npm run build:lib && npm run build:web && node scripts/r2-smoke.mjs",
     "test:r3": "npm run build:lib && npm run build:web && node scripts/r3-library-shapes.mjs",
+    "test:r3:arc": "npm run build:lib && npm run build:web && node scripts/r3-arc.mjs",
     "test:r3:polyline": "npm run build:lib && npm run build:web && node scripts/r3-polyline.mjs",
     "test:r3:layers": "npm run build:lib && node scripts/r3-layers.mjs",
     "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"

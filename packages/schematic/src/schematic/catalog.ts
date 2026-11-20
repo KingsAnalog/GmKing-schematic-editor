@@ -1,4 +1,5 @@
 import { SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type ComponentType, type ComponentVariantDef, type ComponentVariantId, type PinDef, type TerminalClass } from "./types";
+import { arcPoints, arcSize, DEFAULT_ARC_POINTS } from "./arcComponentModel";
 import { DEFAULT_POLYLINE_POINTS, polylinePoints, polylineSize } from "./polylineComponentModel";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
 import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
@@ -282,6 +283,7 @@ function component(options: {
   centeredRefLabel?: boolean;
   bodyPolygon?: ComponentDef["bodyPolygon"];
   bodyPolyline?: ComponentDef["bodyPolyline"];
+  bodyArc?: ComponentDef["bodyArc"];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];
@@ -946,6 +948,19 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     bodyPolyline: DEFAULT_POLYLINE_POINTS,
     symbol: "polyline"
   }),
+  arc: component({
+    type: "arc",
+    label: "ARC",
+    hotLabel: "arc",
+    aliases: ["circular arc", "弧形", "圆弧"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: arcSize(DEFAULT_ARC_POINTS),
+    pins: [],
+    bodyArc: DEFAULT_ARC_POINTS,
+    symbol: "arc"
+  }),
   annotation: component({
     type: "annotation",
     label: "TXT",
@@ -1009,6 +1024,7 @@ export const PALETTE_ORDER: ComponentType[] = [
   "rectangle",
   "triangle",
   "polyline",
+  "arc",
   "nmos",
   "pmos",
   "npn",
@@ -1045,6 +1061,10 @@ export function resolveComponentPinOptions(component: ComponentInstance | Compon
 
 function resolveComponentConfiguration(component: ComponentInstance | ComponentType): ComponentDef {
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
+  if (base.type === "arc" && typeof component !== "string") {
+    const points = arcPoints(component);
+    return { ...base, size: arcSize(points), bodyArc: points };
+  }
   if (base.type === "polyline" && typeof component !== "string") {
     const points = polylinePoints(component);
     return { ...base, size: polylineSize(points), bodyPolyline: points };

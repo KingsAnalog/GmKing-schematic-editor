@@ -54,6 +54,7 @@ const TEMPLATE_REF_PREFIXES: Record<ComponentType, string> = {
   rectangle: "X",
   triangle: "X",
   polyline: "X",
+  arc: "X",
   integrator: "INT",
   differentiator: "DIF",
   delay: "DLY",

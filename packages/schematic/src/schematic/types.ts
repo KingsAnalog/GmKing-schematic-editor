@@ -56,6 +56,7 @@ export type ComponentType =
   | "rectangle"
   | "triangle"
   | "polyline"
+  | "arc"
   | "integrator"
   | "differentiator"
   | "delay"
@@ -136,6 +137,7 @@ export interface ComponentDef {
   centeredRefLabel?: boolean;
   bodyPolygon?: readonly Point[];
   bodyPolyline?: readonly Point[];
+  bodyArc?: readonly Point[];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];

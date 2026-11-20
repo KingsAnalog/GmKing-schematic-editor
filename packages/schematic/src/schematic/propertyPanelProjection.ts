@@ -60,6 +60,7 @@ import { resolvedWireAppearance } from "./wire/wireDecoration";
 import { rectangleSettings } from "./rectangleComponentModel";
 import {
   isLibraryShapeType,
+  isOpenLibraryShapeType,
   libraryShapeStyle
 } from "./libraryShapeStyleModel";
 import {
@@ -230,7 +231,7 @@ function buildComponentInput(
         startArrowSize: aggregateValues(styles.map(style => style.startArrowSize)),
         endArrowSize: aggregateValues(styles.map(style => style.endArrowSize))
       } : {}),
-      ...(components.every(component => component.type !== "polyline") ? {
+      ...(components.every(component => !isOpenLibraryShapeType(component.type)) ? {
         fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
         fillColor: aggregateValues(styles.map(style => style.fillColor)),
         fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))

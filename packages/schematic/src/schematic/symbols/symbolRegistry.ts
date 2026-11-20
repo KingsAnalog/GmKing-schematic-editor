@@ -92,6 +92,7 @@ import {
   dacPentagonSymbol,
   dacSymbol
 } from "./converterSymbols";
+import { quadraticArcSymbol } from "./arcSymbols";
 import { polylineFrameSymbol } from "./polylineSymbols";
 import { rectangleFrameSymbol } from "./rectangleSymbols";
 import { triangleFrameSymbol } from "./triangleSymbols";
@@ -300,6 +301,7 @@ const SYMBOL_DEFINITIONS: Record<string, SymbolDefinition> = {
     strokeWidth: (lineWidth) => 2 * lineWidth
   },
   polyline: { body: polylineFrameSymbol },
+  arc: { body: quadraticArcSymbol },
   triangle: {
     body: (width, height) => triangleFrameSymbol(width, height),
     strokeWidth: (lineWidth) => 2 * lineWidth

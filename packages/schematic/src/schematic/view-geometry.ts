@@ -1,5 +1,6 @@
 import { resolveComponentDef } from "./catalog";
 import { scaleComponentDefinition } from "./componentScaleModel";
+import { quadraticArc } from "./arcGeometry";
 import { polylineFrameSymbol } from "./symbols/polylineSymbols";
 import { triangleFrameSymbol } from "./symbols/triangleSymbols";
 import { rotatePoint, snapPoint } from "./geometry";
@@ -31,6 +32,16 @@ const JUNCTION_VISUAL_RADIUS = JUNCTION_VISUAL_DIAMETER / 2;
 export function componentFrameBox(def: ComponentDef): Rect {
   // The shared layout envelope is template-independent, just like catalog pins.
   // Template artwork must fit this frame; template changes never shift cell origins.
+  if (def.bodyArc) {
+    const { bounds } = quadraticArc(def.bodyArc)!;
+    const width = Math.max(GRID_SIZE, bounds.width);
+    const height = Math.max(GRID_SIZE, bounds.height);
+    return {
+      x: bounds.x + (def.size.width + bounds.width - width) / 2,
+      y: bounds.y + (def.size.height + bounds.height - height) / 2,
+      width, height
+    };
+  }
   if (def.type === "annotation" || isLibraryShapeType(def.type)) {
     return { x: 0, y: 0, width: def.size.width, height: def.size.height };
   }
@@ -264,6 +275,7 @@ function componentPathBounds(def: ComponentDef): { rect: Rect; padding: number }
       padding: padding * scale
     }));
   }
+  if (def.bodyArc) return [{ rect: componentFrameBox(def), padding: symbolStrokeWidth(def.symbol) / 2 }];
   return [
     { data: def.bodyPolyline ? polylineFrameSymbol(def.size.width, def.size.height, def.bodyPolyline)
       : def.bodyPolygon ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon) : symbolPath(def.symbol, def.size.width, def.size.height), padding: symbolStrokeWidth(def.symbol) / 2 },

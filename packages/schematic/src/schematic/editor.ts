@@ -13,8 +13,10 @@ import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
+import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
+import { quadraticArcSymbol } from "./symbols/arcSymbols";
 import { createPolylineGeometry, POLYLINE_MAX_POINTS } from "./polylineComponentModel";
-import { isLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
+import { isLibraryShapeType, isOpenLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
 import { t } from "./schematicI18n";
 import { getComponentDef } from "./catalog";
 import { RECTANGLE_RESIZE_HANDLE_SELECTORS } from "./componentRenderer";
@@ -375,7 +377,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private readonly handleShapeResizePointerDown = (event: PointerEvent) => {
     const handle = (event.target as Element | null)?.closest<SVGElement>(
-      "[data-rectangle-resize-handle], [data-triangle-resize-handle], [data-polyline-vertex]"
+      "[data-rectangle-resize-handle], [data-triangle-resize-handle], [data-polyline-vertex], [data-arc-vertex]"
     );
     if (
       !handle
@@ -387,7 +389,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     const componentId = handle.getAttribute("data-component-id") ?? "";
-    const vertex = handle.getAttribute("data-polyline-vertex");
+    const vertex = handle.getAttribute("data-polyline-vertex") ?? handle.getAttribute("data-arc-vertex");
     const resizeHandle: ShapeResizeHandle = vertex === null
       ? (handle.getAttribute("data-rectangle-resize-handle") ?? handle.getAttribute("data-triangle-resize-handle")) as ShapeResizeHandle
       : Number(vertex);
@@ -409,7 +411,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const result = this.shapeResizeSession.move(this.pointFromClientEvent(event));
+    const result = this.shapeResizeSession.move(this.localPointFromClient(event.clientX, event.clientY));
     if (!result.active) return;
     this.renderDocument();
     this.renderPropertyEditor();
@@ -1230,18 +1232,20 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.ensureShapeDraftOverlay();
     if (this.shapeDraftOverlay) this.shapeDraftOverlay.removeAttribute("hidden");
     this.options.shellEl.classList.add("is-drawing-shape");
+    const layout = this.options.layout;
+    if (isOpenLibraryShapeType(kind) && layout?.isNarrow?.()) layout.closePanel("left");
     if (kind === "polyline") {
-      const layout = this.options.layout;
-      if (layout?.isNarrow?.()) layout.closePanel("left");
       const button = this.ensurePolylineFinishButton();
       button.hidden = false;
       button.disabled = true;
     }
-    this.setStatus(kind === "rectangle"
-      ? "Rectangle: click the first grid point, then drag or click the opposite point. Esc cancels."
-      : kind === "triangle"
-        ? "Triangle: click three grid points. Esc cancels."
-        : t("polyline.draw", "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels."));
+    const instructions = {
+      rectangle: "Rectangle: click the first grid point, then drag or click the opposite point. Esc cancels.",
+      triangle: "Triangle: click three grid points. Esc cancels.",
+      polyline: t("polyline.draw", "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels."),
+      arc: t("arc.firstPoint", "Arc: click the left endpoint.")
+    };
+    this.setStatus(instructions[kind]);
     this.focusCanvas();
   }
 
@@ -1270,6 +1274,10 @@ export class SchematicEditor implements SchematicHostedEditor {
         }
         if (this.polylineFinishButton) this.polylineFinishButton.disabled = draft.points.length < 2;
         this.previewLibraryShapeDraw(point);
+        return;
+      }
+      if (draft.kind === "arc") {
+        this.placeArcPoint(draft.points, point);
         return;
       }
       draft.points.push(point);
@@ -1304,6 +1312,24 @@ export class SchematicEditor implements SchematicHostedEditor {
     }, { signal });
   }
 
+  private placeArcPoint(points: Point[], point: Point) {
+    if (points.length === 2) {
+      this.finishLibraryShapeDraw([...points, point]);
+      return;
+    }
+    if (points.length === 1 && pointKey(points[0]) === pointKey(point)) {
+      this.setStatus(t("arc.distinctEndpoints", "Choose a different right endpoint."));
+      return;
+    }
+    points.push(point);
+    const start = points[0];
+    const preview = points.length === 1 ? point : { x: (start.x + point.x) / 2, y: (start.y + point.y) / 2 };
+    this.previewLibraryShapeDraw(preview);
+    this.setStatus(points.length === 1
+      ? t("arc.secondPoint", "Arc: click the right endpoint.")
+      : t("arc.throughPoint", "Arc: click the third point on the curve."));
+  }
+
   private ensurePolylineFinishButton() {
     if (this.polylineFinishButton) return this.polylineFinishButton;
     const button = this.host.ownerDocument.createElement("button");
@@ -1328,7 +1354,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private libraryShapeSnap(point: Point) {
-    return snapPoint(point, LIBRARY_SHAPE_DRAW_GRID_SIZE);
+    const draft = this.libraryShapeDraw;
+    const step = draft?.kind === "arc" && draft.points.length === 2 ? ARC_THROUGH_POINT_STEP : LIBRARY_SHAPE_DRAW_GRID_SIZE;
+    return snapPoint(point, step);
   }
 
   private ensureShapeDraftOverlay() {
@@ -1381,6 +1409,19 @@ export class SchematicEditor implements SchematicHostedEditor {
       if (draft.points.length < POLYLINE_MAX_POINTS && pointKey(last) !== pointKey(snappedCurrent)) {
         overlay.append(line([last, snappedCurrent]));
       }
+    } else if (draft.kind === "arc" && draft.points.length > 0) {
+      const arc = [...draft.points, snappedCurrent];
+      const path = createArcGeometry(arc)
+        ? quadraticArcSymbol(0, 0, arc.map(point => this.worldToScreenPoint(point)))
+        : "";
+      if (path) {
+        const preview = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+        preview.setAttribute("d", path);
+        preview.setAttribute("class", "schematic-shape-draft-shape");
+        overlay.append(preview);
+      } else {
+        overlay.append(line([draft.points[0], draft.points[1] ?? snappedCurrent]));
+      }
     } else if (draft.kind === "triangle" && draft.points.length > 0) {
       const segments: Array<readonly [Point, Point]> = [];
       const appendSegment = (start: Point, end: Point) => {
@@ -1422,9 +1463,11 @@ export class SchematicEditor implements SchematicHostedEditor {
     const draft = this.libraryShapeDraw;
     if (!draft) return;
     const kind = draft.kind;
-    const polyline = kind === "polyline" ? createPolylineGeometry(points) : null;
-    if (kind === "polyline" && !polyline) {
-      this.setStatus(t("polyline.outOfRange", "Polyline exceeds the supported dimensions."));
+    const geometry = kind === "arc" ? createArcGeometry(points) : kind === "polyline" ? createPolylineGeometry(points) : null;
+    if (isOpenLibraryShapeType(kind) && !geometry) {
+      this.setStatus(kind === "arc"
+        ? t("arc.invalid", "Choose a third point within the supported drawing area.")
+        : t("polyline.outOfRange", "Polyline exceeds the supported dimensions."));
       return;
     }
     this.clearLibraryShapeDraw();
@@ -1436,8 +1479,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     const maxY = Math.max(...ys);
     const width = maxX - minX;
     const height = maxY - minY;
-    const center = polyline?.center ?? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-    if (!polyline && (width < LIBRARY_SHAPE_DRAW_GRID_SIZE || height < LIBRARY_SHAPE_DRAW_GRID_SIZE)) {
+    const center = geometry?.center ?? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    if (!geometry && (width < LIBRARY_SHAPE_DRAW_GRID_SIZE || height < LIBRARY_SHAPE_DRAW_GRID_SIZE)) {
       this.setStatus("Shape needs a non-zero grid size.");
       return;
     }
@@ -1449,8 +1492,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (kind === "rectangle") {
       values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
       values[RECTANGLE_HEIGHT_VALUE_KEY] = String(height / SYMBOL_GRID_SIZE);
-    } else if (polyline) {
-      Object.assign(values, polyline.values);
+    } else if (geometry) {
+      Object.assign(values, geometry.values);
     } else {
       const local = points.map(point => ({ x: point.x - center.x, y: point.y - center.y }));
       TRIANGLE_VERTICES.forEach((vertex, index) => {
@@ -1476,9 +1519,13 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.finishSelectionChange();
     this.sidebarLibrary.showProperties();
     this.focusCanvas();
-    this.setStatus(kind === "polyline"
-      ? t("polyline.created", "Polyline created.")
-      : `${kind === "rectangle" ? "Rectangle" : "Triangle"} created.`);
+    const created = {
+      rectangle: "Rectangle created.",
+      triangle: "Triangle created.",
+      polyline: t("polyline.created", "Polyline created."),
+      arc: t("arc.created", "Arc created.")
+    };
+    this.setStatus(created[kind]);
   }
 
   private addLayer() {
@@ -4478,8 +4525,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       const componentId = cell.get("componentId");
       if (!componentId) return;
       const selected = componentId === selectedShape?.id && !this.presentationMode;
-      if (cell.get("polyline")) {
-        cell.attr("polylineHandles/display", selected ? "inline" : "none");
+      const openShape = cell.get("openShape");
+      if (typeof openShape === "string" && isOpenLibraryShapeType(openShape)) {
+        cell.attr(`${openShape}Handles/display`, selected ? "inline" : "none");
         return;
       }
       const visible = selected && selectedShape?.type === "rectangle";

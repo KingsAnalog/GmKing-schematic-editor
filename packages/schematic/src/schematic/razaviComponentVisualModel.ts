@@ -52,6 +52,7 @@ import { operatorSymbol, plusPinRoleSymbols } from "./symbols/operatorSymbols";
 import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbols/switchSymbols";
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
+import { quadraticArcSymbol } from "./symbols/arcSymbols";
 import { polylineArtwork } from "./symbols/polylineSymbols";
 import { triangleFrameSymbol } from "./symbols/triangleSymbols";
 import { rectangleFrameSymbol } from "./symbols/rectangleSymbols";
@@ -510,6 +511,8 @@ export function resolveRazaviComponentVisualModel(
   const polyline = def.bodyPolyline ? polylineArtwork(def.size.width, def.size.height, def.bodyPolyline, shapeStyle) : null;
   const path = polyline
     ? polyline.path
+    : def.bodyArc
+    ? quadraticArcSymbol(def.size.width, def.size.height, def.bodyArc)
     : def.bodyPolygon
     ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon)
     : def.type === "rectangle"
