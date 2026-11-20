@@ -498,20 +498,25 @@
 }
 
 .schematic-editor-root .property-form,
+.schematic-editor-root .property-component-identity-fields,
 .schematic-editor-root .property-vsource-fields,
 .schematic-editor-root .property-triangle-fields,
 .schematic-editor-root .property-rectangle-fields,
+.schematic-editor-root .property-library-shape-stroke-fields,
+.schematic-editor-root .property-library-shape-fill-fields,
 .schematic-editor-root .property-pin-list {
   display: grid;
   gap: 8px;
 }
 
 .schematic-editor-root .property-rectangle-fields,
+.schematic-editor-root .property-library-shape-fill-fields,
 .schematic-editor-root .property-pin-list {
   padding-top: 2px;
 }
 
-.schematic-editor-root .property-rectangle-fields {
+.schematic-editor-root .property-rectangle-fields,
+.schematic-editor-root .property-library-shape-fill-fields {
   border-top: 1px solid #e2e2de;
 }
 

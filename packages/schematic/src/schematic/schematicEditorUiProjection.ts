@@ -7,6 +7,12 @@ import { MAX_NOTE_FONT_SIZE_PX, MIN_NOTE_FONT_SIZE_PX } from "./notes/noteSizing
 import { NOTE_WIDTH_INPUT_MAX, NOTE_WIDTH_INPUT_MIN } from "./notes/noteProperties";
 import { PAPER_COLOR_PRESETS, NOTE_BACKGROUND_COLOR_PRESETS } from "../shared/color";
 import { SYMBOL_TEMPLATES } from "./symbolTemplateModel";
+import {
+  LIBRARY_SHAPE_LINE_STYLE_OPTIONS,
+  LIBRARY_SHAPE_MAX_CORNER_RADIUS,
+  LIBRARY_SHAPE_MAX_STROKE_WIDTH,
+  LIBRARY_SHAPE_MIN_STROKE_WIDTH
+} from "./libraryShapeStyleModel";
 
 const SCHEMATIC_COLOR_PRESETS = PAPER_COLOR_PRESETS.filter((preset) => preset.color !== DEFAULT_COMPONENT_COLOR);
 
@@ -205,13 +211,15 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
       el("span", {}, "Cell"),
       el("select", { "data-property-cell": true })
     ),
-    el("label", { class: "property-row" },
-      el("span", {}, "Name"),
-      el("input", { type: "text", spellcheck: "false", autocomplete: "off", "data-property-ref": true })
-    ),
-    el("label", { class: "property-row" },
-      el("span", {}, "Show label"),
-      el("input", { class: "property-toggle", type: "checkbox", "aria-label": "Show label", "data-property-label-visible": true })
+    el("div", { class: "property-component-identity-fields", "data-property-component-identity-fields": true },
+      el("label", { class: "property-row" },
+        el("span", {}, "Name"),
+        el("input", { type: "text", spellcheck: "false", autocomplete: "off", "data-property-ref": true })
+      ),
+      el("label", { class: "property-row" },
+        el("span", {}, "Show label"),
+        el("input", { class: "property-toggle", type: "checkbox", "aria-label": "Show label", "data-property-label-visible": true })
+      )
     ),
     el("label", { class: "property-row", "data-property-value-visibility-row": true, hidden: true },
       el("span", {}, "Show value"),
@@ -220,6 +228,42 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
     el("div", { class: "property-row", "data-property-component-color-row": true },
       el("span", {}, "Color"),
       propertyColorControl(el, "component")
+    ),
+    el("div", {
+      class: "property-library-shape-stroke-fields",
+      "data-property-library-shape-stroke-fields": true,
+      hidden: true
+    },
+      el("label", { class: "property-row" },
+        el("span", {}, "Line width"),
+        el("input", {
+          type: "number",
+          min: String(LIBRARY_SHAPE_MIN_STROKE_WIDTH),
+          max: String(LIBRARY_SHAPE_MAX_STROKE_WIDTH),
+          step: "0.5",
+          "aria-label": "Shape line width",
+          "data-property-library-shape-stroke-width": true
+        })
+      ),
+      el("label", { class: "property-row" },
+        el("span", {}, "Line style"),
+        el("select", { "aria-label": "Shape line style", "data-property-library-shape-line-style": true },
+          ...LIBRARY_SHAPE_LINE_STYLE_OPTIONS.map(option =>
+            el("option", { value: option.value }, option.label)
+          )
+        )
+      ),
+      el("label", { class: "property-row", "data-property-library-shape-corner-radius-row": true, hidden: true },
+        el("span", {}, "Corner radius"),
+        el("input", {
+          type: "number",
+          min: "0",
+          max: String(LIBRARY_SHAPE_MAX_CORNER_RADIUS),
+          step: "0.5",
+          "aria-label": "Rectangle corner radius",
+          "data-property-library-shape-corner-radius": true
+        })
+      )
     ),
     el("div", { class: "property-row", "data-property-gain-polarity-row": true, hidden: true },
       el("span", {}, "Polarity"),
@@ -319,6 +363,42 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
     el("div", { class: "property-row", "data-property-scale-row": true, hidden: true },
       el("span", {}, "Size"),
       el("div", { class: "property-segmented", role: "group", "aria-label": "Component size", "data-property-scale-segmented": true })
+    ),
+    el("div", {
+      class: "property-library-shape-fill-fields",
+      "data-property-library-shape-fill-fields": true,
+      hidden: true
+    },
+      el("label", { class: "property-row" },
+        el("span", {}, "Fill"),
+        el("input", {
+          class: "property-toggle",
+          type: "checkbox",
+          "aria-label": "Fill shape",
+          "data-property-library-shape-fill-enabled": true
+        })
+      ),
+      el("label", { class: "property-row" },
+        el("span", {}, "Fill color"),
+        el("span", { class: "property-color-control" },
+          el("input", {
+            type: "color",
+            "aria-label": "Shape fill color",
+            "data-property-library-shape-fill-color": true
+          })
+        )
+      ),
+      el("label", { class: "property-row" },
+        el("span", {}, "Fill opacity"),
+        el("input", {
+          type: "number",
+          min: "0",
+          max: "1",
+          step: "0.05",
+          "aria-label": "Shape fill opacity",
+          "data-property-library-shape-fill-opacity": true
+        })
+      )
     ),
     el("div", { class: "property-row", "data-property-variant-row": true, hidden: true },
       el("span", { "data-property-variant-label": true }, "View"),

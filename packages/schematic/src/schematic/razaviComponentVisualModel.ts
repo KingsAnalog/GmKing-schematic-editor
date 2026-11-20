@@ -53,6 +53,8 @@ import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbol
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
 import { triangleFrameSymbol } from "./symbols/triangleSymbols";
+import { rectangleFrameSymbol } from "./symbols/rectangleSymbols";
+import { isLibraryShapeType, LIBRARY_SHAPE_LINE_DASHARRAYS, libraryShapeStyle } from "./libraryShapeStyleModel";
 import { functionBlockGain, supportsFunctionBlockGain, resolveFunctionBlockModel } from "./functionBlockModel";
 import { componentLocalFrameBox, componentSymbolBounds } from "./view-geometry";
 import type { ComponentDef, ComponentInstance, GainPolarity, Point } from "./types";
@@ -502,8 +504,12 @@ export function resolveRazaviComponentVisualModel(
   const visibleConverterBits = isConverter && componentValueVisible(instance)
     ? converterBits
     : "";
+  const freeLibraryShape = isLibraryShapeType(def.type);
+  const shapeStyle = libraryShapeStyle(instance);
   const path = def.bodyPolygon
     ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon)
+    : def.type === "rectangle"
+      ? rectangleFrameSymbol(def.size.width, def.size.height, 0, shapeStyle.cornerRadius)
     : isPlanarInductor(instance)
     ? [planarInductorLeads(def.size.width, def.size.height), planarInductorTap(def.size.width, def.size.height, inductorTap(instance), inductorLayout(instance))].filter(Boolean).join(" ")
     : functionBlockModel
@@ -549,7 +555,6 @@ export function resolveRazaviComponentVisualModel(
           visiblePinIds.has("ctrl")
         )
       : symbolPath(def.symbol, def.size.width, def.size.height);
-  const freeLibraryShape = def.type === "rectangle" || def.type === "triangle";
   const pinMarksPath = freeLibraryShape ? "" : def.type === "inverter"
     ? inverterSupplyLeadSymbol(def.size.width, def.size.height, visiblePinIds)
     : def.symbol === "plus"
@@ -725,7 +730,14 @@ export function resolveRazaviComponentVisualModel(
     color,
     symbolOpacity,
     labelOpacity,
-    symbolStrokeWidth: symbolStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH),
+    ...(freeLibraryShape ? {
+      symbolFill: shapeStyle.fillEnabled ? shapeStyle.fillColor : "none",
+      symbolFillOpacity: shapeStyle.fillEnabled ? shapeStyle.fillOpacity : 1,
+      symbolStrokeDasharray: LIBRARY_SHAPE_LINE_DASHARRAYS[shapeStyle.lineStyle]
+    } : {}),
+    symbolStrokeWidth: freeLibraryShape
+      ? shapeStyle.strokeWidth
+      : symbolStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH),
     accentStrokeWidth: symbolAccentStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH)
   };
 }

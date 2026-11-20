@@ -11,6 +11,23 @@ import { SPNT_POSITION_VALUE_KEY, validSpntPosition } from "./spntSwitchModel";
 import { isTransistorComponentType, TRANSISTOR_CIRCLE_VALUE_KEY } from "./transistorCircleModel";
 import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
 import { validVoltageSourceFieldValue } from "./voltageSourceModel";
+import {
+  isLibraryShapeType,
+  LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY,
+  LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY,
+  LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY,
+  LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY,
+  LIBRARY_SHAPE_LINE_STYLES,
+  LIBRARY_SHAPE_LINE_STYLE_VALUE_KEY,
+  LIBRARY_SHAPE_MAX_CORNER_RADIUS,
+  LIBRARY_SHAPE_MAX_STROKE_WIDTH,
+  LIBRARY_SHAPE_MIN_STROKE_WIDTH,
+  LIBRARY_SHAPE_STROKE_WIDTH_VALUE_KEY,
+  normalizeLibraryShapeCornerRadius,
+  normalizeLibraryShapeFillOpacity,
+  normalizeLibraryShapeStrokeWidth
+} from "./libraryShapeStyleModel";
+import { normalizeHexColor } from "../shared/color";
 import type { ComponentInstance, ComponentType } from "./types";
 
 export interface ComponentValueIssue { key: string; expected: string }
@@ -61,6 +78,40 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
       && Number.isInteger(Number(value) / RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID),
     expected: `a multiple of ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} from ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} to ${RECTANGLE_MAX_SIZE_GRID}`
   })),
+  {
+    key: LIBRARY_SHAPE_STROKE_WIDTH_VALUE_KEY,
+    supports: component => isLibraryShapeType(component.type),
+    valid: value => normalizeLibraryShapeStrokeWidth(value) !== null,
+    expected: `a half-pixel step from ${LIBRARY_SHAPE_MIN_STROKE_WIDTH} to ${LIBRARY_SHAPE_MAX_STROKE_WIDTH}`
+  },
+  enumeration(
+    LIBRARY_SHAPE_LINE_STYLE_VALUE_KEY,
+    LIBRARY_SHAPE_LINE_STYLES,
+    component => isLibraryShapeType(component.type)
+  ),
+  {
+    key: LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY,
+    supports: only("rectangle"),
+    valid: value => normalizeLibraryShapeCornerRadius(value) !== null,
+    expected: `a half-pixel step from 0 to ${LIBRARY_SHAPE_MAX_CORNER_RADIUS}`
+  },
+  enumeration(
+    LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY,
+    booleanValues,
+    component => isLibraryShapeType(component.type)
+  ),
+  {
+    key: LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY,
+    supports: component => isLibraryShapeType(component.type),
+    valid: value => normalizeHexColor(value) !== null,
+    expected: "a six-digit hex color"
+  },
+  {
+    key: LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY,
+    supports: component => isLibraryShapeType(component.type),
+    valid: value => normalizeLibraryShapeFillOpacity(value) !== null,
+    expected: "a number from 0 to 1"
+  },
   { key: SPNT_POSITION_VALUE_KEY, supports: only("spntSwitch"), valid: (value, component) => validSpntPosition(component, value), expected: "a switch position from 0 (open) to the number of throws" },
   { key: "vsource:", prefix: true, supports: only("voltageSource"), valid: (value, _component, key) => validVoltageSourceFieldValue(key, value), expected: "a valid voltage source setting" },
   {

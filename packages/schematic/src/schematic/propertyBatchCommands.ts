@@ -85,6 +85,13 @@ import {
   setRectangleProperty,
   type RectangleProperty
 } from "./rectangleComponentModel";
+import {
+  isLibraryShapeStyleProperty,
+  isLibraryShapeType,
+  setLibraryShapeStyleProperty,
+  type LibraryShapeStyleProperty,
+  type LibraryShapeStyleValue
+} from "./libraryShapeStyleModel";
 import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
 import { normalizeHexColor } from "../shared/color";
 import type {
@@ -146,6 +153,11 @@ export type SchematicPropertyBatchCommand =
   | { kind: "rectangle-bottom-pins"; value: string | number }
   | { kind: "triangle-pins"; edge: TriangleEdge; value: string | number }
   | { kind: "triangle-vertex"; vertex: TriangleVertex; point: Point }
+  | {
+      kind: "library-shape-style";
+      property: LibraryShapeStyleProperty;
+      value: LibraryShapeStyleValue;
+    }
   | { kind: "component-label-visibility"; visible: boolean }
   | { kind: "component-value-visibility"; visible: boolean }
   | { kind: "component-gain-polarity"; polarity: GainPolarity }
@@ -483,6 +495,17 @@ function preflightCommand(
       return preflightComponentGeometryMutation(document, targets, component => command.kind === "triangle-pins"
         ? setTrianglePinCount(component, command.edge, command.value)
         : setTriangleVertex(component, command.vertex, command.point));
+    case "library-shape-style":
+      if (!isLibraryShapeStyleProperty(command.property)) return invalidValue();
+      if (!onlyComponents(targets)
+        || targets.components.some(component => !isLibraryShapeType(component.type))
+        || (command.property === "cornerRadius"
+          && targets.components.some(component => component.type !== "rectangle"))) {
+        return incompatibleSelection();
+      }
+      return preflightComponentMutation(targets, component =>
+        setLibraryShapeStyleProperty(cloneComponent(component), command.property, command.value)
+      );
     case "rectangle-width":
     case "rectangle-height":
     case "rectangle-left-pins":
@@ -773,6 +796,11 @@ function applyCommand(
         ? setTrianglePinCount(component, command.edge, command.value)
         : setTriangleVertex(component, command.vertex, command.point), changed, runtime);
       renderScope = "document";
+      break;
+    case "library-shape-style":
+      applyComponents(targets, changed, component =>
+        setLibraryShapeStyleProperty(component, command.property, command.value)
+      );
       break;
     case "component-label-visibility":
       applyComponents(targets, changed, (component) =>
@@ -1645,6 +1673,8 @@ function successStatus(command: SchematicPropertyBatchCommand, count: number) {
   switch (command.kind) {
     case "triangle-pins": return "Triangle pins updated.";
     case "triangle-vertex": return "Triangle reshaped.";
+    case "library-shape-style":
+      return `${count} shape${count === 1 ? "" : "s"} updated.`;
     case "component-cell":
       return `${count} component${count === 1 ? "" : "s"} changed cell.`;
     case "component-ref":

@@ -48,6 +48,28 @@ describe("rectangle pure library shape", () => {
     expectTextAndPortFree(cell);
   });
 
+  it("places draggable handles at all four edge midpoints", () => {
+    const rectangle = fixtureComponent("rectangle", "X1", 200, 200);
+    const cell = makeComponentCell(rectangle, { selected: true, resizeHandles: true });
+    const expected = {
+      N: { x: 36, y: -4, cursor: "ns-resize" },
+      E: { x: 76, y: 16, cursor: "ew-resize" },
+      S: { x: 36, y: 36, cursor: "ns-resize" },
+      W: { x: -4, y: 16, cursor: "ew-resize" }
+    };
+    for (const [edge, expectedAttrs] of Object.entries(expected)) {
+      const selector = `rectangleResize${edge}`;
+      expect(cell.attr(`${selector}/x`)).toBe(expectedAttrs.x);
+      expect(cell.attr(`${selector}/y`)).toBe(expectedAttrs.y);
+      expect(cell.attr(`${selector}/cursor`)).toBe(expectedAttrs.cursor);
+      expect(cell.attr(`${selector}/opacity`)).toBe(1);
+      expect(cell.attr(`${selector}/pointerEvents`)).toBe("all");
+      expect(cell.attr(`${selector}/data-rectangle-resize-handle`)).toBe(edge.toLowerCase());
+      expect(makeComponentCell(rectangle, { resizeHandles: true, presentationMode: true }).attr(`${selector}/opacity`)).toBe(0);
+    }
+    expectTextAndPortFree(cell);
+  });
+
   it("keeps 10 px dimensions through rendering and file round trips", () => {
     const rectangle = fixtureComponent("rectangle", "X1", 215, 260);
     rectangle.values[RECTANGLE_WIDTH_VALUE_KEY] = "1.5";

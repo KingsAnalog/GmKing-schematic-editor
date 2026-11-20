@@ -23,6 +23,10 @@ export const PORT_MARKER_STROKE_WIDTH = SYMBOL_STROKE_WIDTH;
 export const PORT_MARKER_INNER_SIZE = 2 * SYMBOL_STROKE_WIDTH;
 export const PORT_MARKER_SIZE = PORT_MARKER_INNER_SIZE + PORT_MARKER_STROKE_WIDTH;
 export const RECTANGLE_RESIZE_HANDLE_SIZE = 8;
+export const RECTANGLE_RESIZE_HANDLES = ["nw", "ne", "se", "sw", "n", "e", "s", "w"] as const;
+export const RECTANGLE_RESIZE_HANDLE_SELECTORS = RECTANGLE_RESIZE_HANDLES.map(handle =>
+  `rectangleResize${handle[0].toUpperCase()}${handle.slice(1)}`
+);
 export { ANALOG_BUFFER_LABEL_FONT_SIZE };
 
 export class SymbolElementView<E extends dia.Element = dia.Element> extends dia.ElementView<E> {
@@ -64,10 +68,10 @@ export const SymbolElement = (dia.Element as any).define(
       centeredRefLabelHead: { fontWeight: 700, fontStyle: "italic" },
       centeredRefLabelTail: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelValue: { fontWeight: 700, fontStyle: "normal" },
-      rectangleResizeNw: { "data-rectangle-resize-handle": "nw" },
-      rectangleResizeNe: { "data-rectangle-resize-handle": "ne" },
-      rectangleResizeSe: { "data-rectangle-resize-handle": "se" },
-      rectangleResizeSw: { "data-rectangle-resize-handle": "sw" }
+      ...Object.fromEntries(RECTANGLE_RESIZE_HANDLES.map((handle, index) => [
+        RECTANGLE_RESIZE_HANDLE_SELECTORS[index],
+        { "data-rectangle-resize-handle": handle }
+      ]))
     }
   },
   {
@@ -107,10 +111,7 @@ export const SymbolElement = (dia.Element as any).define(
           { tagName: "text", selector: "centeredRefLabelValue" }
         ]
       },
-      { tagName: "rect", selector: "rectangleResizeNw" },
-      { tagName: "rect", selector: "rectangleResizeNe" },
-      { tagName: "rect", selector: "rectangleResizeSe" },
-      { tagName: "rect", selector: "rectangleResizeSw" },
+      ...RECTANGLE_RESIZE_HANDLE_SELECTORS.map(selector => ({ tagName: "rect", selector })),
       ...TRIANGLE_VERTICES.map(vertex => (
         { tagName: "rect", selector: `triangleResize${vertex.toUpperCase()}` }
       ))
@@ -133,10 +134,7 @@ export const LibraryShapeElement = (dia.Element as any).define(
       { tagName: "rect", selector: "frame" },
       { tagName: "path", selector: "symbolBody" },
       { tagName: "path", selector: "deleteCross" },
-      ...["nw", "ne", "se", "sw"].map(corner => ({
-        tagName: "rect",
-        selector: `rectangleResize${corner[0].toUpperCase()}${corner.slice(1)}`
-      })),
+      ...RECTANGLE_RESIZE_HANDLE_SELECTORS.map(selector => ({ tagName: "rect", selector })),
       ...TRIANGLE_VERTICES.map(vertex => ({
         tagName: "rect",
         selector: `triangleResize${vertex.toUpperCase()}`
@@ -169,7 +167,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
   const bodyTop = bodyInset + offset.y;
   const bodyBottom = model.def.size.height - bodyInset + offset.y;
   const resizeHandleAttrs = (
-    corner: "nw" | "ne" | "se" | "sw",
+    handle: typeof RECTANGLE_RESIZE_HANDLES[number],
     x: number,
     y: number
   ) => ({
@@ -182,8 +180,12 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     strokeWidth: 1.5,
     opacity: model.resizeHandles && model.def.type === "rectangle" ? 1 : 0,
     pointerEvents: model.resizeHandles && model.def.type === "rectangle" ? "all" : "none",
-    cursor: corner === "nw" || corner === "se" ? "nwse-resize" : "nesw-resize",
-    "data-rectangle-resize-handle": corner,
+    cursor: handle === "n" || handle === "s"
+      ? "ns-resize"
+      : handle === "e" || handle === "w"
+        ? "ew-resize"
+        : handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize",
+    "data-rectangle-resize-handle": handle,
     "data-component-id": model.componentId
   });
   const triangleHandleAttrs = Object.fromEntries(TRIANGLE_VERTICES.map((vertex, index) => {
@@ -220,9 +222,11 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     symbolBody: {
       d: model.path,
       transform: symbolTransform,
+      fill: model.symbolFill ?? "none",
+      fillOpacity: model.symbolFillOpacity ?? 1,
       stroke: model.isAnnotation ? "none" : model.color,
       strokeWidth: model.symbolStrokeWidth,
-      strokeDasharray: "none",
+      strokeDasharray: model.symbolStrokeDasharray ?? "none",
       opacity: model.symbolOpacity,
       cursor: model.preview ? "default" : "move",
       pointerEvents: model.preview ? "none" : "auto"
@@ -450,6 +454,10 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     rectangleResizeNe: resizeHandleAttrs("ne", bodyRight, bodyTop),
     rectangleResizeSe: resizeHandleAttrs("se", bodyRight, bodyBottom),
     rectangleResizeSw: resizeHandleAttrs("sw", bodyLeft, bodyBottom),
+    rectangleResizeN: resizeHandleAttrs("n", (bodyLeft + bodyRight) / 2, bodyTop),
+    rectangleResizeE: resizeHandleAttrs("e", bodyRight, (bodyTop + bodyBottom) / 2),
+    rectangleResizeS: resizeHandleAttrs("s", (bodyLeft + bodyRight) / 2, bodyBottom),
+    rectangleResizeW: resizeHandleAttrs("w", bodyLeft, (bodyTop + bodyBottom) / 2),
     portBody: {
       magnet: !model.preview && !model.deleted,
       x: -PORT_MARKER_SIZE / 2,
@@ -480,7 +488,7 @@ export function makeComponentCell(
   const libraryShape = instance.type === "rectangle" || instance.type === "triangle";
   const shapeSelectors = [
     "root", "frame", "symbolBody", "deleteCross",
-    "rectangleResizeNw", "rectangleResizeNe", "rectangleResizeSe", "rectangleResizeSw",
+    ...RECTANGLE_RESIZE_HANDLE_SELECTORS,
     ...TRIANGLE_VERTICES.map(vertex => `triangleResize${vertex.toUpperCase()}`)
   ];
   const cellAttrs = libraryShape

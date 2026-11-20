@@ -14,6 +14,7 @@ import { RightDockController, type RightDockState, type RightDockView } from "./
 import { SchematicEventLog } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
 import { getComponentDef } from "./catalog";
+import { RECTANGLE_RESIZE_HANDLE_SELECTORS } from "./componentRenderer";
 import {
   RECTANGLE_HEIGHT_VALUE_KEY,
   RECTANGLE_WIDTH_VALUE_KEY
@@ -4132,12 +4133,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       if (!componentId) return;
       const selected = componentId === selectedShape?.id && !this.presentationMode;
       const visible = selected && selectedShape?.type === "rectangle";
-      [
-        "rectangleResizeNw",
-        "rectangleResizeNe",
-        "rectangleResizeSe",
-        "rectangleResizeSw"
-      ].forEach((selector) => {
+      RECTANGLE_RESIZE_HANDLE_SELECTORS.forEach((selector) => {
         cell.attr(`${selector}/opacity`, visible ? 1 : 0);
         cell.attr(`${selector}/pointerEvents`, visible ? "all" : "none");
       });

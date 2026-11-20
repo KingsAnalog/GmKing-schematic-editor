@@ -12,6 +12,7 @@ import type { SchematicDocument } from "./types";
 
 export type SchematicPropertyEditKind =
   | `source-field:${string}`
+  | `library-shape-style:${string}`
   | `triangle-pins:${"ab" | "bc" | "ca"}`
   | "component-ref"
   | "component-value"

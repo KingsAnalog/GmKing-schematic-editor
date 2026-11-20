@@ -101,8 +101,8 @@ try {
       pathData: visiblePaths.map((path) => [path.getAttribute("d"), getComputedStyle(path).stroke]),
       ports: cell?.querySelectorAll(".joint-port").length,
       properties: Boolean(document.querySelector("[data-property-component-form]")),
-      nameHidden: document.querySelector("[data-property-ref]")?.closest(".property-row")?.hidden,
-      labelHidden: document.querySelector("[data-property-label-visible]")?.closest(".property-row")?.hidden,
+      nameHidden: document.querySelector("[data-property-ref]") === null,
+      labelHidden: document.querySelector("[data-property-label-visible]") === null,
       rectangleInputs: document.querySelectorAll("[data-property-rectangle]").length,
       pinInputs: document.querySelectorAll("[data-property-triangle-pins]").length,
       shapeForm: Boolean(document.querySelector("[data-property-shape-form]"))
@@ -152,6 +152,107 @@ try {
   if (smallRectangle.frameWidth !== "10" || smallRectangle.frameHeight !== "10" || smallRectangle.frameStroke !== "rgb(0, 95, 158)" || !smallRectangle.aligned) {
     throw new Error("small rectangle selection frame does not match its outline: " + JSON.stringify(smallRectangle));
   }
+
+  const rectangleEdgeHandles = await evaluate(page, () => {
+    const cell = document.querySelector("[model-id]");
+    const pathBounds = cell?.querySelector("path")?.getBoundingClientRect();
+    return {
+      handles: [...(cell?.querySelectorAll("[data-rectangle-resize-handle]") ?? [])].map(handle => {
+        const bounds = handle.getBoundingClientRect();
+        return {
+          edge: handle.getAttribute("data-rectangle-resize-handle"),
+          opacity: getComputedStyle(handle).opacity,
+          pointerEvents: getComputedStyle(handle).pointerEvents,
+          x: bounds.x + bounds.width / 2,
+          y: bounds.y + bounds.height / 2
+        };
+      }),
+      pathBounds: pathBounds ? { x: pathBounds.x, y: pathBounds.y, width: pathBounds.width, height: pathBounds.height } : null
+    };
+  });
+  const expectedEdges = ["nw", "ne", "se", "sw", "n", "e", "s", "w"];
+  if (JSON.stringify(rectangleEdgeHandles.handles.map(handle => handle.edge)) !== JSON.stringify(expectedEdges)
+    || rectangleEdgeHandles.handles.some(handle => handle.opacity !== "1" || handle.pointerEvents !== "all")) {
+    throw new Error("rectangle must expose four corner and four edge-midpoint handles: " + JSON.stringify(rectangleEdgeHandles));
+  }
+  const edgeHandle = rectangleEdgeHandles.handles.find(handle => handle.edge === "e");
+  const beforeEdgeDrag = rectangleEdgeHandles.pathBounds;
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: edgeHandle.x, y: edgeHandle.y });
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: edgeHandle.x, y: edgeHandle.y, button: "left", buttons: 1, clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: edgeHandle.x + 20, y: edgeHandle.y + 30, button: "left", buttons: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: edgeHandle.x + 20, y: edgeHandle.y + 30, button: "left", buttons: 0, clickCount: 1 });
+  await waitFor(page, () => document.querySelector("[model-id] path")?.getAttribute("d") === "M 0 0 L 30 0 L 30 10 L 0 10 Z", "east edge did not resize only rectangle width");
+  const afterEdgeDrag = await evaluate(page, () => {
+    const bounds = document.querySelector("[model-id] path")?.getBoundingClientRect();
+    return bounds ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } : null;
+  });
+  if (!beforeEdgeDrag || !afterEdgeDrag
+    || afterEdgeDrag.x !== beforeEdgeDrag.x || afterEdgeDrag.y !== beforeEdgeDrag.y
+    || afterEdgeDrag.width !== beforeEdgeDrag.width + 20 || afterEdgeDrag.height !== beforeEdgeDrag.height) {
+    throw new Error("rectangle east-edge drag moved the opposite edge or changed height: " + JSON.stringify({ beforeEdgeDrag, afterEdgeDrag }));
+  }
+  const rectangleHandlesShot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  await fs.writeFile(path.join(outDir, "r3-rectangle-edge-handles.png"), Buffer.from(rectangleHandlesShot.data, "base64"));
+
+  await evaluate(page, () => {
+    const changeNumber = (selector, value) => {
+      const input = document.querySelector(selector);
+      input.value = String(value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    changeNumber("[data-property-library-shape-stroke-width]", 2.5);
+    const lineStyle = document.querySelector("[data-property-library-shape-line-style]");
+    lineStyle.value = "dashDot";
+    lineStyle.dispatchEvent(new Event("change", { bubbles: true }));
+    changeNumber("[data-property-library-shape-corner-radius]", 2);
+    const fill = document.querySelector("[data-property-library-shape-fill-enabled]");
+    fill.checked = true;
+    fill.dispatchEvent(new Event("change", { bubbles: true }));
+    const fillColor = document.querySelector("[data-property-library-shape-fill-color]");
+    fillColor.value = "#123abc";
+    fillColor.dispatchEvent(new Event("input", { bubbles: true }));
+    fillColor.dispatchEvent(new Event("change", { bubbles: true }));
+    changeNumber("[data-property-library-shape-fill-opacity]", 0.35);
+  });
+  const styledRectanglePath = "M 2 0 L 28 0 Q 30 0 30 2 L 30 8 Q 30 10 28 10 L 2 10 Q 0 10 0 8 L 0 2 Q 0 0 2 0 Z";
+  await waitFor(page, path => document.querySelector("[model-id] path")?.getAttribute("d") === path, "rectangle corner radius did not render", { args: [styledRectanglePath] });
+  const styledRectangle = await evaluate(page, () => {
+    const path = document.querySelector("[model-id] path");
+    return {
+      fill: path?.getAttribute("fill"),
+      fillOpacity: path?.getAttribute("fill-opacity"),
+      strokeWidth: path?.getAttribute("stroke-width"),
+      dash: path?.getAttribute("stroke-dasharray"),
+      fillColorDisabled: document.querySelector("[data-property-library-shape-fill-color]")?.disabled,
+      nameAbsent: document.querySelector("[data-property-ref]") === null,
+      labelAbsent: document.querySelector("[data-property-label-visible]") === null
+    };
+  });
+  if (styledRectangle.fill !== "#123abc" || styledRectangle.fillOpacity !== "0.35"
+    || styledRectangle.strokeWidth !== "2.5" || styledRectangle.dash !== "12 5 2 5"
+    || styledRectangle.fillColorDisabled || !styledRectangle.nameAbsent || !styledRectangle.labelAbsent) {
+    throw new Error("rectangle style controls did not update the shared renderer: " + JSON.stringify(styledRectangle));
+  }
+  await clickSelector(page, "[data-command='undo']");
+  await waitFor(page, () => document.querySelector("[model-id] path")?.getAttribute("fill-opacity") === "1", "rectangle style Undo failed");
+  await clickSelector(page, "[data-command='redo']");
+  await waitFor(page, () => document.querySelector("[model-id] path")?.getAttribute("fill-opacity") === "0.35", "rectangle style Redo failed");
+  await waitFor(page, expectedPath => Object.keys(localStorage).some(key => {
+    try {
+      const state = JSON.parse(localStorage.getItem(key));
+      const rectangle = state?.state?.document?.components?.find(component => component.type === "rectangle");
+      const path = document.querySelector("[model-id] path");
+      return rectangle?.values?.libraryShapeFillColor === "#123abc"
+        && rectangle?.values?.libraryShapeFillOpacity === "0.35"
+        && path?.getAttribute("d") === expectedPath;
+    } catch { return false; }
+  }), "rectangle styles were not saved", { args: [styledRectanglePath] });
+  await navigate(page, server.url);
+  await waitFor(page, path => document.querySelector("[model-id] path")?.getAttribute("d") === path
+    && document.querySelector("[model-id] path")?.getAttribute("fill") === "#123abc"
+    && document.querySelector("[model-id] path")?.getAttribute("stroke-dasharray") === "12 5 2 5",
+  "rectangle styles did not survive reload", { args: [styledRectanglePath] });
 
   await clickSelector(page, "[data-sidebar-tab='library']");
   await evaluate(page, () => document.querySelector("[data-library-item='triangle']")?.click());
@@ -216,8 +317,8 @@ try {
       texts: cell?.querySelectorAll("text").length,
       visiblePaths: visiblePaths.length,
       ports: cell?.querySelectorAll(".joint-port").length,
-      nameHidden: document.querySelector("[data-property-ref]")?.closest(".property-row")?.hidden,
-      labelHidden: document.querySelector("[data-property-label-visible]")?.closest(".property-row")?.hidden,
+      nameHidden: document.querySelector("[data-property-ref]") === null,
+      labelHidden: document.querySelector("[data-property-label-visible]") === null,
       pinInputs: document.querySelectorAll("[data-property-triangle-pins]").length
     };
   });
@@ -289,6 +390,41 @@ try {
     throw new Error("triangle frame or resize handles are inconsistent after dragging: " + JSON.stringify(triangleFrame));
   }
 
+  await evaluate(page, () => {
+    const lineStyle = document.querySelector("[data-property-library-shape-line-style]");
+    lineStyle.value = "dotted";
+    lineStyle.dispatchEvent(new Event("change", { bubbles: true }));
+    const width = document.querySelector("[data-property-library-shape-stroke-width]");
+    width.value = "1.5";
+    width.dispatchEvent(new Event("input", { bubbles: true }));
+    width.dispatchEvent(new Event("change", { bubbles: true }));
+    const fill = document.querySelector("[data-property-library-shape-fill-enabled]");
+    fill.checked = true;
+    fill.dispatchEvent(new Event("change", { bubbles: true }));
+    const opacity = document.querySelector("[data-property-library-shape-fill-opacity]");
+    opacity.value = "0.6";
+    opacity.dispatchEvent(new Event("input", { bubbles: true }));
+    opacity.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const styledTriangle = await evaluate(page, () => {
+    const cells = [...document.querySelectorAll("[model-id]")];
+    const path = cells[cells.length - 1]?.querySelector("path");
+    return {
+      d: path?.getAttribute("d"),
+      fill: path?.getAttribute("fill"),
+      fillOpacity: path?.getAttribute("fill-opacity"),
+      strokeWidth: path?.getAttribute("stroke-width"),
+      dash: path?.getAttribute("stroke-dasharray"),
+      cornerHidden: document.querySelector("[data-property-library-shape-corner-radius-row]")?.hidden,
+      rectangleFieldsHidden: document.querySelector("[data-property-rectangle-fields]")?.hidden
+    };
+  });
+  if (styledTriangle.d !== trianglePathAfter || styledTriangle.fill !== "#ffffff"
+    || styledTriangle.fillOpacity !== "0.6" || styledTriangle.strokeWidth !== "1.5"
+    || styledTriangle.dash !== "2 5" || !styledTriangle.cornerHidden || !styledTriangle.rectangleFieldsHidden) {
+    throw new Error("triangle shared styles or rectangle-only controls failed: " + JSON.stringify(styledTriangle));
+  }
+
   await clickSelector(page, "[data-sidebar-tab='library']");
   const palettePreviews = await evaluate(page, () => Object.fromEntries(["rectangle", "triangle"].map(type => {
     const svg = document.querySelector(`[data-library-item='${type}'] .palette-symbol-preview`);
@@ -305,7 +441,39 @@ try {
   await evaluate(page, () => document.querySelector("[data-library-item='rectangle']")?.scrollIntoView({ block: "center" }));
   const shot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   await fs.writeFile(path.join(outDir, "r3-library-shapes.png"), Buffer.from(shot.data, "base64"));
-  console.log(JSON.stringify({ rectangle, smallRectangle, triangle, triangleFrame, palettePreviews, preview, trianglePreview, ok: true }));
+
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
+  await waitFor(page, () => document.querySelector("[data-schematic-shell]")?.classList.contains("is-layout-narrow"),
+    "mobile narrow layout did not activate");
+  await evaluate(page, () => document.querySelector("[data-command='library']")?.click());
+  await waitFor(page, () => document.querySelector("[data-schematic-shell]")?.classList.contains("is-left-panel-visible"),
+    "mobile left drawer did not open");
+  await clickSelector(page, "[data-sidebar-tab='properties']");
+  await waitFor(page, () => document.querySelector("[data-property-library-shape-fill-fields]")?.hidden === false,
+    "mobile shape properties did not open");
+  await new Promise(resolve => setTimeout(resolve, 400));
+  const mobilePanel = await evaluate(page, () => {
+    const panel = document.querySelector("[data-schematic-property-editor]");
+    const bounds = panel?.getBoundingClientRect();
+    const color = document.querySelector("[data-property-library-shape-fill-color]");
+    return {
+      viewport: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      panelX: bounds?.x,
+      panelWidth: bounds?.width,
+      fillColorDisabled: color?.disabled,
+      cornerHidden: document.querySelector("[data-property-library-shape-corner-radius-row]")?.hidden
+    };
+  });
+  if (mobilePanel.viewport !== 375 || mobilePanel.documentWidth > 375
+    || mobilePanel.panelX === undefined || mobilePanel.panelX < 0
+    || !mobilePanel.panelWidth || mobilePanel.panelX + mobilePanel.panelWidth > 375
+    || mobilePanel.fillColorDisabled || !mobilePanel.cornerHidden) {
+    throw new Error("mobile shape properties are clipped or inconsistent: " + JSON.stringify(mobilePanel));
+  }
+  const mobileShot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  await fs.writeFile(path.join(outDir, "r3-shape-properties-mobile.png"), Buffer.from(mobileShot.data, "base64"));
+  console.log(JSON.stringify({ rectangle, smallRectangle, triangle, triangleFrame, palettePreviews, preview, trianglePreview, mobilePanel, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

@@ -16,6 +16,12 @@ import type {
 import { DEFAULT_COMPONENT_COLOR } from "./componentPropertyModel";
 import { DEFAULT_NETWORK_COLOR } from "./networkColorModel";
 import type { RectangleProperty } from "./rectangleComponentModel";
+import {
+  isLibraryShapeLineStyle,
+  LIBRARY_SHAPE_LINE_STYLE_OPTIONS,
+  type LibraryShapeStyleProperty,
+  type LibraryShapeStyleValue
+} from "./libraryShapeStyleModel";
 import type { TriangleEdge } from "./triangleComponentModel";
 import {
   isFilterKind,
@@ -106,6 +112,11 @@ export interface SchematicPropertyPanelControllerCallbacks {
   onComponentValueInput?: (value: string) => void;
   onComponentValueCommit?: (value: string) => void;
   onComponentValueCancel?: () => void;
+  onLibraryShapeStyleChange?: (property: LibraryShapeStyleProperty, value: LibraryShapeStyleValue) => void;
+  onLibraryShapeStyleEditStart?: (property: LibraryShapeStyleProperty) => void;
+  onLibraryShapeStyleInput?: (property: LibraryShapeStyleProperty, value: string) => void;
+  onLibraryShapeStyleCommit?: (property: LibraryShapeStyleProperty, value: string) => void;
+  onLibraryShapeStyleCancel?: (property: LibraryShapeStyleProperty) => void;
   onRectanglePropertyEditStart?: (property: RectangleProperty) => void;
   onRectanglePropertyInput?: (property: RectangleProperty, value: string) => void;
   onRectanglePropertyCommit?: (property: RectangleProperty, value: string) => void;
@@ -210,12 +221,23 @@ type PropertyPanelElements = {
   labelToolError: HTMLElement | null;
   cellRow: HTMLElement;
   cellSelect: HTMLSelectElement;
+  identityFields: HTMLElement | null;
   refInput: HTMLInputElement;
   labelVisibilityInput: HTMLInputElement;
   valueVisibilityRow: HTMLElement | null;
   valueVisibilityInput: HTMLInputElement | null;
   componentColorRow: HTMLElement;
   componentColorInput: HTMLInputElement;
+  libraryShapeStrokeFields: HTMLElement | null;
+  libraryShapeStrokeWidthInput: HTMLInputElement | null;
+  libraryShapeLineStyleSelect: HTMLSelectElement | null;
+  libraryShapeCornerRadiusRow: HTMLElement | null;
+  libraryShapeCornerRadiusInput: HTMLInputElement | null;
+  libraryShapeFillFields: HTMLElement | null;
+  libraryShapeFillEnabledInput: HTMLInputElement | null;
+  libraryShapeFillColorInput: HTMLInputElement | null;
+  libraryShapeFillColorSwatches: NodeListOf<HTMLButtonElement>;
+  libraryShapeFillOpacityInput: HTMLInputElement | null;
   gainPolarityRow: HTMLElement;
   gainPolarityControl: HTMLElement;
   gainPolarityButtons: NodeListOf<HTMLButtonElement>;
@@ -306,13 +328,24 @@ const PROPERTY_EDIT_SELECTOR = [
   "[data-property-note-background]",
   "[data-property-note-text-color]",
   "[data-property-rectangle]",
-  "[data-property-triangle-pins]"
+  "[data-property-triangle-pins]",
+  "[data-property-library-shape-stroke-width]",
+  "[data-property-library-shape-corner-radius]",
+  "[data-property-library-shape-fill-color]",
+  "[data-property-library-shape-fill-opacity]"
 ].join(", ");
 
 export class SchematicPropertyPanelController {
   private bound = false;
   private readonly dirtyTextInputs = new WeakSet<HTMLInputElement>();
   private readonly dirtyColorInputs = new WeakSet<HTMLInputElement>();
+  private componentIdentity: {
+    container: HTMLElement;
+    refRow: HTMLElement;
+    labelRow: HTMLElement;
+    refInput: HTMLInputElement;
+    labelVisibilityInput: HTMLInputElement;
+  } | null = null;
 
   constructor(
     private readonly root: Element,
@@ -411,12 +444,28 @@ export class SchematicPropertyPanelController {
     const labelToolError = this.root.querySelector<HTMLElement>("[data-property-label-tool-error]");
     const cellRow = this.root.querySelector<HTMLElement>("[data-property-cell-row]");
     const cellSelect = this.root.querySelector<HTMLSelectElement>("[data-property-cell]");
-    const refInput = this.root.querySelector<HTMLInputElement>("[data-property-ref]");
-    const labelVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-label-visible]");
+    const identityFields = this.root.querySelector<HTMLElement>("[data-property-component-identity-fields]");
+    const cachedIdentity = this.componentIdentity?.container === identityFields
+      ? this.componentIdentity
+      : null;
+    const refInput = this.root.querySelector<HTMLInputElement>("[data-property-ref]")
+      ?? cachedIdentity?.refInput ?? null;
+    const labelVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-label-visible]")
+      ?? cachedIdentity?.labelVisibilityInput ?? null;
     const valueVisibilityRow = this.root.querySelector<HTMLElement>("[data-property-value-visibility-row]");
     const valueVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-value-visible]");
     const componentColorRow = this.root.querySelector<HTMLElement>("[data-property-component-color-row]");
     const componentColorInput = this.root.querySelector<HTMLInputElement>("[data-property-component-color]");
+    const libraryShapeStrokeFields = this.root.querySelector<HTMLElement>("[data-property-library-shape-stroke-fields]");
+    const libraryShapeStrokeWidthInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-stroke-width]");
+    const libraryShapeLineStyleSelect = this.root.querySelector<HTMLSelectElement>("[data-property-library-shape-line-style]");
+    const libraryShapeCornerRadiusRow = this.root.querySelector<HTMLElement>("[data-property-library-shape-corner-radius-row]");
+    const libraryShapeCornerRadiusInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-corner-radius]");
+    const libraryShapeFillFields = this.root.querySelector<HTMLElement>("[data-property-library-shape-fill-fields]");
+    const libraryShapeFillEnabledInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-enabled]");
+    const libraryShapeFillColorInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-color]");
+    const libraryShapeFillColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-library-shape-fill-color-swatch]");
+    const libraryShapeFillOpacityInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-opacity]");
     const gainPolarityRow = this.root.querySelector<HTMLElement>("[data-property-gain-polarity-row]");
     const gainPolarityControl = this.root.querySelector<HTMLElement>("[data-property-gain-polarity]");
     const gainPolarityButtons = this.root.querySelectorAll<HTMLButtonElement>("[data-property-gain-polarity-value]");
@@ -484,6 +533,11 @@ export class SchematicPropertyPanelController {
     if (!empty || !componentForm || !couplingForm || !couplingPair || !couplingExistingFields || !couplingCoefficientInput || !couplingLabelModeControl || !couplingShowLabelInput || !couplingShowArcInput || !couplingShowCoreInput || !couplingColorInput || !couplingCreateButton || !noteForm || !cellRow || !cellSelect || !refInput || !labelVisibilityInput || !componentColorRow || !componentColorInput || !gainPolarityRow || !gainPolarityControl || gainPolarityButtons.length !== 3 || !valueRow || !valueLabel || !valueInput || !valueUnit || !inductorFields || !inductorTapControl || !inductorDotControl || !inductorCouplingList || !inductorAddCouplingButton || !timeDomainRow || !timeDomainControl || timeDomainButtons.length !== 2 || !variantRow || !variantLabel || !variantSelect || !variantSegmented || !clockRow || !clockSelect || !clockSegmented || dffRows.length !== 5 || !filterKindRow || !filterKindSelect || !mosPinsRow || !mosPinsSegmented || !mosGateStyleRow || !mosGateStyleInput || !mosArrowRow || !mosArrowSegmented || !transistorCircleRow || !transistorCircleControl || transistorCircleButtons.length !== 2 || !pinVisibilityRow || !noteBackgroundRow || !noteBackgroundInput || !noteFontSizeRow || !noteFontSizeInput || !noteFormatRow || !noteFormatSelect || !noteFormatSegmented || !noteWidthRow || !noteWidthInput) {
       return null;
     }
+    const refRow = refInput.closest<HTMLElement>(".property-row");
+    const labelRow = labelVisibilityInput.closest<HTMLElement>(".property-row");
+    if (identityFields && refRow && labelRow) {
+      this.componentIdentity = { container: identityFields, refRow, labelRow, refInput, labelVisibilityInput };
+    }
     return {
       empty,
       componentForm,
@@ -523,12 +577,23 @@ export class SchematicPropertyPanelController {
       labelToolError,
       cellRow,
       cellSelect,
+      identityFields,
       refInput,
       labelVisibilityInput,
       valueVisibilityRow,
       valueVisibilityInput,
       componentColorRow,
       componentColorInput,
+      libraryShapeStrokeFields,
+      libraryShapeStrokeWidthInput,
+      libraryShapeLineStyleSelect,
+      libraryShapeCornerRadiusRow,
+      libraryShapeCornerRadiusInput,
+      libraryShapeFillFields,
+      libraryShapeFillEnabledInput,
+      libraryShapeFillColorInput,
+      libraryShapeFillColorSwatches,
+      libraryShapeFillOpacityInput,
       gainPolarityRow,
       gainPolarityControl,
       gainPolarityButtons,
@@ -643,6 +708,9 @@ export class SchematicPropertyPanelController {
     elements.transistorCircleRow.hidden = true;
     elements.pinVisibilityRow.hidden = true;
     elements.componentColorRow.hidden = true;
+    if (elements.libraryShapeStrokeFields) elements.libraryShapeStrokeFields.hidden = true;
+    if (elements.libraryShapeCornerRadiusRow) elements.libraryShapeCornerRadiusRow.hidden = true;
+    if (elements.libraryShapeFillFields) elements.libraryShapeFillFields.hidden = true;
     elements.noteBackgroundRow.hidden = true;
     if (elements.noteTextColorRow) elements.noteTextColorRow.hidden = true;
     elements.noteFontSizeRow.hidden = true;
@@ -682,7 +750,7 @@ export class SchematicPropertyPanelController {
       button.classList.remove("is-selected");
       button.ariaPressed = "false";
     });
-    [...elements.noteTextColorSwatches, ...elements.noteSwatches, ...elements.componentColorSwatches, ...elements.networkColorSwatches, ...elements.couplingColorSwatches].forEach((swatch) => {
+    [...elements.noteTextColorSwatches, ...elements.noteSwatches, ...elements.componentColorSwatches, ...elements.networkColorSwatches, ...elements.couplingColorSwatches, ...elements.libraryShapeFillColorSwatches].forEach((swatch) => {
       swatch.classList.remove("is-selected");
       swatch.ariaPressed = "false";
     });
@@ -855,10 +923,20 @@ export class SchematicPropertyPanelController {
       );
       this.syncSelectAggregate(elements.cellSelect, component.cellType);
     }
-    const refRow = elements.refInput.closest<HTMLElement>(".property-row");
-    const labelVisibilityRow = elements.labelVisibilityInput.closest<HTMLElement>(".property-row");
-    if (refRow) refRow.hidden = !!component.libraryShape;
-    if (labelVisibilityRow) labelVisibilityRow.hidden = !!component.libraryShape;
+    const identity = this.componentIdentity?.container === elements.identityFields
+      ? this.componentIdentity
+      : null;
+    if (identity) {
+      if (component.libraryShape) identity.container.replaceChildren();
+      else if (!identity.container.contains(identity.refRow)) {
+        identity.container.replaceChildren(identity.refRow, identity.labelRow);
+      }
+    } else {
+      const refRow = elements.refInput.closest<HTMLElement>(".property-row");
+      const labelVisibilityRow = elements.labelVisibilityInput.closest<HTMLElement>(".property-row");
+      if (refRow) refRow.hidden = !!component.libraryShape;
+      if (labelVisibilityRow) labelVisibilityRow.hidden = !!component.libraryShape;
+    }
     this.syncTextAggregate(elements.refInput, component.ref);
     this.syncCheckboxAggregate(elements.labelVisibilityInput, component.labelVisible);
     if (elements.valueVisibilityRow) {
@@ -876,6 +954,7 @@ export class SchematicPropertyPanelController {
       "componentColorSwatch",
       "default"
     );
+    this.syncLibraryShapeStyle(elements, component.libraryShapeStyle);
     elements.gainPolarityRow.hidden = component.gainPolarity === undefined;
     const gainPolarity = component.gainPolarity;
     elements.gainPolarityControl.classList.toggle("is-mixed", gainPolarity?.state === "mixed");
@@ -1011,6 +1090,48 @@ export class SchematicPropertyPanelController {
       ...(pinSettings.length > 0 ? [this.createPinSettingsHeader(showPinModes)] : []),
       ...pinSettings.map((pin) => this.createPinSettingControl(pin))
     );
+  }
+
+  private syncLibraryShapeStyle(
+    elements: PropertyPanelElements,
+    style: SchematicPropertyPanelComponentInput["libraryShapeStyle"]
+  ) {
+    const strokeFields = elements.libraryShapeStrokeFields;
+    const strokeWidth = elements.libraryShapeStrokeWidthInput;
+    const lineStyle = elements.libraryShapeLineStyleSelect;
+    const fillFields = elements.libraryShapeFillFields;
+    const fillEnabled = elements.libraryShapeFillEnabledInput;
+    const fillColor = elements.libraryShapeFillColorInput;
+    const fillOpacity = elements.libraryShapeFillOpacityInput;
+    if (!strokeFields || !strokeWidth || !lineStyle || !fillFields || !fillEnabled || !fillColor || !fillOpacity) return;
+    strokeFields.hidden = !style;
+    fillFields.hidden = !style;
+    if (!style) return;
+
+    this.syncTextAggregate(strokeWidth, style.strokeWidth, String);
+    lineStyle.replaceChildren(...LIBRARY_SHAPE_LINE_STYLE_OPTIONS.map(option =>
+      this.createOption(option.value, option.label)
+    ));
+    this.syncSelectAggregate(lineStyle, style.lineStyle);
+    if (elements.libraryShapeCornerRadiusRow) {
+      elements.libraryShapeCornerRadiusRow.hidden = !style.cornerRadius;
+    }
+    if (style.cornerRadius && elements.libraryShapeCornerRadiusInput) {
+      this.syncTextAggregate(elements.libraryShapeCornerRadiusInput, style.cornerRadius, String);
+    }
+    this.syncCheckboxAggregate(fillEnabled, style.fillEnabled);
+    this.syncColorAggregate(
+      fillColor,
+      elements.libraryShapeFillColorSwatches,
+      style.fillColor,
+      "#ffffff",
+      "libraryShapeFillColorSwatch",
+      "default"
+    );
+    this.syncTextAggregate(fillOpacity, style.fillOpacity, String);
+    const fillDisabled = style.fillEnabled.state === "uniform" && !style.fillEnabled.value;
+    fillColor.disabled = fillDisabled;
+    fillOpacity.disabled = fillDisabled;
   }
 
   private syncInductor(
@@ -1241,7 +1362,7 @@ export class SchematicPropertyPanelController {
   private syncColorSwatches(
     swatches: NodeListOf<HTMLButtonElement>,
     selectedColor: AggregateValue<string | null>,
-    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch",
+    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch" | "libraryShapeFillColorSwatch",
     nullValue: "none" | "default"
   ) {
     swatches.forEach((swatch) => {
@@ -1313,7 +1434,7 @@ export class SchematicPropertyPanelController {
     swatches: NodeListOf<HTMLButtonElement>,
     value: AggregateValue<string | null>,
     defaultColor: string,
-    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch",
+    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch" | "libraryShapeFillColorSwatch",
     nullValue: "none" | "default"
   ) {
     const mixed = value.state === "mixed";
@@ -1415,6 +1536,16 @@ export class SchematicPropertyPanelController {
     };
     const rectangleProperty = input.dataset.propertyRectangle as RectangleProperty;
     const triangleEdge = input.dataset.propertyTrianglePins as TriangleEdge;
+    const shapeStyleBinding = (
+      property: LibraryShapeStyleProperty,
+      kind: PropertyInputBinding["kind"] = "text"
+    ): PropertyInputBinding => ({
+      kind,
+      start: () => callbacks.onLibraryShapeStyleEditStart?.(property),
+      input: value => callbacks.onLibraryShapeStyleInput?.(property, value),
+      commit: value => callbacks.onLibraryShapeStyleCommit?.(property, value),
+      cancel: () => callbacks.onLibraryShapeStyleCancel?.(property)
+    });
     const bindings: Record<string, PropertyInputBinding> = {
       "data-property-ref": {
         kind: "text",
@@ -1499,7 +1630,11 @@ export class SchematicPropertyPanelController {
         input: (value) => callbacks.onRectanglePropertyInput?.(rectangleProperty, value),
         commit: (value) => callbacks.onRectanglePropertyCommit?.(rectangleProperty, value),
         cancel: () => callbacks.onRectanglePropertyCancel?.(rectangleProperty)
-      }
+      },
+      "data-property-library-shape-stroke-width": shapeStyleBinding("strokeWidth"),
+      "data-property-library-shape-corner-radius": shapeStyleBinding("cornerRadius"),
+      "data-property-library-shape-fill-color": shapeStyleBinding("fillColor", "color"),
+      "data-property-library-shape-fill-opacity": shapeStyleBinding("fillOpacity")
     };
     for (const [attribute, binding] of Object.entries(bindings)) {
       if (input.matches("[" + attribute + "]")) return { input, binding };
@@ -1529,6 +1664,8 @@ export class SchematicPropertyPanelController {
       return;
     }
     const cellSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-cell]");
+    const libraryShapeLineStyle = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-line-style]");
+    const libraryShapeFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-library-shape-fill-enabled]");
     const labelVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-visible]");
     const valueVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-value-visible]");
     const differentialOutputsInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-differential-outputs-same]");
@@ -1547,6 +1684,12 @@ export class SchematicPropertyPanelController {
     const couplingShowArcInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-arc]");
     const couplingShowCoreInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-core]");
     const couplingColorInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-color]");
+    if (libraryShapeLineStyle && isLibraryShapeLineStyle(libraryShapeLineStyle.value)) {
+      this.callbacks.onLibraryShapeStyleChange?.("lineStyle", libraryShapeLineStyle.value);
+    }
+    if (libraryShapeFillEnabled) {
+      this.callbacks.onLibraryShapeStyleChange?.("fillEnabled", this.checkboxValue(libraryShapeFillEnabled));
+    }
     if (cellSelect && cellSelect.value) this.callbacks.onComponentCellChange?.(cellSelect.value as ComponentType);
     if (labelVisibilityInput) this.callbacks.onComponentLabelVisibilityChange?.(this.checkboxValue(labelVisibilityInput));
     if (valueVisibilityInput) this.callbacks.onComponentValueVisibilityChange?.(this.checkboxValue(valueVisibilityInput));

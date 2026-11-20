@@ -59,6 +59,10 @@ import {
 import { resolvedWireAppearance } from "./wire/wireDecoration";
 import { rectangleSettings } from "./rectangleComponentModel";
 import {
+  isLibraryShapeType,
+  libraryShapeStyle
+} from "./libraryShapeStyleModel";
+import {
   FILTER_KIND_OPTIONS,
   filterKindForInstance,
   functionBlockTimeDomainForInstance
@@ -211,6 +215,20 @@ function buildComponentInput(
       value: aggregateValues(components.map(component => String(componentScale(component))))
     }
   };
+
+  if (components.every(component => isLibraryShapeType(component.type))) {
+    const styles = components.map(libraryShapeStyle);
+    input.libraryShapeStyle = {
+      strokeWidth: aggregateValues(styles.map(style => style.strokeWidth)),
+      lineStyle: aggregateValues(styles.map(style => style.lineStyle)),
+      ...(components.every(component => component.type === "rectangle")
+        ? { cornerRadius: aggregateValues(styles.map(style => style.cornerRadius)) }
+        : {}),
+      fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
+      fillColor: aggregateValues(styles.map(style => style.fillColor)),
+      fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))
+    };
+  }
 
   if (components.every((component) => component.type === first.type)) {
     const cellTypes = PALETTE_ORDER.includes(first.type)

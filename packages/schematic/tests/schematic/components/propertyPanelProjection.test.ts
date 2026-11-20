@@ -203,6 +203,28 @@ describe("schematic property panel projection", () => {
     });
   });
 
+  it("projects shared shape styles and reserves corner radius for rectangles", () => {
+    const rectangle = fixtureComponent("rectangle", "X1", 40, 40);
+    const triangle = fixtureComponent("triangle", "X2", 160, 40);
+    rectangle.values.libraryShapeStrokeWidth = "2.5";
+    rectangle.values.libraryShapeCornerRadius = "6";
+    triangle.values.libraryShapeFillEnabled = "true";
+    triangle.values.libraryShapeFillColor = "#123456";
+
+    const projected = project(targets({ components: [rectangle, triangle] })).component;
+    expect(projected?.libraryShapeStyle).toEqual({
+      strokeWidth: mixed,
+      lineStyle: uniform("solid"),
+      fillEnabled: mixed,
+      fillColor: mixed,
+      fillOpacity: uniform(1)
+    });
+    expect(project(targets({ components: [rectangle] })).component?.libraryShapeStyle?.cornerRadius)
+      .toEqual(uniform(6));
+    expect(project(targets({ components: [triangle] })).component?.libraryShapeStyle?.cornerRadius)
+      .toBeUndefined();
+  });
+
   it("projects Filter kind only for all-Filter selections and aggregates mixed values", () => {
     const first = fixtureComponent("filter", "FLT1", 40, 40);
     const second = fixtureComponent("filter", "FLT2", 160, 40);

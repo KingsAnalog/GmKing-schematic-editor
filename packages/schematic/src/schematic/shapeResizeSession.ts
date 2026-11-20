@@ -1,10 +1,10 @@
 import { cloneSchematicDocument } from "./document/documentModel";
 import { executeSchematicPropertyBatchCommand } from "./propertyBatchCommands";
-import { RectangleResizeSession, type RectangleResizeCorner } from "./rectangleResizeSession";
+import { RectangleResizeSession, type RectangleResizeHandle } from "./rectangleResizeSession";
 import { isTriangleVertex, type TriangleVertex } from "./triangleComponentModel";
 import type { Point, SchematicDocument } from "./types";
 
-export type ShapeResizeHandle = RectangleResizeCorner | TriangleVertex;
+export type ShapeResizeHandle = RectangleResizeHandle | TriangleVertex;
 
 /** Shares the editor's pointer lifecycle while retaining each shape's geometry rules. */
 export class ShapeResizeSession {
