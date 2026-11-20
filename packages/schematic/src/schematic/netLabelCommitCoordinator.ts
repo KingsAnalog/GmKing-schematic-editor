@@ -23,7 +23,7 @@ export class SchematicNetLabelCommitCoordinator {
     private readonly createId: () => string
   ) {}
 
-  commitPlacement(point: Point, preferredWireId?: string): SchematicNetLabelCommitOutcome {
+  commitPlacement(point: Point, preferredWireId?: string, layerId?: string): SchematicNetLabelCommitOutcome {
     const placement = this.labelTool.preparePlacement(
       this.document,
       point,
@@ -46,7 +46,8 @@ export class SchematicNetLabelCommitCoordinator {
     }
     return {
       kind: "commit",
-      result: applyNetLabelPlacementDocumentOp(this.document, placement.label)
+      result: applyNetLabelPlacementDocumentOp(this.document,
+        layerId === undefined ? placement.label : { ...placement.label, layerId })
     };
   }
 }

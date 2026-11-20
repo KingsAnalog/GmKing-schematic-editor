@@ -58,7 +58,8 @@ export function applyWireCommitToDocument(
   points: Point[],
   appearance: WireAppearance,
   createId: () => string,
-  routeMode: WireRouteMode = wireRouteModeForPath(points)
+  routeMode: WireRouteMode = wireRouteModeForPath(points),
+  layerId?: string
 ): WireCommitResult {
   const normalizedPoints = normalizeWirePath(points);
   if (normalizedPoints.length < 2) return { kind: "none" };
@@ -66,6 +67,7 @@ export function applyWireCommitToDocument(
   const wireId = createId();
   document.wires.push({
     id: wireId,
+    ...(layerId === undefined ? {} : { layerId }),
     points: normalizedPoints,
     routeMode,
     appearance

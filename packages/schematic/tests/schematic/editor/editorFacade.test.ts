@@ -143,7 +143,7 @@ describe("schematic editor public facade", () => {
 
     expect(editorSource).toContain("createPlainSchematicNoteDocumentOp,");
     expect(createNote).toContain(
-      "const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor);"
+      "const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor, layer.id);"
     );
     expect(createNote).toContain("this.beginNoteEditing(noteId);");
   });
@@ -151,7 +151,7 @@ describe("schematic editor public facade", () => {
   it("uses canonical-document commit coordinators without the retired runtime store bridge", () => {
     expect(editorSource).not.toContain('from "./schematicStore"');
     expect(editorSource).not.toContain("currentRuntimeState");
-    expect(editorSource).toContain("this.placementCommitCoordinator.commitPlacement(point)");
+    expect(editorSource).toContain("this.placementCommitCoordinator.commitPlacement(point, layer.id)");
     expect(editorSource).toContain("this.placementCommitCoordinator.commitCopy(point)");
     expect(placementCommitSource).toContain("applyPlacementCommitDocumentOp(this.document, commit)");
     expect(placementCommitSource).toContain("applyCopyPlacementDocumentOp(this.document, placement.copied)");
@@ -159,8 +159,8 @@ describe("schematic editor public facade", () => {
     expect(editorSource).toContain("this.wireCommitCoordinator.applyBlankClick(point)");
     expect(wireCommitSource).toContain("applyWireCommitDocumentOp(");
     expect(wireCommitSource).not.toContain("restoreSchematicDocumentOp");
-    expect(editorSource).toContain("this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId)");
-    expect(netLabelCommitSource).toContain("applyNetLabelPlacementDocumentOp(this.document, placement.label)");
+    expect(editorSource).toContain("this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId, layer.id)");
+    expect(netLabelCommitSource).toContain("applyNetLabelPlacementDocumentOp(this.document,");
     expect(netLabelCommitSource).not.toContain("restoreSchematicDocumentOp");
     expect(editorSource).toContain("this.deleteCommitCoordinator.deleteSelection(selection)");
     expect(editorSource).toContain(

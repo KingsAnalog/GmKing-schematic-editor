@@ -161,9 +161,11 @@ export function applyCopyPlacementDocumentOp(document: SchematicDocument, copied
 export function createPlainSchematicNoteDocumentOp(
   document: SchematicDocument,
   id: string,
-  anchor: Point
+  anchor: Point,
+  layerId?: string
 ): SchematicDocumentOpResult {
   const note = createPlainSchematicNote(id, anchor);
+  if (layerId !== undefined) note.layerId = layerId;
   document.notes.push(note);
   return documentOpResult(true, CREATE_PLAIN_SCHEMATIC_NOTE_STATUS, [], [id]);
 }
@@ -193,9 +195,10 @@ export function applyWireCommitDocumentOp(
   points: Point[],
   appearance: WireAppearance,
   createId: () => string,
-  routeMode?: WireRouteMode
+  routeMode?: WireRouteMode,
+  layerId?: string
 ): WireCommitDocumentOpResult {
-  const commit = applyWireCommitToDocument(document, points, appearance, createId, routeMode);
+  const commit = applyWireCommitToDocument(document, points, appearance, createId, routeMode, layerId);
   if (commit.kind !== "committed") {
     return {
       ...documentOpResult(false, "No wire committed."),

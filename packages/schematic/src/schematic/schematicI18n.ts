@@ -1,6 +1,13 @@
 type SchematicLanguage = "zh" | "en";
 
 const ZH: Record<string, string> = {
+  "layer.field": "图层",
+  "layer.mixed": "多个图层",
+  "layer.hiddenSuffix": "（隐藏）",
+  "layer.lockedSuffix": "（锁定）",
+  "layer.moved": "已将 {count} 个对象移到「{name}」。",
+  "layer.placementLocked": "当前活动图层已锁定。请先解锁或选择其他图层。",
+  "layer.noteCreatedHidden": "注释已创建在隐藏图层。显示该图层后可编辑注释。",
   "sidebar.library": "器件库",
   "sidebar.properties": "属性",
   "sidebar.libraryLabel": "库",

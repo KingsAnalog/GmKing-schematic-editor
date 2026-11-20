@@ -22,6 +22,17 @@ let server;
 let browser;
 let page;
 
+async function clickPoint({ x, y }, modifiers = 0) {
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, modifiers });
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1, modifiers });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1, modifiers });
+}
+
+async function pressKey(key) {
+  await page.send("Input.dispatchKeyEvent", { type: "keyDown", key, code: key });
+  await page.send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key });
+}
+
 function assert(condition, message, evidence) {
   if (!condition) throw new Error(`${message} ${JSON.stringify(evidence)}`);
 }
@@ -300,7 +311,160 @@ try {
   const mobileShot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   await fs.writeFile(path.join(outDir, "r3-layers-mobile.png"), Buffer.from(mobileShot.data, "base64"));
 
-  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, ok: true }));
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 980, deviceScaleFactor: 1, mobile: false });
+  const rcFixture = await fs.readFile(new URL("./fixtures/r3-1c-rc-layer-test.schematic.json", import.meta.url), "utf8");
+  await evaluate(page, json => {
+    const input = document.querySelector("[data-schematic-document-import-input]");
+    const files = new DataTransfer();
+    files.items.add(new File([json], "r3-1c-rc-layer-test.schematic.json", { type: "application/json" }));
+    input.files = files.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, rcFixture);
+  await waitFor(page, () => !!document.querySelector("[model-id='output-branch']")
+    && window.layersSmoke.editor.getContent().notes.some(note => note.id === "output-note"), "RC fixture did not import");
+
+  const selectInLayers = async id => {
+    await clickSelector(page, "[data-sidebar-tab='layers']");
+    await clickSelector(page, `[data-layer-object-select='${id}']`);
+    await clickSelector(page, "[data-sidebar-tab='properties']");
+  };
+  const moveSelection = layerId => evaluate(page, id => {
+    const layer = document.querySelector("[data-property-layer]");
+    layer.value = id;
+    layer.dispatchEvent(new Event("change", { bubbles: true }));
+  }, layerId);
+  const importConnections = await evaluate(page, () => window.layersSmoke.editor.getContent().connections);
+  await selectInLayers("output-label");
+  const ui = await evaluate(page, () => {
+    const layer = document.querySelector("[data-property-layer]");
+    return { shown: !!layer.getBoundingClientRect().width, value: layer.value,
+      locked: [...layer.options].find(option => option.value === "layer-3").disabled };
+  });
+  assert(ui.shown && ui.value === "layer-2" && ui.locked, "label layer or locked target option is incorrect", ui);
+  await moveSelection("layer-3");
+  const rejected = await evaluate(page, () => window.layersSmoke.editor.getContent().netLabels.find(label => label.id === "output-label").layerId);
+  assert(rejected === "layer-2", "locked layer accepted an assignment", rejected);
+  await moveSelection("layer-1");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().netLabels.find(label => label.id === "output-label").layerId === "layer-1",
+    "label did not move to the base layer");
+  assert(await evaluate(page, () => document.querySelector("[data-layer-object-select='output-label']")?.hasAttribute("aria-current")),
+    "visible label lost its selection after a layer move", {});
+  await clickSelector(page, "[data-command='undo']");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().netLabels.find(label => label.id === "output-label").layerId === "layer-2",
+    "Undo did not restore the label layer");
+
+  const wirePoint = id => evaluate(page, wireId => {
+    const path = document.querySelector(`[model-id='${wireId}'] [joint-selector='line']`);
+    const point = path.getPointAtLength(path.getTotalLength() * 0.35).matrixTransform(path.getScreenCTM());
+    return { x: point.x, y: point.y };
+  }, id);
+  await selectInLayers("output-note");
+  await clickPoint(await wirePoint("input-wire-segment-1"), 8);
+  const mixed = await evaluate(page, () => {
+    const select = document.querySelector("[data-property-layer]");
+    return { value: select.value, text: select.selectedOptions[0]?.textContent };
+  });
+  assert(mixed.value === "" && mixed.text === "Multiple layers", "mixed note and wire selection did not show mixed layers", mixed);
+  await moveSelection("layer-1");
+  await waitFor(page, () => {
+    const content = window.layersSmoke.editor.getContent();
+    return content.notes.find(note => note.id === "output-note").layerId === "layer-1"
+      && content.layerObjectStates?.["output-note"]?.z > content.layerObjectStates?.["input-wire-segment-1"]?.z;
+  }, "batch assignment did not keep stack order");
+  await clickSelector(page, "[data-command='undo']");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().notes.find(note => note.id === "output-note").layerId === "layer-2",
+    "Undo did not restore the mixed layer assignment");
+  await clickSelector(page, "[data-command='redo']");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().notes.find(note => note.id === "output-note").layerId === "layer-1",
+    "Redo did not restore the mixed layer assignment");
+  const finalConnections = await evaluate(page, () => window.layersSmoke.editor.getContent().connections);
+  assert(JSON.stringify(importConnections) === JSON.stringify(finalConnections), "layer assignment changed connection bindings", finalConnections);
+
+  await evaluate(page, () => document.querySelector("[data-layer-visible='layer-1']").click());
+  await selectInLayers("output-branch");
+  const hiddenAssignmentState = () => evaluate(page, () => {
+    const row = document.querySelector("[data-layer-object-select='output-branch']");
+    const layer = document.querySelector("[data-property-layer]");
+    return {
+      layer: row?.closest("[data-layer-id]")?.dataset.layerId,
+      disabled: row?.disabled,
+      selected: row?.hasAttribute("aria-current"),
+      drawn: !!document.querySelector("[model-id='output-branch']"),
+      baseVisible: window.layersSmoke.editor.getContent().layers.find(layer => layer.id === "layer-1").visible,
+      select: layer.value,
+      selection: [...window.layersSmoke.editor.editor.selectionSession.selectedIds]
+    };
+  });
+  const beforeHiddenAssignment = await hiddenAssignmentState();
+  assert(beforeHiddenAssignment.selected && beforeHiddenAssignment.baseVisible === false,
+    "hidden destination scenario was not prepared", beforeHiddenAssignment);
+  await moveSelection("layer-1");
+  const hiddenAssignment = await hiddenAssignmentState();
+  assert(hiddenAssignment.layer === "layer-1" && hiddenAssignment.disabled && !hiddenAssignment.selected && !hiddenAssignment.drawn,
+    "move into a hidden layer did not remove the canvas selection", hiddenAssignment);
+  await clickSelector(page, "[data-command='undo']");
+  await evaluate(page, () => document.querySelector("[data-layer-visible='layer-1']").click());
+
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await clickSelector(page, "[data-layer-select='layer-2']");
+  await clickSelector(page, "[data-layer-delete]");
+  assert(await evaluate(page, () => window.layersSmoke.editor.getContent().layers.some(layer => layer.id === "layer-2")),
+    "occupied layer was deleted", {});
+  const blank = await evaluate(page, () => {
+    const paper = document.querySelector("[data-schematic-paper]").getBoundingClientRect();
+    return { x: paper.right - 300, y: paper.bottom - 100 };
+  });
+  await clickSelector(page, "[data-command='wire']");
+  await clickPoint(blank);
+  await clickPoint({ x: blank.x + 70, y: blank.y });
+  await pressKey("Enter");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().wires.some(wire =>
+    wire.layerId === "layer-2" && wire.id !== "output-branch"), "new wire was not assigned to the active layer");
+  await pressKey("Escape");
+  await clickSelector(page, "[data-command='note']");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().notes.some(note => note.id !== "output-note" && note.layerId === "layer-2"),
+    "new note was not assigned to the active layer");
+  await pressKey("Escape");
+  await clickSelector(page, "[data-command='label']");
+  await evaluate(page, () => {
+    const input = document.querySelector("[data-property-label-tool-input]");
+    input.value = "TEST";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+  await pressKey("Enter");
+  await clickPoint(await wirePoint("input-wire-segment-1"));
+  await waitFor(page, () => window.layersSmoke.editor.getContent().netLabels.some(label => label.name === "TEST" && label.layerId === "layer-2"),
+    "new label was not assigned to the active layer");
+  await pressKey("Escape");
+
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await clickSelector(page, "[data-layer-select='layer-3']");
+  const noteCount = await evaluate(page, () => window.layersSmoke.editor.getContent().notes.length);
+  await clickSelector(page, "[data-command='note']");
+  const lockedPlacement = await evaluate(page, () => ({
+    notes: window.layersSmoke.editor.getContent().notes.length,
+    status: document.querySelector("[data-schematic-status]").textContent
+  }));
+  assert(lockedPlacement.notes === noteCount && /locked/.test(lockedPlacement.status),
+    "locked active layer accepted a new note", lockedPlacement);
+
+  await selectInLayers("output-branch");
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
+  await waitFor(page, () => document.querySelector("[data-schematic-shell]").classList.contains("is-layout-narrow"), "narrow layout unavailable after import");
+  await evaluate(page, () => {
+    document.documentElement.dataset.effectiveTheme = "dark";
+    const shell = document.querySelector("[data-schematic-shell]");
+    if (!shell.classList.contains("is-left-panel-visible")) document.querySelector("[data-command='library']").click();
+    document.querySelector("[data-sidebar-tab='properties']").click();
+  });
+  await waitFor(page, () => {
+    const select = document.querySelector("[data-property-layer]");
+    const { width, left, right } = select.getBoundingClientRect();
+    return select.value === "layer-2" && width > 0 && left >= 0 && right <= innerWidth;
+  }, "mobile Layer selector was clipped or hidden");
+
+  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

@@ -38,8 +38,11 @@ import {
   type SchematicLayerObjectNode
 } from "./layerObjectTreeModel";
 import {
+  applyLayerAssignment,
   applyLayerObjectMove,
+  planLayerAssignment,
   planLayerObjectMove,
+  projectLayerAssignment,
   type LayerObjectMoveDirection
 } from "./layerObjectCommands";
 import {
@@ -570,7 +573,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.wireCommitCoordinator = new SchematicWireCommitCoordinator(
       this.document,
       this.wireToolController,
-      () => this.host.idFactory()
+      () => this.host.idFactory(),
+      () => this.activeLayerId
     );
     this.netLabelCommitCoordinator = new SchematicNetLabelCommitCoordinator(
       this.document,
@@ -1131,7 +1135,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.propertyPanelController.bind();
     this.bindMosParamEvents();
     this.bindLayerEvents();
-    this.bindComponentLayerEvents();
+    this.bindLayerAssignmentEvents();
   }
 
   private layers(): SchematicLayer[] {
@@ -1218,26 +1222,30 @@ export class SchematicEditor implements SchematicHostedEditor {
     }, { signal });
   }
 
-  private bindComponentLayerEvents() {
+  private bindLayerAssignmentEvents() {
     const { signal } = this.lifecycleController;
     const root = this.options.propertyEl;
     if (!root) return;
     root.addEventListener("change", (event) => {
       const target = event.target as HTMLSelectElement | null;
       if (!target?.hasAttribute("data-property-layer")) return;
-      const component = this.selectedTransformObjects().components[0];
-      if (!component) return;
-      this.transact((draft) => {
-        const instance = draft.components.find(item => item.id === component.id);
-        if (instance) instance.values["layer:id"] = target.value;
-      }, { origin: "editor", reason: "component-layer" });
+      const plan = planLayerAssignment(this.document, this.selectedLayerObjectIds(), target.value);
+      if (!plan) {
+        this.syncLayerAssignment();
+        return;
+      }
+      this.hostFinishActiveEdits();
+      applyLayerAssignment(this.document, plan);
+      applyNormalizedDocumentWires(this.document);
       this.renderDocument();
-      this.renderLayersPanel();
-      this.syncComponentLayer();
+      this.commitCurrentContent("assign-layer", "editor");
+      this.setStatus(t("layer.moved", "Moved {count} object(s) to {name}.")
+        .replace("{count}", String(plan.ids.size)).replace("{name}", () => plan.target.name));
     }, { signal });
   }
 
   private beginLibraryShapeDraw(kind: LibraryShapeType) {
+    if (!this.editablePlacementLayer()) return;
     this.transientToolSession.transition("select", "enter-tool");
     this.syncToolUi();
     this.instanceSelector.closePanel();
@@ -1518,7 +1526,8 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private finishLibraryShapeDraw(points: Point[]) {
     const draft = this.libraryShapeDraw;
-    if (!draft) return;
+    const layer = draft && this.editablePlacementLayer();
+    if (!draft || !layer) return;
     const kind = draft.kind;
     const geometry = isVertexLibraryShapeType(kind) ? VERTEX_SHAPE_GEOMETRY[kind](points) : null;
     if (isVertexLibraryShapeType(kind) && !geometry) {
@@ -1548,7 +1557,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const def = getComponentDef(kind);
     const values: Record<string, string> = {
       ...(def.defaultValues ?? {}),
-      "layer:id": this.activeLayerId
+      "layer:id": layer.id
     };
     if (kind === "rectangle") {
       values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
@@ -1871,22 +1880,51 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
   }
 
-  private syncComponentLayer() {
+  private selectedLayerObjectIds() {
+    return new Set([...this.selectionSession.selectedIds, ...this.selectionSession.selectedNoteIds]);
+  }
+
+  private syncLayerAssignment() {
     const row = this.options.propertyEl.querySelector<HTMLElement>("[data-property-layer-row]");
     const select = this.options.propertyEl.querySelector<HTMLSelectElement>("[data-property-layer]");
     if (!row || !select) return;
-    const components = this.selectedTransformObjects().components;
-    const component = components.length === 1 ? components[0] : null;
-    row.hidden = !component;
-    if (!component) return;
-    const layers = this.layers();
-    select.replaceChildren(...layers.map((layer) => {
+    if (this.transientToolSession.mode !== "select" || !this.selectionSession.hasAny()) {
+      row.hidden = true;
+      return;
+    }
+    const { groups, objects } = projectLayerAssignment(this.document, this.selectedLayerObjectIds());
+    row.hidden = objects.length === 0;
+    if (!objects.length) return;
+    const first = objects[0].layer.id;
+    const mixed = objects.some(object => object.layer.id !== first);
+    const createOption = (id: string, label: string, disabled: boolean) => {
       const option = select.ownerDocument.createElement("option");
-      option.value = layer.id;
-      option.textContent = layer.name;
+      option.value = id;
+      option.textContent = label;
+      option.disabled = disabled;
       return option;
-    }));
-    select.value = resolveLayerObjects(this.document).layerOf(component.id).id;
+    };
+    const options = groups.map(({ layer }) => {
+      const suffix = layer.locked ? t("layer.lockedSuffix", " (locked)")
+        : layer.visible ? "" : t("layer.hiddenSuffix", " (hidden)");
+      return createOption(layer.id, layer.name + suffix, layer.locked);
+    });
+    if (mixed) options.unshift(createOption("", t("layer.mixed", "Multiple layers"), true));
+    select.replaceChildren(...options);
+    select.value = mixed ? "" : first;
+    select.disabled = objects.some(object => object.layer.locked || !object.displayed)
+      || !groups.some(({ layer }) => !layer.locked && (mixed || layer.id !== first));
+  }
+
+  private editablePlacementLayer() {
+    const layers = this.layers();
+    const layer = layers.find(candidate => candidate.id === this.activeLayerId) ?? defaultSchematicLayer(layers);
+    if (layer.locked) {
+      this.setStatus(t("layer.placementLocked", "The active layer is locked. Unlock it or select another layer."));
+      return null;
+    }
+    this.activeLayerId = layer.id;
+    return layer;
   }
 
   private bindMosParamEvents() {
@@ -2971,8 +3009,10 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private placeNetLabel(point: Point, preferredWireId?: string) {
+    const layer = this.editablePlacementLayer();
+    if (!layer) return;
     this.applyNetLabelCommitOutcome(
-      this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId)
+      this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId, layer.id)
     );
   }
 
@@ -3090,16 +3130,20 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private createNoteAtCurrentPoint() {
+    const layer = this.editablePlacementLayer();
+    if (!layer) return;
     this.transientToolSession.transition("select", "create-note");
     this.instanceSelector.closePanel();
     const anchor = snapPoint(this.lastPointerPoint ?? this.viewportCenterPoint());
     const noteId = this.host.idFactory();
-    const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor);
-    this.setNoteSelection(result.noteIds);
+    const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor, layer.id);
+    this.setNoteSelection(layer.visible ? result.noteIds : []);
     this.renderNotes();
+    this.renderLayersPanel();
     this.consumeHistoryIntent(result);
-    this.beginNoteEditing(noteId);
-    this.setStatus(result.status);
+    if (layer.visible) this.beginNoteEditing(noteId);
+    this.setStatus(layer.visible ? result.status
+      : t("layer.noteCreatedHidden", "Note created on a hidden layer. Show the layer to edit it."));
   }
 
   private nextComponentRef(type: ComponentType) {
@@ -3112,12 +3156,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
-    if (outcome.source === "placement") {
-      outcome.result.selectedIds.forEach((id) => {
-        const component = this.document.components.find(item => item.id === id);
-        if (component) component.values["layer:id"] = this.activeLayerId;
-      });
-    }
     this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
     applyNormalizedDocumentWires(this.document);
     this.renderDocument();
@@ -3133,7 +3171,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private commitPlacementItem(point: Point) {
-    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitPlacement(point));
+    const layer = this.editablePlacementLayer();
+    if (layer) this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitPlacement(point, layer.id));
   }
 
   private handlePointerMove(point: Point) {
@@ -3182,14 +3221,17 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handleWireBlankClick(point: Point) {
+    if (!this.editablePlacementLayer()) return;
     this.applyWireCommitOutcome(this.wireCommitCoordinator.applyBlankClick(point));
   }
 
   private handleWirePinClick(point: Point) {
+    if (!this.editablePlacementLayer()) return;
     this.applyWireCommitOutcome(this.wireCommitCoordinator.applyPinClick(point));
   }
 
   private finishWireFromKeyboard() {
+    if (!this.editablePlacementLayer()) return;
     this.applyWireCommitOutcome(this.wireCommitCoordinator.finishFromKeyboard(this.lastPointerPoint));
   }
 
@@ -4728,7 +4770,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const projection = this.currentSelectionUiProjection(resolution);
     this.propertyPanelController.sync(projection.propertyPanel);
     this.syncMosParams();
-    this.syncComponentLayer();
+    this.syncLayerAssignment();
     this.syncLayerObjectSelection();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
     if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();

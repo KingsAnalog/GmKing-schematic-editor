@@ -2,6 +2,41 @@ import { buildSchematicLayerObjectTree } from "./layerObjectTreeModel";
 import { setLayerObjectZ } from "./layerObjectStateModel";
 import type { SchematicContent, SchematicDocument } from "./types";
 
+export function projectLayerAssignment(document: SchematicDocument, selectedIds: ReadonlySet<string>) {
+  const groups = buildSchematicLayerObjectTree(document);
+  const objects = groups.flatMap(({ layer, objects }) => objects.flatMap(object =>
+    selectedIds.has(object.id) && (object.kind === "component" || object.kind === "shape"
+      || object.kind === "wire" || object.kind === "label" || object.kind === "note")
+      ? [{ id: object.id, layer, displayed: object.displayed }]
+      : []
+  ));
+  return { groups, objects };
+}
+
+export function planLayerAssignment(
+  document: SchematicDocument, selectedIds: ReadonlySet<string>, targetLayerId: string
+) {
+  const { groups, objects } = projectLayerAssignment(document, selectedIds);
+  const target = groups.find(group => group.layer.id === targetLayerId);
+  if (!target || target.layer.locked || objects.some(object => object.layer.locked || !object.displayed)
+    || !objects.some(object => object.layer.id !== targetLayerId)) return null;
+  const ids = new Set(objects.map(object => object.id));
+  const order = [...ids, ...target.objects.filter(object => !ids.has(object.id)).map(object => object.id)];
+  return { target: target.layer, ids, z: Object.fromEntries(order.map((id, index) => [id, order.length - index])) };
+}
+
+export function applyLayerAssignment(document: SchematicContent, plan: NonNullable<ReturnType<typeof planLayerAssignment>>) {
+  document.components.forEach(component => {
+    if (plan.ids.has(component.id)) component.values["layer:id"] = plan.target.id;
+  });
+  for (const objects of [document.wires, document.netLabels, document.notes]) {
+    objects.forEach(object => {
+      if (plan.ids.has(object.id)) object.layerId = plan.target.id;
+    });
+  }
+  applyLayerObjectMove(document, plan.z);
+}
+
 export type LayerObjectMoveDirection = "up" | "down";
 
 /** Plans one adjacent move in the top-most-first Objects panel. */

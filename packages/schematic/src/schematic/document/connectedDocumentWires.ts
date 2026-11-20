@@ -52,7 +52,12 @@ export function normalizeConnectedWires(
     const arms = new Set<string>(), kinds = new Set<string>();
     node.wires.forEach(end => {
       const wire = sourceWires.get(end.wireId)!;
-      kinds.add(JSON.stringify([layerOf(wire.id).id, wire.routeMode, Boolean(wire.temporarilyDeleted), ...wireBodyKindValues(wire)]));
+      // Keep the boundary when two electrically joined wires carry different display state.
+      const state = document.layerObjectStates?.[wire.id];
+      kinds.add(JSON.stringify([
+        layerOf(wire.id).id, wire.routeMode, Boolean(wire.temporarilyDeleted),
+        state?.visible === false, state?.z ?? 0, ...wireBodyKindValues(wire)
+      ]));
       [wire.points[end.index - 1], wire.points[end.index + 1]].forEach(neighbor => {
         if (!neighbor) return;
         const dx = neighbor.x - end.point.x, dy = neighbor.y - end.point.y, length = Math.hypot(dx, dy);

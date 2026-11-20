@@ -113,6 +113,10 @@ export function buildSchematicEditorSidebar<T extends object>(
       el("section", { class: "property-editor", "aria-label": "Property Editor", "data-schematic-property-editor": true },
         el("h2", {}, "Property Editor"),
         el("div", { class: "property-empty", "data-property-empty": true }, "No object selected."),
+        el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
+          el("span", {}, t("layer.field", "Layer")),
+          el("select", { "data-property-layer": true })
+        ),
         netProperties(el),
         labelToolProperties(el),
         componentProperties(el),
@@ -209,10 +213,6 @@ function labelToolProperties<T extends object>(el: UiBuilder<T>["el"]) {
 
 function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
   return el("div", { class: "property-form", "data-property-component-form": true, hidden: true },
-    el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
-      el("span", {}, "Layer"),
-      el("select", { "data-property-layer": true })
-    ),
     el("label", { class: "property-row", "data-property-cell-row": true },
       el("span", {}, "Cell"),
       el("select", { "data-property-cell": true })
