@@ -11,11 +11,56 @@ const server = await serveDist(dist);
 const browser = await launchBrowser();
 let page;
 
-async function clickPoint(x, y) {
+async function movePoint(x, y) {
   await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+}
+
+async function clickPoint(x, y) {
+  await movePoint(x, y);
   await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
   await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
   await new Promise((resolve) => setTimeout(resolve, 80));
+}
+
+async function readSnapMarker() {
+  return evaluate(page, () => {
+    const marker = document.querySelector(".schematic-shape-draft-grid-point");
+    const paper = document.querySelector("[data-schematic-paper]");
+    const bounds = paper?.getBoundingClientRect();
+    const cx = Number(marker?.getAttribute("cx"));
+    const cy = Number(marker?.getAttribute("cy"));
+    return {
+      marker: Boolean(marker),
+      cx,
+      cy,
+      clientX: (bounds?.left ?? 0) + cx,
+      clientY: (bounds?.top ?? 0) + cy,
+      rectanglePreview: Boolean(document.querySelector(".schematic-shape-draft rect")),
+      trianglePreview: Boolean(document.querySelector(".schematic-shape-draft polyline"))
+    };
+  });
+}
+
+async function assertInitialSnapMarker(kind) {
+  await movePoint(620, 280);
+  await waitFor(page, () => Boolean(document.querySelector(".schematic-shape-draft-grid-point")), `${kind} initial snap marker missing`);
+  const initial = await readSnapMarker();
+  if (!initial.marker || initial.rectanglePreview || initial.trianglePreview) {
+    throw new Error(`${kind} initial snap preview failed: ${JSON.stringify(initial)}`);
+  }
+
+  await movePoint(initial.clientX + 2, initial.clientY + 2);
+  const nearby = await readSnapMarker();
+  if (nearby.cx !== initial.cx || nearby.cy !== initial.cy) {
+    throw new Error(`${kind} snapped before the 10 px creation step: ${JSON.stringify({ initial, nearby })}`);
+  }
+
+  await movePoint(initial.clientX + 10, initial.clientY + 10);
+  const stepped = await readSnapMarker();
+  if (stepped.cx - initial.cx !== 10 || stepped.cy - initial.cy !== 10) {
+    throw new Error(`${kind} did not advance by one canvas grid cell: ${JSON.stringify({ initial, stepped })}`);
+  }
+  return { x: stepped.clientX, y: stepped.clientY };
 }
 
 try {
@@ -28,14 +73,20 @@ try {
 
   await evaluate(page, () => document.querySelector("[data-library-item='rectangle']")?.click());
   await waitFor(page, () => document.querySelector(".schematic-shape-draft")?.hasAttribute("hidden") === false, "rectangle draw mode did not start");
-  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: 620, y: 280, button: "left", clickCount: 1 });
-  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 900, y: 470, button: "left", buttons: 1 });
+  const rectangleStart = await assertInitialSnapMarker("rectangle");
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: rectangleStart.x, y: rectangleStart.y, button: "left", clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rectangleStart.x + 30, y: rectangleStart.y + 40, button: "left", buttons: 1 });
   const preview = await evaluate(page, () => ({
     draft: document.querySelector(".schematic-shape-draft")?.hasAttribute("hidden") === false,
-    rect: Boolean(document.querySelector(".schematic-shape-draft rect"))
+    rect: Boolean(document.querySelector(".schematic-shape-draft rect")),
+    rectWidth: Number(document.querySelector(".schematic-shape-draft rect")?.getAttribute("width")),
+    rectHeight: Number(document.querySelector(".schematic-shape-draft rect")?.getAttribute("height")),
+    snapMarker: Boolean(document.querySelector(".schematic-shape-draft-grid-point"))
   }));
-  if (!preview.draft || !preview.rect) throw new Error("rectangle dashed preview missing: " + JSON.stringify(preview));
-  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: 900, y: 470, button: "left", clickCount: 1 });
+  if (!preview.draft || !preview.rect || preview.rectWidth !== 30 || preview.rectHeight !== 40 || !preview.snapMarker) {
+    throw new Error("rectangle dashed preview does not follow the 10 px grid: " + JSON.stringify(preview));
+  }
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rectangleStart.x + 30, y: rectangleStart.y + 40, button: "left", clickCount: 1 });
   await waitFor(page, () => document.querySelectorAll("[model-id]").length === 1, "rectangle was not created");
   const rectangle = await evaluate(page, () => {
     const cell = document.querySelector("[model-id]");
@@ -57,20 +108,23 @@ try {
       shapeForm: Boolean(document.querySelector("[data-property-shape-form]"))
     };
   });
-  if (rectangle.type !== "eda.Symbol" || rectangle.visibleTexts !== 0 || rectangle.visiblePaths !== 1 || rectangle.ports !== 0 || !rectangle.properties || rectangle.shapeForm) {
-    throw new Error("rectangle decoration/selection failed: " + JSON.stringify(rectangle));
+  const expectedRectanglePath = "M 20 20 L 50 20 L 50 60 L 20 60 Z";
+  if (rectangle.type !== "eda.Symbol" || rectangle.visibleTexts !== 0 || rectangle.visiblePaths !== 1 || rectangle.pathData[0]?.[0] !== expectedRectanglePath || rectangle.ports !== 0 || !rectangle.properties || rectangle.shapeForm) {
+    throw new Error("rectangle decoration/selection/10 px geometry failed: " + JSON.stringify(rectangle));
   }
 
   await clickSelector(page, "[data-sidebar-tab='library']");
   await evaluate(page, () => document.querySelector("[data-library-item='triangle']")?.click());
-  await clickPoint(980, 300);
-  await clickPoint(1160, 480);
+  const triangleStart = await assertInitialSnapMarker("triangle");
+  await clickPoint(triangleStart.x, triangleStart.y);
+  await clickPoint(triangleStart.x + 160, triangleStart.y + 160);
   const trianglePreview = await evaluate(page, () => ({
     line: Boolean(document.querySelector(".schematic-shape-draft polyline")),
+    snapMarker: Boolean(document.querySelector(".schematic-shape-draft-grid-point")),
     hidden: document.querySelector(".schematic-shape-draft")?.hasAttribute("hidden")
   }));
-  if (!trianglePreview.line || trianglePreview.hidden) throw new Error("triangle dashed segment missing");
-  await clickPoint(980, 480);
+  if (!trianglePreview.line || !trianglePreview.snapMarker || trianglePreview.hidden) throw new Error("triangle dashed segment missing: " + JSON.stringify(trianglePreview));
+  await clickPoint(triangleStart.x, triangleStart.y + 160);
   await waitFor(page, () => document.querySelectorAll("[model-id]").length === 2, "triangle was not created");
   const triangle = await evaluate(page, () => {
     const cells = [...document.querySelectorAll("[model-id]")];

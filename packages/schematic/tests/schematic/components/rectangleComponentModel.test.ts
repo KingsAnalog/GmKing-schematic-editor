@@ -7,7 +7,9 @@ import { makeComponentCell } from "../../../src/schematic/componentRenderer";
 import { buildCopySource, instantiateCopyAt } from "../../../src/schematic/copyModel";
 import { componentPinPoint } from "../../../src/schematic/netlist";
 import {
+  RECTANGLE_HEIGHT_VALUE_KEY,
   RECTANGLE_MAX_PIN_COUNT,
+  RECTANGLE_WIDTH_VALUE_KEY,
   rectanglePins,
   rectangleSettings,
   setRectangleProperty
@@ -51,6 +53,24 @@ describe("rectangle component model", () => {
     expect(cell.attr("symbolPinMarks/d")).toBe("");
     expect(cell.attr("symbolPinMarks/strokeWidth")).toBe(SYMBOL_STROKE_WIDTH);
     expect(cell.attr("rectangleResizeNw/opacity")).toBe(1);
+  });
+
+  it("keeps 10 px increments for pin-free library rectangles through rendering and file round trips", () => {
+    const rectangle = fixtureComponent("rectangle", "X1", 200, 200);
+    for (const property of ["leftPins", "rightPins", "topPins", "bottomPins"] as const) {
+      setRectangleProperty(rectangle, property, 0);
+    }
+    rectangle.values[RECTANGLE_WIDTH_VALUE_KEY] = "1.5";
+    rectangle.values[RECTANGLE_HEIGHT_VALUE_KEY] = "2";
+
+    expect(rectangleSettings(rectangle)).toMatchObject({ widthGrid: 1.5, heightGrid: 2 });
+    expect(resolveComponentDef(rectangle).size).toEqual({ width: 70, height: 80 });
+    expect(makeComponentCell(rectangle).attr("symbolBody/d")).toBe("M 20 20 L 50 20 L 50 60 L 20 60 Z");
+
+    const parsed = parseSchematicDocumentFile(
+      serializeSchematicDocumentFile(fixtureDocument({ components: [rectangle] }))
+    );
+    expect(rectangleSettings(parsed.components[0])).toMatchObject({ widthGrid: 1.5, heightGrid: 2 });
   });
 
   it("distributes pins over integer slots, excludes corners, and keeps side ordering", () => {

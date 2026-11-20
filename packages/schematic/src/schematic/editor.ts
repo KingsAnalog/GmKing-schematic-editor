@@ -68,7 +68,7 @@ import {
   SchematicPlacementCommitCoordinator,
   type SchematicPlacementCommitOutcome
 } from "./placementCommitCoordinator";
-import { SYMBOL_GRID_SIZE } from "./types";
+import { GRID_SIZE, SYMBOL_GRID_SIZE } from "./types";
 import type { SchematicPropertyBatchCommandResult } from "./propertyBatchCommands";
 import {
   ShapeResizeSession,
@@ -244,6 +244,8 @@ const MAX_ZOOM = 280;
 const FIT_PADDING_PX = 48;
 const FIT_BOUNDS_MARGIN = 28;
 const NOTE_COMMIT_DEBOUNCE_MS = 400;
+// Shape creation follows the visible 10 px canvas grid.
+const LIBRARY_SHAPE_DRAW_GRID_SIZE = GRID_SIZE;
 
 type SchematicEditorOptions = SchematicEditorMountElements;
 type MoveBehavior = SelectionMoveBehavior;
@@ -1224,18 +1226,14 @@ export class SchematicEditor implements SchematicHostedEditor {
       const start = this.libraryShapeDragStart;
       if (draft?.kind !== "rectangle" || !start || draft.points.length !== 1) return;
       const end = this.libraryShapeSnap(this.localPointFromClient(event.clientX, event.clientY));
-      if (Math.abs(end.x - start.x) >= SYMBOL_GRID_SIZE || Math.abs(end.y - start.y) >= SYMBOL_GRID_SIZE) {
+      if (Math.abs(end.x - start.x) >= LIBRARY_SHAPE_DRAW_GRID_SIZE || Math.abs(end.y - start.y) >= LIBRARY_SHAPE_DRAW_GRID_SIZE) {
         this.finishLibraryShapeDraw([start, end]);
       }
     }, { signal });
   }
 
   private libraryShapeSnap(point: Point) {
-    const snapped = snapPoint(point);
-    return {
-      x: Math.round(snapped.x / SYMBOL_GRID_SIZE) * SYMBOL_GRID_SIZE,
-      y: Math.round(snapped.y / SYMBOL_GRID_SIZE) * SYMBOL_GRID_SIZE
-    };
+    return snapPoint(point, LIBRARY_SHAPE_DRAW_GRID_SIZE);
   }
 
   private ensureShapeDraftOverlay() {
@@ -1257,6 +1255,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     overlay.setAttribute("viewBox", `0 0 ${Math.max(1, rect.width)} ${Math.max(1, rect.height)}`);
     overlay.replaceChildren();
     const doc = this.host.ownerDocument;
+    const snappedCurrent = this.libraryShapeSnap(current);
     const line = (points: Point[], close = false) => {
       const element = doc.createElementNS("http://www.w3.org/2000/svg", close ? "polygon" : "polyline");
       element.setAttribute("points", points.map((point) => {
@@ -1268,7 +1267,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     };
     if (draft.kind === "rectangle" && draft.points.length > 0) {
       const start = draft.points[0];
-      const snappedCurrent = this.libraryShapeSnap(current);
       const x1 = Math.min(start.x, snappedCurrent.x);
       const x2 = Math.max(start.x, snappedCurrent.x);
       const y1 = Math.min(start.y, snappedCurrent.y);
@@ -1283,8 +1281,15 @@ export class SchematicEditor implements SchematicHostedEditor {
       preview.setAttribute("class", "schematic-shape-draft-shape");
       overlay.append(preview);
     } else if (draft.kind === "triangle" && draft.points.length > 0) {
-      overlay.append(line([...draft.points, this.libraryShapeSnap(current)]));
+      overlay.append(line([...draft.points, snappedCurrent]));
     }
+    const screenSnap = this.worldToScreenPoint(snappedCurrent);
+    const snapMarker = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+    snapMarker.setAttribute("class", "schematic-shape-draft-grid-point");
+    snapMarker.setAttribute("cx", String(screenSnap.x));
+    snapMarker.setAttribute("cy", String(screenSnap.y));
+    snapMarker.setAttribute("r", "4");
+    overlay.append(snapMarker);
   }
 
   private clearLibraryShapeDraw() {
@@ -1311,7 +1316,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const width = maxX - minX;
     const height = maxY - minY;
     const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-    if (width < SYMBOL_GRID_SIZE || height < SYMBOL_GRID_SIZE) {
+    if (width < LIBRARY_SHAPE_DRAW_GRID_SIZE || height < LIBRARY_SHAPE_DRAW_GRID_SIZE) {
       this.setStatus("Shape needs a non-zero grid size.");
       return;
     }
@@ -1322,8 +1327,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       "layer:id": this.activeLayerId
     };
     if (kind === "rectangle") {
-      values[RECTANGLE_WIDTH_VALUE_KEY] = String(Math.max(1, Math.round(width / SYMBOL_GRID_SIZE)));
-      values[RECTANGLE_HEIGHT_VALUE_KEY] = String(Math.max(1, Math.round(height / SYMBOL_GRID_SIZE)));
+      values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
+      values[RECTANGLE_HEIGHT_VALUE_KEY] = String(height / SYMBOL_GRID_SIZE);
       values[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY] = "0";
       values[RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY] = "0";
       values[RECTANGLE_TOP_PIN_COUNT_VALUE_KEY] = "0";

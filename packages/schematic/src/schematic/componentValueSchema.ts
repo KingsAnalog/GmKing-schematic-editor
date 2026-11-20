@@ -6,7 +6,7 @@ import { DFF_VALUE_KEYS, DFF_SETTING_OPTIONS, type DffSettingProperty } from "./
 import { DIFFERENTIAL_OUTPUTS_SAME_VALUE_KEY } from "./differentialOutputModel";
 import { FILTER_KIND_OPTIONS, FILTER_KIND_VALUE_KEY, FUNCTION_BLOCK_TIME_DOMAIN_OPTIONS, FUNCTION_BLOCK_TIME_DOMAIN_VALUE_KEY, isFunctionBlockType } from "./functionBlockModel";
 import { INDUCTOR_DOT_VALUE_KEY, INDUCTOR_TAP_VALUE_KEY, INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS } from "./inductorModel";
-import { RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY, RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY, RECTANGLE_MIN_SIZE_GRID, RECTANGLE_MAX_SIZE_GRID, RECTANGLE_MAX_PIN_COUNT } from "./rectangleComponentModel";
+import { RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY, RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY, RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID, RECTANGLE_MAX_SIZE_GRID, RECTANGLE_MAX_PIN_COUNT } from "./rectangleComponentModel";
 import { SPNT_POSITION_VALUE_KEY, validSpntPosition } from "./spntSwitchModel";
 import { isTransistorComponentType, TRANSISTOR_CIRCLE_VALUE_KEY } from "./transistorCircleModel";
 import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
@@ -65,7 +65,15 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
     valid: (value: string) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) % GRID_SIZE === 0 && Math.abs(Number(value)) <= TRIANGLE_MAX_COORDINATE,
     expected: "a triangle vertex coordinate on the canvas grid"
   }))),
-  ...[RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY].map(key => integer(key, RECTANGLE_MIN_SIZE_GRID, RECTANGLE_MAX_SIZE_GRID)),
+  ...[RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY].map(key => ({
+    key, supports: only("rectangle"),
+    valid: (value: string) => value.trim() !== ""
+      && Number.isFinite(Number(value))
+      && Number(value) >= RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID
+      && Number(value) <= RECTANGLE_MAX_SIZE_GRID
+      && Number.isInteger(Number(value) / RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID),
+    expected: `a multiple of ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} from ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} to ${RECTANGLE_MAX_SIZE_GRID}`
+  })),
   ...[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY].map(key => integer(key, 0, RECTANGLE_MAX_PIN_COUNT)),
   { key: SPNT_POSITION_VALUE_KEY, supports: only("spntSwitch"), valid: (value, component) => validSpntPosition(component, value), expected: "a switch position from 0 (open) to the number of throws" },
   { key: "vsource:", prefix: true, supports: only("voltageSource"), valid: (value, _component, key) => validVoltageSourceFieldValue(key, value), expected: "a valid voltage source setting" },

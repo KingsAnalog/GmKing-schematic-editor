@@ -8,6 +8,7 @@ export const RECTANGLE_TOP_PIN_COUNT_VALUE_KEY = "rectanglePinCount:top";
 export const RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY = "rectanglePinCount:bottom";
 
 export const RECTANGLE_MIN_SIZE_GRID = 2;
+export const RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID = GRID_SIZE / SYMBOL_GRID_SIZE;
 export const RECTANGLE_MAX_SIZE_GRID = 4096;
 export const RECTANGLE_MAX_PIN_COUNT = 1024;
 export const RECTANGLE_PIN_LEAD_GRID = 1;
@@ -67,8 +68,8 @@ export function rectangleSettings(
     ? candidateValues
     : component as Record<string, string>;
   return normalizeRectangleSettings({
-    widthGrid: readInteger(values[RECTANGLE_WIDTH_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.widthGrid),
-    heightGrid: readInteger(values[RECTANGLE_HEIGHT_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.heightGrid),
+    widthGrid: readGridSize(values[RECTANGLE_WIDTH_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.widthGrid),
+    heightGrid: readGridSize(values[RECTANGLE_HEIGHT_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.heightGrid),
     leftPins: readInteger(values[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.leftPins),
     rightPins: readInteger(values[RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.rightPins),
     topPins: readInteger(values[RECTANGLE_TOP_PIN_COUNT_VALUE_KEY], DEFAULT_RECTANGLE_SETTINGS.topPins),
@@ -182,7 +183,7 @@ export function rectanglePins(settings: RectangleSettings): PinDef[] {
 }
 
 export function rectangleMinimumSideGrid(pinCount: number) {
-  if (pinCount <= 0) return RECTANGLE_MIN_SIZE_GRID;
+  if (pinCount <= 0) return RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID;
   return normalizeGridSize(pinCount + 1, RECTANGLE_MIN_SIZE_GRID);
 }
 
@@ -208,13 +209,20 @@ function sameRectangleSettings(left: RectangleSettings, right: RectangleSettings
 }
 
 function normalizeGridSize(value: number, minimum: number) {
-  const finite = Number.isFinite(value) ? Math.trunc(value) : minimum;
+  const finite = Number.isFinite(value)
+    ? Math.round(value / RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID) * RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID
+    : minimum;
   return Math.min(RECTANGLE_MAX_SIZE_GRID, Math.max(minimum, finite));
 }
 
 function clampPinCount(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(RECTANGLE_MAX_PIN_COUNT, Math.max(0, Math.trunc(value)));
+}
+
+function readGridSize(value: string | undefined, fallback: number) {
+  const parsed = value === undefined ? Number.NaN : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function readInteger(value: string | undefined, fallback: number) {
