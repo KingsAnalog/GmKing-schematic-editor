@@ -4,6 +4,7 @@ import { applyNormalizedDocumentWires } from "./documentWires";
 import { cloneConnections, emptyConnections, connectGeometry } from "../connectionGraph";
 import { normalizeMarkdownNoteWidth } from "../notes/noteSizing";
 import { defaultLayers } from "../layers";
+import { normalizeLayerObjectStates } from "../layerObjectStateModel";
 import { snapPoint } from "../geometry";
 import {
   deriveSchematicTopology,
@@ -80,6 +81,7 @@ export function cloneSchematicDocument(document: SchematicDocument): SchematicDo
 export function contentFromDocument(document: SchematicDocument): SchematicContent {
   const snapshot = cloneSchematicDocument(document);
   const couplings = snapshot.inductorCouplings ?? [];
+  const layerObjectStates = normalizeLayerObjectStates(snapshot.layerObjectStates);
   return {
     symbolTemplate: resolveSymbolTemplate(snapshot.symbolTemplate).id,
     components: snapshot.components,
@@ -89,7 +91,8 @@ export function contentFromDocument(document: SchematicDocument): SchematicConte
     junctionAppearances: snapshot.junctionAppearances,
     netLabels: snapshot.netLabels,
     notes: snapshot.notes,
-    layers: snapshot.layers ?? defaultLayers()
+    layers: snapshot.layers ?? defaultLayers(),
+    ...(layerObjectStates ? { layerObjectStates } : {})
   };
 }
 
@@ -122,6 +125,7 @@ export function restoreSchematicDocument(document: SchematicDocument): Schematic
   restored.junctionAppearances = normalizeJunctionAppearances(restored.junctionAppearances);
   restored.netLabels = restored.netLabels.map(normalizeNetLabel);
   restored.notes = restored.notes.map(normalizeSchematicNote);
+  restored.layerObjectStates = normalizeLayerObjectStates(restored.layerObjectStates);
   normalizeComponentValues(restored);
   normalizeComponentVariants(restored);
   normalizeComponentAppearances(restored);
@@ -142,6 +146,7 @@ export function assignRestoredSchematicDocument(target: SchematicDocument, sourc
   target.netLabels = source.netLabels.map(normalizeNetLabel);
   target.notes = source.notes.map(normalizeSchematicNote);
   target.layers = (source.layers ?? defaultLayers()).map(layer => ({ ...layer }));
+  target.layerObjectStates = normalizeLayerObjectStates(source.layerObjectStates);
   normalizeComponentValues(target);
   normalizeComponentVariants(target);
   normalizeComponentAppearances(target);

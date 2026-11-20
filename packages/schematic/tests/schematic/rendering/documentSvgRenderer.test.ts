@@ -123,6 +123,53 @@ describe("pure schematic SVG rendering", () => {
         .find((id) => id.endsWith("-grid"))
     );
   });
+
+  it("omits independently hidden objects without changing connectivity", () => {
+    const content = decoratedContent();
+    content.layerObjectStates = Object.fromEntries([
+      "R1", "signal", "signal-segment-1", "branch", "branch-segment-1",
+      "deleted-wire", "junction-40-0", "net-label", "plain-note", "markdown-note"
+    ].map(id => [id, { visible: false }]));
+
+    const rendered = renderSchematicDocumentSvg(content, {
+      namespace: "hidden-objects",
+      presentationMode: false
+    });
+
+    expect(rendered.svg).not.toContain("data-component-id=");
+    expect(rendered.svg).not.toContain("data-wire-id=");
+    expect(rendered.svg).not.toContain("data-junction=");
+    expect(rendered.svg).not.toContain("data-net-label-id=");
+    expect(rendered.svg).not.toContain("data-note-id=");
+    expect(rendered.topology.junctions).toContainEqual({ x: 40, y: 0 });
+    expect(content.connections.wires.signal).toBeDefined();
+  });
+
+  it("uses the Layers panel object order for all SVG object types", () => {
+    const content = decoratedContent();
+    content.layerObjectStates = Object.fromEntries([
+      "R1", "signal", "branch", "deleted-wire", "junction-40-0",
+      "net-label", "plain-note", "markdown-note"
+    ].map((id, index) => [id, { z: index + 1 }]));
+
+    const svg = renderSchematicDocumentSvg(content, {
+      namespace: "ordered-objects",
+      presentationMode: false
+    }).svg;
+    const markers = [
+      'data-component-id="R1"',
+      'data-wire-id="signal"',
+      'data-wire-id="branch"',
+      'data-wire-id="deleted-wire"',
+      'data-junction="40,0"',
+      'data-net-label-id="net-label"',
+      'data-note-id="plain-note"',
+      'data-note-id="markdown-note"'
+    ];
+    const positions = markers.map(marker => svg.indexOf(marker));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((first, second) => first - second));
+  });
 });
 
 function decoratedContent(): SchematicContent {

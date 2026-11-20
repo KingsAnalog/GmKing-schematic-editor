@@ -25,6 +25,7 @@ import type {
   SchematicConnections,
   SchematicDocument,
   SchematicLayer,
+  SchematicLayerObjectStates,
   SchematicNote,
   Wire,
   WireAppearance
@@ -50,7 +51,8 @@ const SCHEMATIC_KEYS = [
   "junctionAppearances",
   "netLabels",
   "notes",
-  "layers"
+  "layers",
+  "layerObjectStates"
 ] as const;
 
 export type SchematicDocumentFileSource = {
@@ -82,6 +84,7 @@ export class SchematicDocumentFileError extends Error {
 
 export function createSchematicFile(document: SchematicDocumentFileSource): SchematicFile {
   const inductorCouplings = document.inductorCouplings ?? [];
+  const layerObjectStates = snapshotLayerObjectStates(document.layerObjectStates);
   return {
     format: SCHEMATIC_FILE_FORMAT,
     schematic: {
@@ -95,7 +98,8 @@ export function createSchematicFile(document: SchematicDocumentFileSource): Sche
       junctionAppearances: document.junctionAppearances.map(snapshotJunctionAppearance),
       netLabels: document.netLabels.map(snapshotNetLabel),
       notes: document.notes.map(snapshotNote),
-      layers: (document.layers ?? defaultLayers()).map(snapshotLayer)
+      layers: (document.layers ?? defaultLayers()).map(snapshotLayer),
+      ...(layerObjectStates ? { layerObjectStates } : {})
     }
   };
 }
@@ -126,6 +130,9 @@ function formatSchematicFileJson(file: SchematicFile) {
     `    "connections": ${stringifyInline(file.schematic.connections)},`,
     formatInlineSchematicCollection("junctionAppearances", file.schematic.junctionAppearances, true),
     formatInlineSchematicCollection("netLabels", file.schematic.netLabels, true),
+    ...(file.schematic.layerObjectStates
+      ? [formatInlineSchematicCollection("layerObjectStates", file.schematic.layerObjectStates, true)]
+      : []),
     formatInlineSchematicCollection("layers", file.schematic.layers ?? defaultLayers(), true),
     ...formatSchematicNotes(file.schematic.notes),
     "  }",
@@ -301,7 +308,12 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     );
   }
   const source = requireObject(envelope.schematic, "$.schematic");
-  requireExactKeys(source, SCHEMATIC_KEYS, "$.schematic", ["inductorCouplings", "symbolTemplate", "layers"]);
+  requireExactKeys(
+    source,
+    SCHEMATIC_KEYS,
+    "$.schematic",
+    ["inductorCouplings", "symbolTemplate", "layers", "layerObjectStates"]
+  );
   let symbolTemplate;
   try {
     symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
@@ -333,6 +345,9 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     ? requireArray(source.layers, "$.schematic.layers")
         .map((layer, index) => decodeLayer(layer, `$.schematic.layers[${index}]`))
     : defaultLayers();
+  const layerObjectStates = hasOwn(source, "layerObjectStates")
+    ? decodeLayerObjectStates(source.layerObjectStates)
+    : undefined;
 
   assertUniqueObjectIds({ components, wires, inductorCouplings, netLabels, notes });
   assertUniqueLayerIds(layers);
@@ -347,7 +362,8 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     junctionAppearances,
     netLabels,
     notes,
-    layers
+    layers,
+    ...(layerObjectStates ? { layerObjectStates } : {})
   };
 }
 
@@ -814,6 +830,37 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
       point: snapshotPoint(label.attachment.point)
     }
   };
+}
+
+function snapshotLayerObjectStates(
+  states: SchematicLayerObjectStates | undefined
+): SchematicLayerObjectStates | undefined {
+  const entries = Object.entries(states ?? {}).flatMap(([id, state]) => {
+    const snapshot = {
+      ...(state.visible === false ? { visible: false } : {}),
+      ...(state.z !== undefined ? { z: state.z } : {})
+    };
+    return Object.keys(snapshot).length > 0 ? [[id, snapshot] as const] : [];
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function decodeLayerObjectStates(value: unknown): SchematicLayerObjectStates | undefined {
+  const path = "$.schematic.layerObjectStates";
+  const source = requireObject(value, path);
+  const entries = Object.entries(source).map(([id, item]) => {
+    const at = `${path}.${id}`;
+    if (!id.trim() || id === "__proto__" || id === "prototype" || id === "constructor") {
+      invalid(at, "safe, non-empty object ids");
+    }
+    const state = requireObject(item, at);
+    requireExactKeys(state, ["visible", "z"], at, ["visible", "z"]);
+    return [id, {
+      ...(hasOwn(state, "visible") ? { visible: requireBoolean(state.visible, `${at}.visible`) } : {}),
+      ...(hasOwn(state, "z") ? { z: requireFiniteNumber(state.z, `${at}.z`) } : {})
+    }] as const;
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function snapshotLayer(layer: SchematicLayer): SchematicLayer {

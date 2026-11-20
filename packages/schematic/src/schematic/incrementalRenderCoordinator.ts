@@ -1,5 +1,6 @@
 import type { SchematicGraphAdapter, SchematicGraphCell } from "./graphAdapter";
 import { junctionId } from "./junctionIdentity";
+import { layerObjectDisplayed } from "./layerObjectStateModel";
 import { wireDecorationLabels, wireLineAttrs, wireSelectionHaloAttrs } from "./renderer";
 import type { ComponentInstance, Point, SchematicDocument, Wire } from "./types";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
@@ -51,7 +52,9 @@ export class SchematicIncrementalRenderCoordinator<
     const z = previousCell?.get("z");
     if (previousCell) this.options.graphAdapter.removeCell(id);
     if (z !== undefined && z !== null) nextCell.set("z", z);
-    this.options.graphAdapter.addCell(nextCell);
+    if (layerObjectDisplayed(this.options.document, id)) {
+      this.options.graphAdapter.addCell(nextCell);
+    }
     return nextCell;
   }
 
@@ -85,6 +88,10 @@ export class SchematicIncrementalRenderCoordinator<
           ?? this.options.document.wires.find((candidate) => candidate.id === wireId);
         const cell = this.options.graphAdapter.getCell(wireId);
         if (!wire) {
+          if (cell) this.options.graphAdapter.removeCell(wireId);
+          return;
+        }
+        if (!layerObjectDisplayed(this.options.document, wire.id)) {
           if (cell) this.options.graphAdapter.removeCell(wireId);
           return;
         }

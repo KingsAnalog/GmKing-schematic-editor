@@ -1011,6 +1011,7 @@
   --schematic-ui-hover: #eef5fb;
   --schematic-ui-active: #e2f0fb;
   --schematic-ui-line: var(--schematic-soft-rule, #d5d5d0);
+  --schematic-ui-ink: var(--schematic-ink, #111111);
   --schematic-ui-muted: var(--schematic-muted, #565656);
 }
 
@@ -1018,6 +1019,8 @@
   --schematic-ui-panel: #211f1b;
   --schematic-ui-hover: #2c2a25;
   --schematic-ui-active: #34322c;
+  --schematic-ui-ink: #e8e4dc;
+  --schematic-ui-muted: #b7b1a7;
 }
 
 .schematic-shell > .schematic-palette,
@@ -1063,14 +1066,14 @@
 
 .schematic-sidebar-tab:hover {
   background: var(--schematic-ui-hover);
-  color: var(--schematic-ink);
+  color: var(--schematic-ui-ink);
 }
 
 .schematic-sidebar-tab.is-active {
   border-color: var(--schematic-ui-line);
   border-bottom-color: var(--schematic-ui-panel);
   background: var(--schematic-ui-panel);
-  color: var(--schematic-ink);
+  color: var(--schematic-ui-ink);
   font-weight: 600;
 }
 
@@ -1094,6 +1097,7 @@
 .schematic-sidebar-panel .palette-title {
   flex: 0 0 auto;
   padding: 9px 10px;
+  color: var(--schematic-ui-ink);
 }
 
 .schematic-sidebar-panel .palette-title-copy > span {
@@ -1243,7 +1247,7 @@
   padding: 2px 7px;
   border: 1px solid var(--schematic-border);
   background: var(--schematic-ui-panel);
-  color: var(--schematic-ink);
+  color: var(--schematic-ui-ink);
   font: inherit;
   font-size: 0.7rem;
   cursor: pointer;
@@ -1259,9 +1263,13 @@
   padding: 2px 0 8px;
 }
 
+.layer-stack-group {
+  min-width: 0;
+}
+
 .layer-stack-row {
   display: grid;
-  grid-template-columns: 16px 16px minmax(0, 1fr) 22px 22px;
+  grid-template-columns: 16px 16px 16px minmax(0, 1fr) 22px 22px;
   align-items: center;
   gap: 4px;
   padding: 3px 4px;
@@ -1286,7 +1294,7 @@
   padding: 0 2px;
   border: 0;
   background: transparent;
-  color: var(--schematic-ink);
+  color: var(--schematic-ui-ink);
   font: inherit;
   font-size: 0.72rem;
   cursor: pointer;
@@ -1297,6 +1305,90 @@
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.layer-object-tree {
+  margin: 0 0 3px 11px;
+  padding: 2px 0 2px 5px;
+  border-left: 1px solid var(--schematic-ui-line);
+}
+
+.layer-object-node,
+.layer-object-row {
+  min-width: 0;
+}
+
+.layer-object-row {
+  display: grid;
+  grid-template-columns: 16px 16px minmax(0, 1fr) 20px 20px;
+  align-items: center;
+  gap: 2px;
+  min-height: 25px;
+  border: 1px solid transparent;
+  color: var(--schematic-ui-ink);
+}
+
+.layer-object-visibility {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.layer-object-row.is-object-hidden .layer-object-select {
+  opacity: 0.5;
+}
+
+.layer-object-row.is-selected {
+  border-color: var(--schematic-focus);
+  background: var(--schematic-ui-active);
+}
+
+.layer-object-row.is-temporarily-deleted .layer-object-select {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.layer-object-row > button,
+.layer-tree-toggle {
+  min-width: 0;
+  height: 23px;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.layer-tree-toggle {
+  text-align: center;
+}
+
+.layer-object-select {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-object-row > button:disabled,
+.layer-object-visibility:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.layer-object-children {
+  margin-left: 14px;
+  padding-left: 3px;
+  border-left: 1px dotted var(--schematic-ui-line);
+}
+
+.layer-object-empty {
+  padding: 5px 7px;
+  color: var(--schematic-ui-muted);
+  font-size: 0.68rem;
+  font-style: italic;
 }
 
 .schematic-shell.is-drawing-shape .schematic-paper {

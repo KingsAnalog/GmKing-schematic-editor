@@ -1,5 +1,6 @@
 import { noteBackgroundColor, noteTextColor } from "./notes/noteAppearance";
 import { noteRotation } from "./notes/noteGeometry";
+import { junctionId } from "./junctionIdentity";
 import { renderComponentSvg } from "./componentSvgRenderer";
 import { componentExportBounds } from "./componentExportBounds";
 import type { SymbolTemplateContext } from "./symbolTemplateModel";
@@ -58,6 +59,8 @@ export interface SchematicSvgScene extends SymbolTemplateContext {
   netLabels: readonly NetLabel[];
   netLabelStatuses?: Readonly<Record<string, NetLabelStatus>>;
   notes: readonly SchematicNote[];
+  /** Optional bottom-to-top object order shared with the Layers panel. */
+  layerObjectOrder?: readonly string[];
   renderedNoteHtml?: Readonly<Record<string, string>>;
   renderedNoteText?: Readonly<Record<string, string>>;
   renderedNoteTextStyles?: Readonly<Record<string, SchematicSvgTextStyle>>;
@@ -119,20 +122,46 @@ export function renderSchematicSvgScene(
   const width = Math.ceil(viewBox.width);
   const height = Math.ceil(viewBox.height);
   const namespace = svgIdFragment(options.namespace);
-  const body = [
-    ...(scene.inductorCouplings ?? []).map((coupling) =>
-      renderInductorCouplingSvg(scene, coupling)
-    ),
-    ...scene.wires.map((wire) => renderWire(wire, wireEndpointConnections(scene, wire))),
-    ...scene.components.map((component) => renderComponentSvg(component, {
-      symbolTemplate: scene.symbolTemplate,
-      presentationMode: options.presentationMode,
-      flipReferenceLabelSide: inductorCouplingFlipsReferenceLabel(scene, component)
+  const objects = [
+    ...(scene.inductorCouplings ?? []).map((coupling) => ({
+      id: coupling.id,
+      svg: renderInductorCouplingSvg(scene, coupling)
     })),
-    ...scene.junctionPoints.map((point) => renderJunction(point, scene.junctionColors?.[`${point.x},${point.y}`])),
-    ...scene.netLabels.map((label) => renderNetLabel(label, scene.netLabelStatuses?.[label.id])),
-    ...scene.notes.map((note) => renderNote(scene, note, namespace, !!options.portableNotes))
-  ].filter(Boolean).join("");
+    ...scene.wires.map((wire) => ({
+      id: wire.id,
+      svg: renderWire(wire, wireEndpointConnections(scene, wire))
+    })),
+    ...scene.components.map((component) => ({
+      id: component.id,
+      svg: renderComponentSvg(component, {
+        symbolTemplate: scene.symbolTemplate,
+        presentationMode: options.presentationMode,
+        flipReferenceLabelSide: inductorCouplingFlipsReferenceLabel(scene, component)
+      })
+    })),
+    ...scene.junctionPoints.map((point) => ({
+      id: junctionId(point),
+      svg: renderJunction(point, scene.junctionColors?.[`${point.x},${point.y}`])
+    })),
+    ...scene.netLabels.map((label) => ({
+      id: label.id,
+      svg: renderNetLabel(label, scene.netLabelStatuses?.[label.id])
+    })),
+    ...scene.notes.map((note) => ({
+      id: note.id,
+      svg: renderNote(scene, note, namespace, !!options.portableNotes)
+    }))
+  ];
+  const order = new Map(scene.layerObjectOrder?.map((id, index) => [id, index]));
+  const body = objects
+    .map((object, sequence) => ({ ...object, sequence }))
+    .sort((first, second) =>
+      (order.get(first.id) ?? -1) - (order.get(second.id) ?? -1)
+      || first.sequence - second.sequence
+    )
+    .map(object => object.svg)
+    .filter(Boolean)
+    .join("");
   const svg = wrapSvg(body, width, height, viewBox, namespace, options);
   return { svg, bounds, viewBox, width, height };
 }

@@ -24,6 +24,20 @@ import {
   triangleVertexKey
 } from "./triangleComponentModel";
 import { defaultLayers, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
+import {
+  buildSchematicLayerObjectTree,
+  type SchematicLayerObjectNode
+} from "./layerObjectTreeModel";
+import {
+  applyLayerObjectMove,
+  planLayerObjectMove,
+  type LayerObjectMoveDirection
+} from "./layerObjectCommands";
+import {
+  layerObjectDisplayed,
+  setLayerObjectVisible as setLayerObjectVisibleState
+} from "./layerObjectStateModel";
+import { setComponentPinVisibility } from "./pinConfigurationModel";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
 import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator";
@@ -279,6 +293,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly netlistPanel: NetlistPanelController | null;
   private netlistRefreshTimer: number | null = null;
   private activeLayerId = "layer-1";
+  private readonly collapsedLayerTreeNodes = new Set<string>();
   private libraryShapeDraw: { kind: "rectangle" | "triangle"; points: Point[] } | null = null;
   private libraryShapeDragStart: Point | null = null;
   private shapeDraftOverlay: SVGSVGElement | null = null;
@@ -1107,6 +1122,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       const up = target.closest<HTMLElement>("[data-layer-up]");
       const down = target.closest<HTMLElement>("[data-layer-down]");
       const select = target.closest<HTMLElement>("[data-layer-select]");
+      const treeToggle = target.closest<HTMLElement>("[data-layer-tree-toggle]");
+      const objectSelect = target.closest<HTMLElement>("[data-layer-object-select]");
+      const objectMove = target.closest<HTMLElement>("[data-layer-object-up], [data-layer-object-down]");
       const row = target.closest<HTMLElement>("[data-layer-id]");
       if (add) { event.preventDefault(); this.addLayer(); return; }
       if (remove) { event.preventDefault(); this.deleteLayer(); return; }
@@ -1114,6 +1132,31 @@ export class SchematicEditor implements SchematicHostedEditor {
         event.preventDefault();
         const id = up?.dataset.layerUp ?? down?.dataset.layerDown ?? "";
         this.moveLayer(id, up ? 1 : -1);
+        return;
+      }
+      if (objectMove) {
+        event.preventDefault();
+        const layerId = objectMove.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId ?? "";
+        const direction: LayerObjectMoveDirection = objectMove.dataset.layerObjectUp !== undefined ? "up" : "down";
+        const objectId = direction === "up"
+          ? objectMove.dataset.layerObjectUp ?? ""
+          : objectMove.dataset.layerObjectDown ?? "";
+        this.moveLayerObject(layerId, objectId, direction);
+        return;
+      }
+      if (treeToggle) {
+        event.preventDefault();
+        const id = treeToggle.dataset.layerTreeToggle ?? "";
+        if (id) {
+          if (this.layerTreeCollapseState().has(id)) this.layerTreeCollapseState().delete(id);
+          else this.layerTreeCollapseState().add(id);
+          this.renderLayersPanel();
+        }
+        return;
+      }
+      if (objectSelect) {
+        event.preventDefault();
+        this.selectLayerObject(objectSelect);
         return;
       }
       if (select) { this.activeLayerId = select.dataset.layerSelect ?? this.activeLayerId; this.renderLayersPanel(); return; }
@@ -1133,6 +1176,11 @@ export class SchematicEditor implements SchematicHostedEditor {
     root.addEventListener("change", (event) => {
       const target = event.target as HTMLInputElement | HTMLSelectElement | null;
       if (!target) return;
+      const objectId = target.dataset.layerObjectVisible;
+      if (objectId) {
+        this.updateLayerObjectVisibility(objectId, (target as HTMLInputElement).checked);
+        return;
+      }
       const layerId = target.dataset.layerVisible ?? target.dataset.layerLock ?? target.dataset.layerName;
       if (layerId) {
         if (target.dataset.layerVisible) this.updateLayer(layerId, { visible: (target as HTMLInputElement).checked });
@@ -1408,6 +1456,48 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.renderLayersPanel();
   }
 
+  private moveLayerObject(
+    layerId: string,
+    objectId: string,
+    direction: LayerObjectMoveDirection
+  ) {
+    const layer = this.layers().find(candidate => candidate.id === layerId);
+    if (!layer || layer.locked) return;
+    const plan = planLayerObjectMove(this.document, layerId, objectId, direction);
+    if (!plan) return;
+    this.transact(
+      draft => applyLayerObjectMove(draft, plan),
+      { origin: "editor", reason: "reorder-layer-object" }
+    );
+  }
+
+  private updateLayerObjectVisibility(objectId: string, visible: boolean) {
+    const groups = buildSchematicLayerObjectTree(this.document);
+    const group = groups.find(candidate => candidate.objects.some(object =>
+      object.id === objectId || object.children.some(child => child.id === objectId)
+    ));
+    const node = group?.objects.find(object => object.id === objectId)
+      ?? group?.objects.flatMap(object => object.children).find(child => child.id === objectId);
+    if (!group || !node || group.layer.locked || !node.visibilityEditable) return;
+
+    if (objectId.startsWith("pin:")) {
+      const separator = objectId.indexOf(":", 4);
+      if (separator < 0) return;
+      const componentId = objectId.slice(4, separator);
+      const pinId = objectId.slice(separator + 1);
+      this.transact((draft) => {
+        const component = draft.components.find(candidate => candidate.id === componentId);
+        if (component) setComponentPinVisibility(component, pinId, visible);
+      }, { origin: "editor", reason: "layer-pin-visibility" });
+      return;
+    }
+
+    this.transact(
+      draft => { setLayerObjectVisibleState(draft, objectId, visible); },
+      { origin: "editor", reason: "layer-object-visibility" }
+    );
+  }
+
   private updateLayer(id: string, patch: Partial<SchematicLayer>) {
     this.transact((draft) => {
       const layer = (draft.layers ?? []).find(item => item.id === id);
@@ -1422,12 +1512,17 @@ export class SchematicEditor implements SchematicHostedEditor {
     const layers = this.layers();
     if (!layers.some(layer => layer.id === this.activeLayerId)) this.activeLayerId = layers[0]?.id ?? "layer-1";
     const doc = list.ownerDocument;
+    const groups = buildSchematicLayerObjectTree(this.document);
     list.replaceChildren();
-    [...layers].reverse().forEach((layer) => {
+    groups.forEach((group) => {
+      const { layer } = group;
+      const container = doc.createElement("section");
+      container.className = "layer-stack-group";
+      container.dataset.layerId = layer.id;
       const row = doc.createElement("div");
       row.className = "layer-stack-row";
-      row.dataset.layerId = layer.id;
       row.classList.toggle("is-active", layer.id === this.activeLayerId);
+      row.append(this.createLayerTreeToggle(doc, `layer:${layer.id}`, `Toggle ${layer.name} objects`));
       const visible = doc.createElement("input");
       visible.type = "checkbox";
       visible.checked = layer.visible;
@@ -1443,8 +1538,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       select.className = "layer-select";
       select.dataset.layerSelect = layer.id;
       select.dataset.layerName = layer.name;
-      const count = this.document.components.filter(component => this.componentLayerId(component) === layer.id).length;
-      select.textContent = `${layer.name} (${count})`;
+      select.textContent = `${layer.name} (${group.objectCount})`;
+      select.title = layer.name;
       const up = doc.createElement("button");
       up.type = "button";
       up.textContent = "↑";
@@ -1456,7 +1551,144 @@ export class SchematicEditor implements SchematicHostedEditor {
       down.dataset.layerDown = layer.id;
       down.title = "Lower layer";
       row.append(visible, lock, select, up, down);
-      list.append(row);
+      container.append(row);
+      if (!this.layerTreeCollapseState().has(`layer:${layer.id}`)) {
+        const objects = doc.createElement("div");
+        objects.className = "layer-object-tree";
+        objects.dataset.layerObjects = layer.id;
+        if (group.objects.length === 0) {
+          const empty = doc.createElement("div");
+          empty.className = "layer-object-empty";
+          empty.textContent = "No objects";
+          objects.append(empty);
+        } else {
+          group.objects.forEach((object, index) => objects.append(
+            this.createLayerObjectRow(doc, object, layer, index, group.objects.length)
+          ));
+        }
+        container.append(objects);
+      }
+      list.append(container);
+    });
+    this.syncLayerObjectSelection();
+  }
+
+  private layerTreeCollapseState() {
+    return this.collapsedLayerTreeNodes ?? new Set<string>();
+  }
+
+  private createLayerTreeToggle(doc: Document, id: string, label: string) {
+    const collapsed = this.layerTreeCollapseState().has(id);
+    const toggle = doc.createElement("button");
+    toggle.type = "button";
+    toggle.className = "layer-tree-toggle";
+    toggle.dataset.layerTreeToggle = id;
+    toggle.textContent = collapsed ? "▸" : "▾";
+    toggle.title = label;
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    return toggle;
+  }
+
+  private createLayerObjectRow(
+    doc: Document,
+    node: SchematicLayerObjectNode,
+    layer: SchematicLayer,
+    index = 0,
+    count = 1,
+    parentVisible = true
+  ) {
+    const container = doc.createElement("div");
+    container.className = "layer-object-node";
+    const row = doc.createElement("div");
+    row.className = "layer-object-row";
+    row.dataset.layerObjectKind = node.kind;
+    row.dataset.layerObjectId = node.id;
+    row.classList.toggle("is-temporarily-deleted", node.temporarilyDeleted);
+    row.classList.toggle("is-object-hidden", !parentVisible || !node.visible);
+    if (node.children.length > 0) {
+      row.append(this.createLayerTreeToggle(doc, node.id, `Toggle ${node.label} pins`));
+    } else {
+      const spacer = doc.createElement("span");
+      spacer.className = "layer-tree-leaf";
+      spacer.setAttribute("aria-hidden", "true");
+      row.append(spacer);
+    }
+
+    const visible = doc.createElement("input");
+    visible.type = "checkbox";
+    visible.className = "layer-object-visibility";
+    visible.checked = node.visible;
+    visible.dataset.layerObjectVisible = node.id;
+    visible.disabled = layer.locked || !node.visibilityEditable;
+    visible.title = node.visibilityEditable ? `${node.visible ? "Hide" : "Show"} ${node.label}` : "Pin visibility is fixed";
+    visible.setAttribute("aria-label", visible.title);
+
+    const select = doc.createElement("button");
+    select.type = "button";
+    select.className = "layer-object-select";
+    select.dataset.layerObjectSelect = node.id;
+    select.dataset.layerObjectTarget = node.targetId;
+    select.dataset.layerObjectTargetType = node.targetType;
+    select.disabled = !layer.visible || layer.locked || !parentVisible || !node.visible;
+    select.title = !layer.visible
+      ? "Layer is hidden"
+      : layer.locked
+        ? "Layer is locked"
+        : !parentVisible || !node.visible
+          ? "Object is hidden"
+          : node.label;
+    select.textContent = node.label;
+
+    const up = doc.createElement("button");
+    up.type = "button";
+    up.textContent = "↑";
+    up.dataset.layerObjectUp = node.id;
+    up.disabled = layer.locked || !node.reorderable || index <= 0;
+    up.title = node.reorderable ? `Raise ${node.label}` : "Pins cannot be reordered";
+    up.setAttribute("aria-label", up.title);
+    const down = doc.createElement("button");
+    down.type = "button";
+    down.textContent = "↓";
+    down.dataset.layerObjectDown = node.id;
+    down.disabled = layer.locked || !node.reorderable || index >= count - 1;
+    down.title = node.reorderable ? `Lower ${node.label}` : "Pins cannot be reordered";
+    down.setAttribute("aria-label", down.title);
+
+    row.append(visible, select, up, down);
+    container.append(row);
+    if (node.children.length > 0 && !this.layerTreeCollapseState().has(node.id)) {
+      const children = doc.createElement("div");
+      children.className = "layer-object-children";
+      node.children.forEach(child => children.append(
+        this.createLayerObjectRow(doc, child, layer, 0, 1, parentVisible && node.visible)
+      ));
+      container.append(children);
+    }
+    return container;
+  }
+
+  private selectLayerObject(button: HTMLElement) {
+    const targetId = button.dataset.layerObjectTarget;
+    if (!targetId) return;
+    const layerId = button.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId;
+    if (layerId) this.activeLayerId = layerId;
+    const note = button.dataset.layerObjectTargetType === "note";
+    this.selectionSession.setMixed(note ? [] : [targetId], note ? [targetId] : []);
+    this.finishSelectionChange();
+    this.sidebarLibrary.showLayers();
+    this.syncLayerObjectSelection();
+  }
+
+  private syncLayerObjectSelection() {
+    this.options.paletteEl.querySelectorAll<HTMLElement>("[data-layer-object-select]").forEach((button) => {
+      const id = button.dataset.layerObjectTarget ?? "";
+      const selected = button.dataset.layerObjectTargetType === "note"
+        ? this.selectionSession.isNoteSelected(id)
+        : this.selectionSession.isCellSelected(id);
+      button.closest<HTMLElement>(".layer-object-row")?.classList.toggle("is-selected", selected);
+      if (selected) button.setAttribute("aria-current", "true");
+      else button.removeAttribute("aria-current");
     });
   }
 
@@ -3279,21 +3511,28 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.graphAdapter.clear();
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
+        .filter(coupling => layerObjectDisplayed(this.document, coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
     this.graphAdapter.addCells(this.sortedLayerCells());
-    this.graphAdapter.addCells(this.document.wires.map((wire) => this.makeWireCell(wire)));
+    this.graphAdapter.addCells(
+      this.document.wires
+        .filter(wire => layerObjectDisplayed(this.document, wire.id))
+        .map(wire => this.makeWireCell(wire))
+    );
     const resolution = resolveSchematicNets(this.document);
     this.netResolutionCache = resolution;
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
-    this.graphAdapter.addCells((this.document.netLabels ?? []).map((label) =>
-      makeNetLabelCell(label, {
+    this.graphAdapter.addCells((this.document.netLabels ?? [])
+      .filter(label => layerObjectDisplayed(this.document, label.id))
+      .map(label => makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
         status: resolution.labelStates.get(label.id)?.status
-      })
-    ));
+      }))
+    );
     this.junctionRenderCoordinator.refreshFull(resolution);
+    this.applyLayerObjectStackOrder();
     this.syncSelectionStyles({ resolution });
     this.renderNotes();
     this.transientToolSession.projectActivePreview(
@@ -3301,6 +3540,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.lastPointerPoint ?? this.copyController.anchor
     );
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
+    this.renderLayersPanel();
   }
 
   private renderTransformedDocument(renderSnapshot: TransformRenderSnapshot) {
@@ -3338,6 +3578,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       }));
     });
     this.junctionRenderCoordinator.refreshFull(resolution);
+    this.applyLayerObjectStackOrder();
 
     renderSnapshot.noteIds.forEach((noteId) => {
       const note = (this.document.notes ?? []).find((candidate) => candidate.id === noteId);
@@ -3429,7 +3670,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private sortedLayerCells() {
     const layers = this.layersById();
     return this.document.components
-      .filter((component) => layers.visible.get(this.componentLayerId(component)) !== false)
+      .filter(component => layerObjectDisplayed(this.document, component.id))
       .sort((first, second) => {
         const firstLayer = layers.index.get(this.componentLayerId(first)) ?? 0;
         const secondLayer = layers.index.get(this.componentLayerId(second)) ?? 0;
@@ -3446,6 +3687,19 @@ export class SchematicEditor implements SchematicHostedEditor {
         if (locked) cell.attr({ root: { pointerEvents: "none" } });
         return cell;
       });
+  }
+
+  private applyLayerObjectStackOrder() {
+    let z = 1;
+    const groups = buildSchematicLayerObjectTree(this.document);
+    groups.slice().reverse().forEach((group) => {
+      group.objects.slice().reverse().forEach((object) => {
+        if (!layerObjectDisplayed(this.document, object.id)) return;
+        const cell = this.graphAdapter.getCell(object.id);
+        if (cell) cell.set("z", z);
+        z += 1;
+      });
+    });
   }
 
   private makeComponentCell(instance: ComponentInstance, options: { preview?: boolean } = {}) {
@@ -3479,9 +3733,11 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
+        .filter(coupling => layerObjectDisplayed(this.document, coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
+    this.applyLayerObjectStackOrder();
   }
 
   private renderInductorCouplingEndpoints(couplingId: string) {
@@ -3687,11 +3943,26 @@ export class SchematicEditor implements SchematicHostedEditor {
     const invalidation = this.noteInteractionController.invalidateAgainstDocument();
     if (invalidation.drag) this.removeNoteDragListeners();
     if (invalidation.width) this.removeNoteWidthDragListeners();
-    this.noteLayer.render(this.document.notes ?? [], this.noteLayerState());
+    this.noteLayer.render(this.displayedNotesInStackOrder(), this.noteLayerState());
+  }
+
+  private displayedNotesInStackOrder() {
+    const order = new Map(
+      buildSchematicLayerObjectTree(this.document)
+        .reverse()
+        .flatMap(group => group.objects.reverse().map(object => object.id))
+        .map((id, index) => [id, index])
+    );
+    return (this.document.notes ?? [])
+      .filter(note => layerObjectDisplayed(this.document, note.id))
+      .sort((first, second) => (order.get(first.id) ?? -1) - (order.get(second.id) ?? -1));
   }
 
   private updateNoteLayerTransform() {
-    this.noteLayer.updateTransform(this.document.notes ?? [], this.noteLayerState());
+    this.noteLayer.updateTransform(
+      (this.document.notes ?? []).filter(note => layerObjectDisplayed(this.document, note.id)),
+      this.noteLayerState()
+    );
     if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
       this.updateCopyPreview(this.lastPointerPoint ?? this.copyController.anchor);
     }
@@ -4272,6 +4543,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.propertyPanelController.sync(projection.propertyPanel);
     this.syncMosParams();
     this.syncComponentLayer();
+    this.syncLayerObjectSelection();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
     if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();
     this.lastHadSelection = hasSelection;

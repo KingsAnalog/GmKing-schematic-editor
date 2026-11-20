@@ -173,6 +173,30 @@ describe("schematic incremental render coordinator", () => {
     expect(result.coordinator.isApplyingDocumentGeometry).toBe(false);
   });
 
+  it("does not recreate hidden component or wire cells during incremental refreshes", () => {
+    const resistor = component("component-hidden");
+    const signal = wire("wire-hidden", [{ x: 0, y: 0 }, { x: 40, y: 0 }]);
+    const document = documentWith([signal]);
+    document.components = [resistor];
+    document.layerObjectStates = {
+      [resistor.id]: { visible: false },
+      [signal.id]: { visible: false }
+    };
+    const oldComponent = new FakeCell(resistor.id).set("z", 3) as FakeCell;
+    const oldWire = new FakeCell(signal.id).set("z", 4) as FakeCell;
+    const result = fixture(document, [oldComponent, oldWire]);
+
+    const nextComponent = result.coordinator.replaceComponent(resistor);
+    const nextWire = result.coordinator.replaceWire(signal);
+    result.coordinator.updateWireCellsFromDocument(new Set([signal.id]));
+
+    expect(nextComponent.get("z")).toBe(3);
+    expect(nextWire.get("z")).toBe(4);
+    expect(result.graph.addedCells).toEqual([]);
+    expect(oldComponent.removeCalls).toBe(1);
+    expect(oldWire.removeCalls).toBeGreaterThan(0);
+  });
+
   it("projects existing wire geometry without removing collinear connection vertices", () => {
     const signal = wire("wire-1", [
       { x: 1, y: 1 },

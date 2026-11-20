@@ -211,6 +211,13 @@ export interface SchematicLayer {
   locked: boolean;
 }
 
+export interface SchematicLayerObjectState {
+  visible?: boolean;
+  z?: number;
+}
+
+export type SchematicLayerObjectStates = Record<string, SchematicLayerObjectState>;
+
 export interface SchematicNote {
   rotation?: 0 | 90 | 180 | 270;
   id: string;
@@ -265,6 +272,7 @@ export interface SchematicContent extends SymbolTemplateContext {
   netLabels: NetLabel[];
   notes: SchematicNote[];
   layers?: SchematicLayer[];
+  layerObjectStates?: SchematicLayerObjectStates;
 }
 
 /** Runtime document shape. `junctions` is derived and omitted from durable content. */

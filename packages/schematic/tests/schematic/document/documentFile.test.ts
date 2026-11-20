@@ -227,6 +227,42 @@ describe("single schematic document file codec", () => {
     expect(document.junctions).toEqual([{ x: 999, y: 999 }]);
   });
 
+  it("round trips per-object layer state and omits empty defaults", () => {
+    const document = documentFixture();
+    document.layerObjectStates = {
+      "component-1": { visible: false, z: 3 },
+      horizontal: { z: 2 },
+      "note-1": { visible: true }
+    };
+
+    const serialized = serializeSchematicDocumentFile(document);
+    const restored = parseSchematicDocumentFile(serialized);
+    expect(restored.layerObjectStates).toEqual({
+      "component-1": { visible: false, z: 3 },
+      horizontal: { z: 2 }
+    });
+    expect(serialized).toContain('"layerObjectStates": {"component-1":');
+    expect(serializeSchematicDocumentFile({ ...document, layerObjectStates: {} }))
+      .not.toContain('"layerObjectStates"');
+  });
+
+  it("rejects malformed per-object layer state", () => {
+    const invalidStates: unknown[] = [
+      [],
+      { "component-1": null },
+      { "component-1": { visible: "false" } },
+      { "component-1": { z: "3" } },
+      { "component-1": { locked: true } },
+      { "": { visible: false } },
+      { constructor: { visible: false } }
+    ];
+    invalidStates.forEach((layerObjectStates) => {
+      const file = emptyFile();
+      file.schematic.layerObjectStates = layerObjectStates as never;
+      expectFileError(() => parseValue(file), "invalid-schema");
+    });
+  });
+
   it("keeps empty collections inline and long note strings lossless", () => {
     const emptySerialized = serializeSchematicDocumentFile(emptyFile().schematic);
     const document = documentFixture();

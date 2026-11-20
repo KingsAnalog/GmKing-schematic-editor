@@ -3,6 +3,9 @@ import {
   normalizeSchematicContent
 } from "./document/documentModel";
 import { pointKey } from "./geometry";
+import { junctionId } from "./junctionIdentity";
+import { layerObjectDisplayed } from "./layerObjectStateModel";
+import { buildSchematicLayerObjectTree } from "./layerObjectTreeModel";
 import { renderSchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
@@ -53,23 +56,23 @@ export function renderSchematicDocumentSvg(
   const netLabelStatuses = Object.fromEntries(
     Array.from(topology.netResolution.labelStates, ([id, state]) => [id, state.status])
   );
-  const hiddenLayers = new Set(
-    (document.layers ?? []).filter(layer => layer.visible === false).map(layer => layer.id)
-  );
+  const displayed = (id: string) => layerObjectDisplayed(document, id);
+  const layerObjectOrder = buildSchematicLayerObjectTree(document)
+    .reverse()
+    .flatMap(group => group.objects.reverse().map(object => object.id));
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,
-      components: document.components.filter(component =>
-        !hiddenLayers.has(component.values["layer:id"] ?? "")
-      ),
-      inductorCouplings: document.inductorCouplings,
-      wires: document.wires,
+      components: document.components.filter(component => displayed(component.id)),
+      inductorCouplings: (document.inductorCouplings ?? []).filter(coupling => displayed(coupling.id)),
+      wires: document.wires.filter(wire => displayed(wire.id)),
       connections: document.connections,
-      junctionPoints,
+      junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
       junctionColors,
-      netLabels: document.netLabels,
+      netLabels: document.netLabels.filter(label => displayed(label.id)),
       netLabelStatuses,
-      notes: document.notes
+      notes: document.notes.filter(note => displayed(note.id)),
+      layerObjectOrder
     },
     {
       presentationMode,

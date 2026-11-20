@@ -2,6 +2,7 @@ import { buildVisibleJunctions, presentationJunctions } from "./connectivity";
 import { pointKey } from "./geometry";
 import type { SchematicGraphAdapter, SchematicGraphCell } from "./graphAdapter";
 import { junctionId } from "./junctionIdentity";
+import { layerObjectDisplayed } from "./layerObjectStateModel";
 import { resolveSchematicNets, type NetResolution } from "./netResolution";
 import { pruneJunctionAppearances } from "./networkColorModel";
 import type { Point, SchematicDocument } from "./types";
@@ -74,9 +75,10 @@ export class SchematicJunctionRenderCoordinator<
   }
 
   refreshViews() {
-    const junctions = this.options.getPresentationMode()
+    const junctions = (this.options.getPresentationMode()
       ? presentationJunctions(this.options.document)
-      : this.options.document.junctions;
+      : this.options.document.junctions)
+      .filter(point => layerObjectDisplayed(this.options.document, junctionId(point)));
     const retainedKeys = new Set(junctions.map((point) => pointKey(point)));
 
     Array.from(this.junctionCellIds).forEach((id) => {

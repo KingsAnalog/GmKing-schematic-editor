@@ -206,6 +206,8 @@ export class SchematicNoteLayer {
       const element = this.noteElements.get(note.id) ?? this.createNoteElement(note);
       this.noteElements.set(note.id, element);
       this.syncNoteElement(note, element, state);
+      // Re-append retained elements too, so note stacking follows object order.
+      this.activeDocumentLayer.element.appendChild(element);
     });
 
     this.updateTransform(notes, state);
