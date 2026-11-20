@@ -1,6 +1,6 @@
 import { resolveComponentVisualModel, type ComponentRenderOptions } from "./componentVisualModel";
 import { measureSymbolText } from "./symbolContentModel";
-import { componentCellPosition, componentVisualBounds, unionRects, type Rect } from "./view-geometry";
+import { componentCellPosition, componentVisualBounds, svgPathBounds, unionRects, type Rect } from "./view-geometry";
 import type { ComponentInstance, Point } from "./types";
 
 /** Export bounds include text; selection and pin geometry keep their existing frame. */
@@ -27,6 +27,37 @@ export function componentExportBounds(instance: ComponentInstance, options: Comp
     const ys = corners.map(point => point.y);
     rects.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
   };
+
+  if (instance.type === "polyline") {
+    [
+      { path: model.path, padding: model.symbolStrokeWidth / 2 },
+      { path: model.markerPath, padding: 0 }
+    ].forEach(({ path, padding }) => {
+      const bounds = svgPathBounds(path);
+      if (!bounds) return;
+      const scale = model.artworkScale;
+      const corners = [
+        { x: bounds.x - padding, y: bounds.y - padding },
+        { x: bounds.x + bounds.width + padding, y: bounds.y + bounds.height + padding }
+      ].map(point => {
+        const x = point.x * scale;
+        const y = point.y * scale;
+        return {
+          x: (instance.mirrored ? model.def.size.width - x : x) + offset.x,
+          y: y + offset.y
+        };
+      });
+      const [first, last] = corners;
+      const world = [first, last, { x: first.x, y: last.y }, { x: last.x, y: first.y }]
+        .map(point => rotateAround(point, instance.rotation, center));
+      const xs = world.map(point => point.x);
+      const ys = world.map(point => point.y);
+      rects.push({
+        x: position.x + Math.min(...xs), y: position.y + Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys)
+      });
+    });
+  }
 
   if (model.showRefLabel) {
     const attrs = model.refLabelAttrs;

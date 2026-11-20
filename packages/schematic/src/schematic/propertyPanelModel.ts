@@ -1,7 +1,7 @@
 import type { VoltageSourceField } from "./voltageSourceModel";
 import type { MosArrowView, MosPinView } from "./mosViewModel";
 import type { RectangleSettings } from "./rectangleComponentModel";
-import type { LibraryShapeLineStyle } from "./libraryShapeStyleModel";
+import type { LibraryShapeArrowSize, LibraryShapeArrowType, LibraryShapeLineStyle } from "./libraryShapeStyleModel";
 import type { FilterKind, FunctionBlockTimeDomain } from "./functionBlockModel";
 import type {
   DffActiveLevel,
@@ -134,9 +134,13 @@ export interface SchematicPropertyPanelComponentInput {
     strokeWidth: AggregateValue<number>;
     lineStyle: AggregateValue<LibraryShapeLineStyle>;
     cornerRadius?: AggregateValue<number>;
-    fillEnabled: AggregateValue<boolean>;
-    fillColor: AggregateValue<string>;
-    fillOpacity: AggregateValue<number>;
+    startArrow?: AggregateValue<LibraryShapeArrowType>;
+    endArrow?: AggregateValue<LibraryShapeArrowType>;
+    startArrowSize?: AggregateValue<LibraryShapeArrowSize>;
+    endArrowSize?: AggregateValue<LibraryShapeArrowSize>;
+    fillEnabled?: AggregateValue<boolean>;
+    fillColor?: AggregateValue<string>;
+    fillOpacity?: AggregateValue<number>;
   };
   rectangle?: {
     [Property in keyof RectangleSettings]: AggregateValue<number>;

@@ -7,6 +7,10 @@ export const LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY = "libraryShapeCornerRadius";
 export const LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY = "libraryShapeFillEnabled";
 export const LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY = "libraryShapeFillColor";
 export const LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY = "libraryShapeFillOpacity";
+export const LIBRARY_SHAPE_START_ARROW_VALUE_KEY = "libraryShapeStartArrow";
+export const LIBRARY_SHAPE_END_ARROW_VALUE_KEY = "libraryShapeEndArrow";
+export const LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY = "libraryShapeStartArrowSize";
+export const LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY = "libraryShapeEndArrowSize";
 
 export const LIBRARY_SHAPE_MIN_STROKE_WIDTH = 0.5;
 export const LIBRARY_SHAPE_MAX_STROKE_WIDTH = 40;
@@ -32,6 +36,31 @@ export const LIBRARY_SHAPE_LINE_DASHARRAYS: Readonly<Record<LibraryShapeLineStyl
   dashDot: "12 5 2 5"
 };
 
+export const LIBRARY_SHAPE_ARROW_TYPES = ["none", "filled", "asmeFilled", "open", "stealth", "diamond"] as const;
+export type LibraryShapeArrowType = typeof LIBRARY_SHAPE_ARROW_TYPES[number];
+export const LIBRARY_SHAPE_ARROW_SIZES = ["small", "medium", "large", "extraLarge"] as const;
+export type LibraryShapeArrowSize = typeof LIBRARY_SHAPE_ARROW_SIZES[number];
+export const LIBRARY_SHAPE_ARROW_FIELDS = [
+  ["startArrow", "startArrowSize"], ["endArrow", "endArrowSize"]
+] as const;
+
+export function isLibraryShapeArrowType(value: unknown): value is LibraryShapeArrowType {
+  return LIBRARY_SHAPE_ARROW_TYPES.some(type => type === value);
+}
+
+export function isLibraryShapeArrowSize(value: unknown): value is LibraryShapeArrowSize {
+  return LIBRARY_SHAPE_ARROW_SIZES.some(size => size === value);
+}
+
+function readArrowType(value: string | undefined): LibraryShapeArrowType {
+  if (value === "true") return "filled";
+  return isLibraryShapeArrowType(value) ? value : "none";
+}
+
+function readArrowSize(value: string | undefined): LibraryShapeArrowSize {
+  return isLibraryShapeArrowSize(value) ? value : "medium";
+}
+
 export interface LibraryShapeStyle {
   strokeWidth: number;
   lineStyle: LibraryShapeLineStyle;
@@ -39,6 +68,10 @@ export interface LibraryShapeStyle {
   fillEnabled: boolean;
   fillColor: string;
   fillOpacity: number;
+  startArrow: LibraryShapeArrowType;
+  endArrow: LibraryShapeArrowType;
+  startArrowSize: LibraryShapeArrowSize;
+  endArrowSize: LibraryShapeArrowSize;
 }
 
 export type LibraryShapeStyleProperty = keyof LibraryShapeStyle;
@@ -54,7 +87,11 @@ export const DEFAULT_LIBRARY_SHAPE_STYLE: Readonly<LibraryShapeStyle> = {
   cornerRadius: 0,
   fillEnabled: false,
   fillColor: "#ffffff",
-  fillOpacity: 1
+  fillOpacity: 1,
+  startArrow: "none",
+  endArrow: "none",
+  startArrowSize: "medium",
+  endArrowSize: "medium"
 };
 
 const VALUE_KEYS: Readonly<Record<LibraryShapeStyleProperty, string>> = {
@@ -63,11 +100,32 @@ const VALUE_KEYS: Readonly<Record<LibraryShapeStyleProperty, string>> = {
   cornerRadius: LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY,
   fillEnabled: LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY,
   fillColor: LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY,
-  fillOpacity: LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY
+  fillOpacity: LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY,
+  startArrow: LIBRARY_SHAPE_START_ARROW_VALUE_KEY,
+  endArrow: LIBRARY_SHAPE_END_ARROW_VALUE_KEY,
+  startArrowSize: LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY,
+  endArrowSize: LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY
 };
 
-export function isLibraryShapeType(type: ComponentType) {
-  return type === "rectangle" || type === "triangle";
+export type LibraryShapeType = Extract<ComponentType, "rectangle" | "triangle" | "polyline">;
+
+export function isLibraryShapeType(type: string): type is LibraryShapeType {
+  return type === "rectangle" || type === "triangle" || type === "polyline";
+}
+
+export function supportsLibraryShapeStyle(type: ComponentType, property: LibraryShapeStyleProperty) {
+  if (!isLibraryShapeType(type)) return false;
+  switch (property) {
+    case "cornerRadius": return type === "rectangle";
+    case "startArrow":
+    case "endArrow":
+    case "startArrowSize":
+    case "endArrowSize": return type === "polyline";
+    case "fillEnabled":
+    case "fillColor":
+    case "fillOpacity": return type !== "polyline";
+    default: return true;
+  }
 }
 
 export function isLibraryShapeLineStyle(value: unknown): value is LibraryShapeLineStyle {
@@ -97,7 +155,11 @@ export function libraryShapeStyle(
       ? normalizeLibraryShapeCornerRadius(values[LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY])
         ?? DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius
       : DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius,
-    fillEnabled: values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
+    fillEnabled: component.type !== "polyline" && values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
+    startArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_START_ARROW_VALUE_KEY]) : "none",
+    endArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_END_ARROW_VALUE_KEY]) : "none",
+    startArrowSize: readArrowSize(values[LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY]),
+    endArrowSize: readArrowSize(values[LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY]),
     fillColor: normalizeHexColor(values[LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY])
       ?? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor,
     fillOpacity: normalizeLibraryShapeFillOpacity(values[LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY])
@@ -127,8 +189,7 @@ export function setLibraryShapeStyleProperty(
   property: LibraryShapeStyleProperty,
   value: LibraryShapeStyleValue
 ): LibraryShapeStyleMutationResult {
-  if (!isLibraryShapeType(component.type)
-    || (property === "cornerRadius" && component.type !== "rectangle")) {
+  if (!supportsLibraryShapeStyle(component.type, property)) {
     return { kind: "noop", reason: "unsupported" };
   }
   const key = VALUE_KEYS[property];
@@ -151,6 +212,20 @@ export function setLibraryShapeStyleProperty(
       nextValue = parsed;
       break;
     }
+    case "startArrow":
+    case "endArrow":
+      if (typeof value === "boolean") {
+        nextValue = value ? (current[property] === "none" ? "filled" : current[property]) : "none";
+      } else {
+        if (!isLibraryShapeArrowType(value)) return { kind: "noop", reason: "invalid" };
+        nextValue = value;
+      }
+      break;
+    case "startArrowSize":
+    case "endArrowSize":
+      if (!isLibraryShapeArrowSize(value)) return { kind: "noop", reason: "invalid" };
+      nextValue = value;
+      break;
     case "fillEnabled":
       if (typeof value !== "boolean") return { kind: "noop", reason: "invalid" };
       nextValue = value;

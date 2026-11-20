@@ -19,5 +19,7 @@ describe("device library projection", () => {
     expect(filterDeviceItems("all", "res")[0]).toBe("resistor");
     expect(filterDeviceItems("all", "opamp")).toContain("opAmp");
     expect(filterDeviceItems("passives", "cap")).toEqual(["capacitor"]);
+    expect(getDeviceLibrary("shapes").items).toEqual(["rectangle", "triangle", "polyline"]);
+    expect(filterDeviceItems("shapes", "折线")).toEqual(["polyline"]);
   });
 });

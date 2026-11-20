@@ -8,6 +8,10 @@ import { NOTE_WIDTH_INPUT_MAX, NOTE_WIDTH_INPUT_MIN } from "./notes/noteProperti
 import { PAPER_COLOR_PRESETS, NOTE_BACKGROUND_COLOR_PRESETS } from "../shared/color";
 import { SYMBOL_TEMPLATES } from "./symbolTemplateModel";
 import {
+  DEFAULT_LIBRARY_SHAPE_STYLE,
+  LIBRARY_SHAPE_ARROW_FIELDS,
+  LIBRARY_SHAPE_ARROW_TYPES,
+  LIBRARY_SHAPE_ARROW_SIZES,
   LIBRARY_SHAPE_LINE_STYLE_OPTIONS,
   LIBRARY_SHAPE_MAX_CORNER_RADIUS,
   LIBRARY_SHAPE_MAX_STROKE_WIDTH,
@@ -15,6 +19,8 @@ import {
 } from "./libraryShapeStyleModel";
 
 const SCHEMATIC_COLOR_PRESETS = PAPER_COLOR_PRESETS.filter((preset) => preset.color !== DEFAULT_COMPONENT_COLOR);
+const ARROW_LABELS = { none: "None", filled: "Filled triangle", asmeFilled: "Solid ASME", open: "Open arrow", stealth: "Stealth arrow", diamond: "Filled diamond" } as const;
+const ARROW_SIZE_LABELS = { small: "Small", medium: "Medium", large: "Large", extraLarge: "Extra large" } as const;
 
 export const SCHEMATIC_SYMBOL_COLOR_PRESETS = SCHEMATIC_COLOR_PRESETS;
 export const SCHEMATIC_NETWORK_COLOR_PRESETS = SCHEMATIC_COLOR_PRESETS;
@@ -253,6 +259,28 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
           )
         )
       ),
+      ...LIBRARY_SHAPE_ARROW_FIELDS.flatMap(([typeField, sizeField]) => {
+        const typeLabel = t(`polyline.${typeField}`, typeField === "startArrow" ? "Start arrow" : "End arrow");
+        const sizeLabel = t(`polyline.${sizeField}`, sizeField === "startArrowSize" ? "Start arrow size" : "End arrow size");
+        return [
+          el("label", { class: "property-row", hidden: true },
+            el("span", {}, typeLabel),
+            el("select", { "aria-label": typeLabel, "data-property-library-shape-arrow": typeField },
+              ...LIBRARY_SHAPE_ARROW_TYPES.map(value =>
+                el("option", { value }, t(`polyline.arrow.${value}`, ARROW_LABELS[value]))
+              )
+            )
+          ),
+          el("label", { class: "property-row", hidden: true },
+            el("span", {}, sizeLabel),
+            el("select", { "aria-label": sizeLabel, "data-property-library-shape-arrow": sizeField },
+              ...LIBRARY_SHAPE_ARROW_SIZES.map(value =>
+                el("option", { value }, t(`polyline.arrowSize.${value}`, ARROW_SIZE_LABELS[value]))
+              )
+            )
+          )
+        ];
+      }),
       el("label", { class: "property-row", "data-property-library-shape-corner-radius-row": true, hidden: true },
         el("span", {}, "Corner radius"),
         el("input", {
@@ -378,15 +406,9 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
           "data-property-library-shape-fill-enabled": true
         })
       ),
-      el("label", { class: "property-row" },
-        el("span", {}, "Fill color"),
-        el("span", { class: "property-color-control" },
-          el("input", {
-            type: "color",
-            "aria-label": "Shape fill color",
-            "data-property-library-shape-fill-color": true
-          })
-        )
+      el("div", { class: "property-row" },
+        el("span", {}, t("shape.fillColor", "Fill color")),
+        propertyColorControl(el, "library-shape-fill")
       ),
       el("label", { class: "property-row" },
         el("span", {}, "Fill opacity"),
@@ -677,22 +699,27 @@ function dffControls<T extends object>(el: UiBuilder<T>["el"]) {
   );
 }
 
-function propertyColorControl<T extends object>(el: UiBuilder<T>["el"], target: "network" | "component" | "coupling") {
-  const name = target === "component" ? "symbol" : target;
+function propertyColorControl<T extends object>(el: UiBuilder<T>["el"], target: "network" | "component" | "coupling" | "library-shape-fill") {
+  const isFill = target === "library-shape-fill";
+  const name = isFill ? "fill" : target === "component" ? "symbol" : target;
+  const defaultColor = isFill ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : DEFAULT_COMPONENT_COLOR;
+  const defaultLabel = isFill ? t("shape.defaultFillColor", "White (default)") : "Black (default)";
+  const customLabel = isFill ? t("shape.customFillColor", "Custom fill color")
+    : `Custom ${target === "network" ? "wire or junction" : name} color`;
   const swatch = `data-${target}-color-swatch`;
   return el("div", { class: "property-color-control" },
     el("div", { class: "property-color-swatches", [`data-property-${target}-color-swatches`]: true },
       el("button", {
-        type: "button", class: "property-default-color-swatch", [swatch]: "default", style: `--swatch-color: ${DEFAULT_COMPONENT_COLOR}`,
-        "aria-label": `Use black (default) ${name} color`, title: "Black (default)", "aria-pressed": "false"
+        type: "button", class: "property-default-color-swatch", [swatch]: "default", style: `--swatch-color: ${defaultColor}`,
+        "aria-label": isFill ? defaultLabel : `Use black (default) ${name} color`, title: defaultLabel, "aria-pressed": "false"
       }),
-      ...SCHEMATIC_COLOR_PRESETS.map(preset => el("button", {
+      ...PAPER_COLOR_PRESETS.filter(preset => preset.color !== defaultColor).map(preset => el("button", {
         type: "button", [swatch]: preset.color, style: `--swatch-color: ${preset.color}`,
         "aria-label": `Set ${name} color ${preset.name}`, title: preset.name, "aria-pressed": "false"
       }))
     ),
     el("input", {
-      type: "color", "aria-label": `Custom ${target === "network" ? "wire or junction" : name} color`, title: "Custom color",
+      type: "color", "aria-label": customLabel, title: isFill ? customLabel : "Custom color",
       [`data-property-${target}-color`]: true
     })
   );

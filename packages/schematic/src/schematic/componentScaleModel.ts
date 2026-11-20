@@ -9,7 +9,7 @@ export function componentScale(instance: Pick<ComponentInstance, "scale">): Comp
 
 export function supportsComponentScale(type: ComponentType, scale: unknown): scale is ComponentScale {
   return COMPONENT_SCALES.some(value => value === scale)
-    && (scale !== 0.5 || !["rectangle", "triangle", "spntSwitch"].includes(type));
+    && (scale !== 0.5 || !["rectangle", "triangle", "polyline", "spntSwitch"].includes(type));
 }
 
 export function setComponentScale(instance: ComponentInstance, scale: unknown) {
@@ -28,6 +28,7 @@ export function scaleComponentDefinition(def: ComponentDef, scale: number): Comp
     geometryScale: (def.geometryScale ?? 1) * scale,
     size: { width: def.size.width * scale, height: def.size.height * scale },
     pins: def.pins.map(pin => ({ ...pin, x: pin.x * scale, y: pin.y * scale })),
-    ...(def.bodyPolygon ? { bodyPolygon: def.bodyPolygon.map(point => ({ x: point.x * scale, y: point.y * scale })) } : {})
+    ...(def.bodyPolygon ? { bodyPolygon: def.bodyPolygon.map(point => ({ x: point.x * scale, y: point.y * scale })) } : {}),
+    ...(def.bodyPolyline ? { bodyPolyline: def.bodyPolyline.map(point => ({ x: point.x * scale, y: point.y * scale })) } : {})
   };
 }

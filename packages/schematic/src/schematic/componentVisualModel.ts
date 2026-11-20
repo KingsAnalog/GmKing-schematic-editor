@@ -1,3 +1,4 @@
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { resolveComponentDef } from "./catalog";
 import { componentScale } from "./componentScaleModel";
 import { scaleComponentAppearance } from "./componentScaleVisualModel";
@@ -37,12 +38,12 @@ export function resolveComponentVisualModel(instance: ComponentInstance, options
   return {
     ...appearance,
     artworkScale: scale,
-    terminalLeadPath: instance.type === "rectangle" || instance.type === "triangle"
+    terminalLeadPath: isLibraryShapeType(instance.type)
       ? ""
       : terminalLeadPath.trim(),
     def,
     frameBox,
-    visiblePinIds: instance.type === "rectangle" || instance.type === "triangle"
+    visiblePinIds: isLibraryShapeType(instance.type)
       ? new Set<string>()
       : new Set(def.pins.map(pin => pin.id))
   };

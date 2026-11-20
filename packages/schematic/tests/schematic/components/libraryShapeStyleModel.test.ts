@@ -7,6 +7,7 @@ import {
   DEFAULT_LIBRARY_SHAPE_STYLE,
   LIBRARY_SHAPE_STROKE_WIDTH_VALUE_KEY,
   libraryShapeStyle,
+  libraryShapeStyleValueKey,
   setLibraryShapeStyleProperty,
   type LibraryShapeStyleProperty,
   type LibraryShapeStyleValue
@@ -34,19 +35,12 @@ describe("library shape style model", () => {
     ];
     for (const [property, value, stored] of changes) {
       expect(setLibraryShapeStyleProperty(rectangle, property, value).kind).toBe("changed");
-      const key = {
-        strokeWidth: "libraryShapeStrokeWidth",
-        lineStyle: "libraryShapeLineStyle",
-        cornerRadius: "libraryShapeCornerRadius",
-        fillEnabled: "libraryShapeFillEnabled",
-        fillColor: "libraryShapeFillColor",
-        fillOpacity: "libraryShapeFillOpacity"
-      }[property];
+      const key = libraryShapeStyleValueKey(property);
       expect(rectangle.values[key]).toBe(stored);
     }
     expect(componentValueIssue(rectangle)).toBeNull();
 
-    for (const property of Object.keys(DEFAULT_LIBRARY_SHAPE_STYLE) as LibraryShapeStyleProperty[]) {
+    for (const [property] of changes) {
       expect(setLibraryShapeStyleProperty(
         rectangle,
         property,

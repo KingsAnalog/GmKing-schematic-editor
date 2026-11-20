@@ -77,6 +77,7 @@ export const COMPONENT_ANALYSIS_REGISTRY = {
   transmissionGate: { model: "blackBox" },
   rectangle: { model: "blackBox" },
   triangle: { model: "blackBox" },
+  polyline: { model: "blackBox" },
   integrator: { model: "blackBox" },
   differentiator: { model: "blackBox" },
   delay: { model: "blackBox" },

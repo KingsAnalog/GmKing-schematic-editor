@@ -53,6 +53,7 @@ const TEMPLATE_REF_PREFIXES: Record<ComponentType, string> = {
   transmissionGate: "TG",
   rectangle: "X",
   triangle: "X",
+  polyline: "X",
   integrator: "INT",
   differentiator: "DIF",
   delay: "DLY",

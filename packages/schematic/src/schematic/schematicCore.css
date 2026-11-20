@@ -822,6 +822,11 @@
   cursor: pointer;
 }
 
+.schematic-editor-root .property-color-swatches button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .schematic-editor-root .property-color-swatches button.is-selected,
 .schematic-editor-root .property-color-swatches button[aria-pressed="true"] {
   border-color: var(--schematic-focus);

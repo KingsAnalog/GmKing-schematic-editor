@@ -92,6 +92,7 @@ import {
   dacPentagonSymbol,
   dacSymbol
 } from "./converterSymbols";
+import { polylineFrameSymbol } from "./polylineSymbols";
 import { rectangleFrameSymbol } from "./rectangleSymbols";
 import { triangleFrameSymbol } from "./triangleSymbols";
 import { parseLogicGateSymbol } from "../logicGateModel";
@@ -298,6 +299,7 @@ const SYMBOL_DEFINITIONS: Record<string, SymbolDefinition> = {
     body: (width, height) => rectangleFrameSymbol(width, height, 0),
     strokeWidth: (lineWidth) => 2 * lineWidth
   },
+  polyline: { body: polylineFrameSymbol },
   triangle: {
     body: (width, height) => triangleFrameSymbol(width, height),
     strokeWidth: (lineWidth) => 2 * lineWidth

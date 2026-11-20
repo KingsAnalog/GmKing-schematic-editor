@@ -207,7 +207,7 @@ function buildComponentInput(
   const input: SchematicPropertyPanelComponentInput = {
     ref: aggregateValues(components.map((component) => component.ref)),
     labelVisible: aggregateValues(components.map(componentLabelVisible)),
-    libraryShape: components.every(component => component.type === "rectangle" || component.type === "triangle"),
+    libraryShape: components.every(component => isLibraryShapeType(component.type)),
     color: aggregateValues(components.map(componentCustomColor)),
     scale: {
       label: "Size",
@@ -224,9 +224,17 @@ function buildComponentInput(
       ...(components.every(component => component.type === "rectangle")
         ? { cornerRadius: aggregateValues(styles.map(style => style.cornerRadius)) }
         : {}),
-      fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
-      fillColor: aggregateValues(styles.map(style => style.fillColor)),
-      fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))
+      ...(components.every(component => component.type === "polyline") ? {
+        startArrow: aggregateValues(styles.map(style => style.startArrow)),
+        endArrow: aggregateValues(styles.map(style => style.endArrow)),
+        startArrowSize: aggregateValues(styles.map(style => style.startArrowSize)),
+        endArrowSize: aggregateValues(styles.map(style => style.endArrowSize))
+      } : {}),
+      ...(components.every(component => component.type !== "polyline") ? {
+        fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
+        fillColor: aggregateValues(styles.map(style => style.fillColor)),
+        fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))
+      } : {})
     };
   }
 

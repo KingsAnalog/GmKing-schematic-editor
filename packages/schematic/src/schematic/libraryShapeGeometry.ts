@@ -1,5 +1,6 @@
 import { componentScale } from "./componentScaleModel";
 import { rotatePoint, snapPoint } from "./geometry";
+import { polylinePoints } from "./polylineComponentModel";
 import { rectangleSettings } from "./rectangleComponentModel";
 import { TRIANGLE_VERTICES, triangleSettings } from "./triangleComponentModel";
 import { SYMBOL_GRID_SIZE, type ComponentInstance, type Point } from "./types";
@@ -30,6 +31,9 @@ export function libraryShapeVertices(
   if (instance.type === "triangle") {
     const settings = triangleSettings(instance);
     return TRIANGLE_VERTICES.map(vertex => transformOutlinePoint(instance, center, settings.vertices[vertex]));
+  }
+  if (instance.type === "polyline") {
+    return polylinePoints(instance).map(point => transformOutlinePoint(instance, center, point));
   }
   return [];
 }

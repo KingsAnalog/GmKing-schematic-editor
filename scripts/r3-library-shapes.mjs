@@ -210,6 +210,14 @@ try {
     fill.checked = true;
     fill.dispatchEvent(new Event("change", { bubbles: true }));
     const fillColor = document.querySelector("[data-property-library-shape-fill-color]");
+    const red = document.querySelector('[data-library-shape-fill-color-swatch="#ff0000"]');
+    const white = document.querySelector('[data-library-shape-fill-color-swatch="default"]');
+    red.click();
+    if (fillColor.value !== "#ff0000" || red.getAttribute("aria-pressed") !== "true") throw new Error("red fill swatch did not apply");
+    white.click();
+    if (fillColor.value !== "#ffffff" || white.getAttribute("aria-pressed") !== "true" || fillColor.parentElement.lastElementChild !== fillColor) {
+      throw new Error("fill palette did not restore default white or put the picker last");
+    }
     fillColor.value = "#123abc";
     fillColor.dispatchEvent(new Event("input", { bubbles: true }));
     fillColor.dispatchEvent(new Event("change", { bubbles: true }));
@@ -456,19 +464,25 @@ try {
     const panel = document.querySelector("[data-schematic-property-editor]");
     const bounds = panel?.getBoundingClientRect();
     const color = document.querySelector("[data-property-library-shape-fill-color]");
+    const fillSwatches = [...document.querySelectorAll("[data-library-shape-fill-color-swatch]"), color];
+    const fillPaletteFits = fillSwatches.length > 1 && fillSwatches.every(swatch => {
+      const rect = swatch.getBoundingClientRect();
+      return rect.width > 0 && rect.left >= bounds.left && rect.right <= bounds.right;
+    });
     return {
       viewport: innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       panelX: bounds?.x,
       panelWidth: bounds?.width,
       fillColorDisabled: color?.disabled,
+      fillPaletteFits,
       cornerHidden: document.querySelector("[data-property-library-shape-corner-radius-row]")?.hidden
     };
   });
   if (mobilePanel.viewport !== 375 || mobilePanel.documentWidth > 375
     || mobilePanel.panelX === undefined || mobilePanel.panelX < 0
     || !mobilePanel.panelWidth || mobilePanel.panelX + mobilePanel.panelWidth > 375
-    || mobilePanel.fillColorDisabled || !mobilePanel.cornerHidden) {
+    || mobilePanel.fillColorDisabled || !mobilePanel.fillPaletteFits || !mobilePanel.cornerHidden) {
     throw new Error("mobile shape properties are clipped or inconsistent: " + JSON.stringify(mobilePanel));
   }
   const mobileShot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });

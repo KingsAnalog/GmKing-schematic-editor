@@ -52,6 +52,7 @@ import { operatorSymbol, plusPinRoleSymbols } from "./symbols/operatorSymbols";
 import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbols/switchSymbols";
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
+import { polylineArtwork } from "./symbols/polylineSymbols";
 import { triangleFrameSymbol } from "./symbols/triangleSymbols";
 import { rectangleFrameSymbol } from "./symbols/rectangleSymbols";
 import { isLibraryShapeType, LIBRARY_SHAPE_LINE_DASHARRAYS, libraryShapeStyle } from "./libraryShapeStyleModel";
@@ -506,7 +507,10 @@ export function resolveRazaviComponentVisualModel(
     : "";
   const freeLibraryShape = isLibraryShapeType(def.type);
   const shapeStyle = libraryShapeStyle(instance);
-  const path = def.bodyPolygon
+  const polyline = def.bodyPolyline ? polylineArtwork(def.size.width, def.size.height, def.bodyPolyline, shapeStyle) : null;
+  const path = polyline
+    ? polyline.path
+    : def.bodyPolygon
     ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon)
     : def.type === "rectangle"
       ? rectangleFrameSymbol(def.size.width, def.size.height, 0, shapeStyle.cornerRadius)
@@ -587,7 +591,9 @@ export function resolveRazaviComponentVisualModel(
         clock
       ) ?? symbolAccentPath(def.symbol, def.size.width, def.size.height);
   const dotTerminal = def.type === "inductor" ? inductorDotTerminal(instance) : "none";
-  const markerPath = isPlanarInductor(instance)
+  const markerPath = polyline
+    ? polyline.markers
+    : isPlanarInductor(instance)
     ? planarInductorDot(def.size.width, def.size.height, dotTerminal)
     : dotTerminal !== "none"
     ? inductorDotMarkerSymbol(def.size.width, def.size.height, dotTerminal)
@@ -704,7 +710,7 @@ export function resolveRazaviComponentVisualModel(
     selected,
     deleted,
     preview,
-    resizeHandles: !!options.resizeHandles && (def.type === "rectangle" || def.type === "triangle") && !preview && !options.presentationMode,
+    resizeHandles: !!options.resizeHandles && freeLibraryShape && !preview && !options.presentationMode,
     frameBox,
     showPins,
     visiblePinIds,

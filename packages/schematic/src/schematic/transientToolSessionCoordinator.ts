@@ -20,6 +20,7 @@ export interface SchematicTransientToolSessionHooks {
   clearActiveNetPick(): void;
   clearDeleteHover(): void;
   clearPlacementPreview(): void;
+  clearShapeDraft?(): void;
   clearWirePreview(): void;
   clearCopyPreview(): void;
   clearCopyState(): void;
@@ -65,6 +66,7 @@ export class SchematicTransientToolSessionCoordinator {
 
   transition(mode: ToolMode, reason: TransientToolTransitionReason) {
     const previousMode = this.modeState;
+    this.hooks.clearShapeDraft?.();
     this.modeState = mode;
     if (
       previousMode === "select"
@@ -78,6 +80,7 @@ export class SchematicTransientToolSessionCoordinator {
   }
 
   prepareHistoryRestore() {
+    this.hooks.clearShapeDraft?.();
     this.hooks.clearWireSegmentMove();
     this.hooks.resetWireTool();
     this.hooks.clearActiveNetPick();
@@ -92,6 +95,7 @@ export class SchematicTransientToolSessionCoordinator {
   }
 
   prepareDocumentSwitch(preserveCopyState: boolean) {
+    this.hooks.clearShapeDraft?.();
     this.modeState = "select";
     this.moveBehaviorState = "stretch";
     this.hooks.clearWireSegmentMove();

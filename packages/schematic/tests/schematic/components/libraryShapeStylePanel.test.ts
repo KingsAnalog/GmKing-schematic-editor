@@ -101,6 +101,18 @@ describe("library shape property panel", () => {
     fill.dispatchEvent(new Event("change", { bubbles: true }));
     expect(f.callbacks.onLibraryShapeStyleChange).toHaveBeenCalledWith("fillEnabled", true);
 
+    f.rectangle.values.libraryShapeFillEnabled = "true";
+    f.sync(f.rectangle);
+    const white = f.root.querySelector<HTMLButtonElement>('[data-library-shape-fill-color-swatch="default"]')!;
+    const red = f.root.querySelector<HTMLButtonElement>('[data-library-shape-fill-color-swatch="#ff0000"]')!;
+    const picker = f.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-color]")!;
+    expect(white.getAttribute("aria-pressed")).toBe("true");
+    expect(picker.parentElement?.lastElementChild).toBe(picker);
+    red.click();
+    expect(f.callbacks.onLibraryShapeStyleChange).toHaveBeenCalledWith("fillColor", "#ff0000");
+    white.click();
+    expect(f.callbacks.onLibraryShapeStyleChange).toHaveBeenCalledWith("fillColor", "#ffffff");
+
     const lineStyle = f.root.querySelector<HTMLSelectElement>("[data-property-library-shape-line-style]")!;
     lineStyle.value = "dashed";
     lineStyle.dispatchEvent(new Event("change", { bubbles: true }));

@@ -1,4 +1,5 @@
 import { SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type ComponentType, type ComponentVariantDef, type ComponentVariantId, type PinDef, type TerminalClass } from "./types";
+import { DEFAULT_POLYLINE_POINTS, polylinePoints, polylineSize } from "./polylineComponentModel";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
 import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
 import {
@@ -280,6 +281,7 @@ function component(options: {
   nameFormat?: ComponentDef["nameFormat"];
   centeredRefLabel?: boolean;
   bodyPolygon?: ComponentDef["bodyPolygon"];
+  bodyPolyline?: ComponentDef["bodyPolyline"];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];
@@ -931,6 +933,19 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     bodyPolygon: TRIANGLE_VERTICES.map(vertex => DEFAULT_TRIANGLE_SETTINGS.vertices[vertex]),
     symbol: "triangle"
   }),
+  polyline: component({
+    type: "polyline",
+    label: "POLYLINE",
+    hotLabel: "polyline",
+    aliases: ["折线"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: polylineSize(DEFAULT_POLYLINE_POINTS),
+    pins: [],
+    bodyPolyline: DEFAULT_POLYLINE_POINTS,
+    symbol: "polyline"
+  }),
   annotation: component({
     type: "annotation",
     label: "TXT",
@@ -993,6 +1008,7 @@ export const PALETTE_ORDER: ComponentType[] = [
   "transmissionGate",
   "rectangle",
   "triangle",
+  "polyline",
   "nmos",
   "pmos",
   "npn",
@@ -1029,6 +1045,10 @@ export function resolveComponentPinOptions(component: ComponentInstance | Compon
 
 function resolveComponentConfiguration(component: ComponentInstance | ComponentType): ComponentDef {
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
+  if (base.type === "polyline" && typeof component !== "string") {
+    const points = polylinePoints(component);
+    return { ...base, size: polylineSize(points), bodyPolyline: points };
+  }
   if (base.type === "triangle" && typeof component !== "string") {
     const settings = triangleSettings(component);
     return { ...base, size: triangleSize(settings), pins: [], bodyPolygon: TRIANGLE_VERTICES.map(vertex => settings.vertices[vertex]) };

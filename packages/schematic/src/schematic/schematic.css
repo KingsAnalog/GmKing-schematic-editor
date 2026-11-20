@@ -1405,7 +1405,33 @@
   pointer-events: none;
 }
 
-.schematic-shape-draft[hidden] {
+.schematic-polyline-finish {
+  position: absolute;
+  z-index: 21;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--schematic-ui-line);
+  border-radius: 6px;
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ui-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.schematic-polyline-finish:disabled {
+  color: var(--schematic-ui-muted);
+  cursor: default;
+}
+
+.schematic-polyline-finish:focus-visible {
+  outline: 2px solid var(--schematic-focus);
+  outline-offset: 2px;
+}
+
+.schematic-shape-draft[hidden],
+.schematic-polyline-finish[hidden] {
   display: none;
 }
 

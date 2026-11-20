@@ -10,6 +10,9 @@ import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { PREVIEW_COMPONENT_ID } from "./previewIds";
 import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
+import { polylineFrameSymbol } from "./symbols/polylineSymbols";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { t } from "./schematicI18n";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
@@ -205,7 +208,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
   return {
     ...triangleHandleAttrs,
     root: {
-      "data-layer": model.def.type === "rectangle" || model.def.type === "triangle" ? "shape" : "component"
+      "data-layer": isLibraryShapeType(model.def.type) ? "shape" : "component"
     },
     frame: {
       x: 0,
@@ -213,7 +216,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
       width: model.frameBox.width,
       height: model.frameBox.height,
       fill: "rgba(255, 255, 255, 0)",
-      pointerEvents: model.preview ? "none" : "all",
+      pointerEvents: model.preview || model.def.type === "polyline" ? "none" : "all",
       cursor: model.preview ? "default" : "move",
       stroke: !model.preview && model.selected ? "#005f9e" : "none",
       strokeWidth: !model.preview && model.selected ? 1.5 : 0,
@@ -227,6 +230,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
       stroke: model.isAnnotation ? "none" : model.color,
       strokeWidth: model.symbolStrokeWidth,
       strokeDasharray: model.symbolStrokeDasharray ?? "none",
+      ...(model.def.type === "polyline" ? { strokeLinejoin: "round" } : {}),
       opacity: model.symbolOpacity,
       cursor: model.preview ? "default" : "move",
       pointerEvents: model.preview ? "none" : "auto"
@@ -485,7 +489,8 @@ export function makeComponentCell(
     y: instance.y - model.def.size.height / 2 + frame.y
   };
   const attrs = componentCellAttrsFromModel(model);
-  const libraryShape = instance.type === "rectangle" || instance.type === "triangle";
+  const libraryShape = isLibraryShapeType(instance.type);
+  const polyline = model.def.bodyPolyline;
   const shapeSelectors = [
     "root", "frame", "symbolBody", "deleteCross",
     ...RECTANGLE_RESIZE_HANDLE_SELECTORS,
@@ -494,12 +499,44 @@ export function makeComponentCell(
   const cellAttrs = libraryShape
     ? Object.fromEntries(shapeSelectors.map(selector => [selector, attrs[selector]]))
     : attrs;
+  const polylineMarkup = polyline?.map((point, index) => {
+    const selector = `polylineVertex${index}`;
+    const half = RECTANGLE_RESIZE_HANDLE_SIZE / 2;
+    cellAttrs[selector] = {
+      x: frame.width / 2 + (instance.mirrored ? -point.x : point.x) - half,
+      y: frame.height / 2 + point.y - half,
+      width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
+      fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, cursor: "move",
+      "data-polyline-vertex": index, "data-component-id": instance.id,
+      "aria-label": `${t("polyline.vertex", "Drag vertex")} ${index + 1}`
+    };
+    return { tagName: "rect", selector };
+  });
+  if (polyline && polylineMarkup) {
+    cellAttrs.symbolMarker = attrs.symbolMarker;
+    cellAttrs.polylineHit = {
+      d: polylineFrameSymbol(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
+        polyline.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale }))),
+      transform: attrs.symbolBody.transform, fill: "none",
+      stroke: "transparent", strokeWidth: Math.max(12 / model.artworkScale, model.symbolStrokeWidth),
+      pointerEvents: model.preview ? "none" : "stroke", cursor: "move"
+    };
+    cellAttrs.polylineHandles = { display: model.resizeHandles ? "inline" : "none" };
+  }
   const ElementClass = libraryShape ? LibraryShapeElement : SymbolElement;
   const element = new ElementClass({
     id: model.preview ? PREVIEW_COMPONENT_ID : instance.id,
     position,
     size: { width: frame.width, height: frame.height },
     attrs: cellAttrs,
+    ...(polylineMarkup ? { markup: [
+      { tagName: "rect", selector: "frame" },
+      { tagName: "path", selector: "symbolBody" },
+      { tagName: "path", selector: "symbolMarker" },
+      { tagName: "path", selector: "polylineHit" },
+      { tagName: "path", selector: "deleteCross" },
+      { tagName: "g", selector: "polylineHandles", children: polylineMarkup }
+    ] } : {}),
     ports: {
       groups: {
         pin: {
@@ -522,6 +559,7 @@ export function makeComponentCell(
     }
   });
   element.set("componentId", instance.id);
+  if (polyline) element.set("polyline", true);
   element.set("preview", model.preview);
   element.rotate(instance.rotation, true, { x: instance.x, y: instance.y });
   return element;

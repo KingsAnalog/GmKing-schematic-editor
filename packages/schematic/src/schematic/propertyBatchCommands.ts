@@ -87,7 +87,7 @@ import {
 } from "./rectangleComponentModel";
 import {
   isLibraryShapeStyleProperty,
-  isLibraryShapeType,
+  supportsLibraryShapeStyle,
   setLibraryShapeStyleProperty,
   type LibraryShapeStyleProperty,
   type LibraryShapeStyleValue
@@ -498,9 +498,7 @@ function preflightCommand(
     case "library-shape-style":
       if (!isLibraryShapeStyleProperty(command.property)) return invalidValue();
       if (!onlyComponents(targets)
-        || targets.components.some(component => !isLibraryShapeType(component.type))
-        || (command.property === "cornerRadius"
-          && targets.components.some(component => component.type !== "rectangle"))) {
+        || targets.components.some(component => !supportsLibraryShapeStyle(component.type, command.property))) {
         return incompatibleSelection();
       }
       return preflightComponentMutation(targets, component =>

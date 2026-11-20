@@ -18,6 +18,10 @@ import { DEFAULT_NETWORK_COLOR } from "./networkColorModel";
 import type { RectangleProperty } from "./rectangleComponentModel";
 import {
   isLibraryShapeLineStyle,
+  isLibraryShapeArrowType,
+  isLibraryShapeArrowSize,
+  DEFAULT_LIBRARY_SHAPE_STYLE,
+  LIBRARY_SHAPE_ARROW_FIELDS,
   LIBRARY_SHAPE_LINE_STYLE_OPTIONS,
   type LibraryShapeStyleProperty,
   type LibraryShapeStyleValue
@@ -233,6 +237,7 @@ type PropertyPanelElements = {
   libraryShapeLineStyleSelect: HTMLSelectElement | null;
   libraryShapeCornerRadiusRow: HTMLElement | null;
   libraryShapeCornerRadiusInput: HTMLInputElement | null;
+  libraryShapeArrowSelects: NodeListOf<HTMLSelectElement>;
   libraryShapeFillFields: HTMLElement | null;
   libraryShapeFillEnabledInput: HTMLInputElement | null;
   libraryShapeFillColorInput: HTMLInputElement | null;
@@ -461,6 +466,7 @@ export class SchematicPropertyPanelController {
     const libraryShapeLineStyleSelect = this.root.querySelector<HTMLSelectElement>("[data-property-library-shape-line-style]");
     const libraryShapeCornerRadiusRow = this.root.querySelector<HTMLElement>("[data-property-library-shape-corner-radius-row]");
     const libraryShapeCornerRadiusInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-corner-radius]");
+    const libraryShapeArrowSelects = this.root.querySelectorAll<HTMLSelectElement>("[data-property-library-shape-arrow]");
     const libraryShapeFillFields = this.root.querySelector<HTMLElement>("[data-property-library-shape-fill-fields]");
     const libraryShapeFillEnabledInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-enabled]");
     const libraryShapeFillColorInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-color]");
@@ -589,6 +595,7 @@ export class SchematicPropertyPanelController {
       libraryShapeLineStyleSelect,
       libraryShapeCornerRadiusRow,
       libraryShapeCornerRadiusInput,
+      libraryShapeArrowSelects,
       libraryShapeFillFields,
       libraryShapeFillEnabledInput,
       libraryShapeFillColorInput,
@@ -1105,7 +1112,23 @@ export class SchematicPropertyPanelController {
     const fillOpacity = elements.libraryShapeFillOpacityInput;
     if (!strokeFields || !strokeWidth || !lineStyle || !fillFields || !fillEnabled || !fillColor || !fillOpacity) return;
     strokeFields.hidden = !style;
-    fillFields.hidden = !style;
+    fillFields.hidden = !style?.fillEnabled;
+    elements.libraryShapeArrowSelects.forEach(select => {
+      const field = select.dataset.propertyLibraryShapeArrow;
+      const fields = LIBRARY_SHAPE_ARROW_FIELDS.find(pair => pair.some(property => property === field));
+      if (!fields) return;
+      const [typeField, sizeField] = fields;
+      const isSize = field === sizeField;
+      const option = style?.[isSize ? sizeField : typeField];
+      const type = style?.[typeField];
+      const row = select.closest("label");
+      if (row) row.hidden = !option;
+      select.disabled = !option || (isSize && type?.state === "uniform" && type.value === "none");
+      if (option) {
+        select.querySelector('option[value=""][disabled]')?.remove();
+        this.syncSelectAggregate(select, option);
+      }
+    });
     if (!style) return;
 
     this.syncTextAggregate(strokeWidth, style.strokeWidth, String);
@@ -1119,18 +1142,21 @@ export class SchematicPropertyPanelController {
     if (style.cornerRadius && elements.libraryShapeCornerRadiusInput) {
       this.syncTextAggregate(elements.libraryShapeCornerRadiusInput, style.cornerRadius, String);
     }
+    if (!style.fillEnabled || !style.fillColor || !style.fillOpacity) return;
     this.syncCheckboxAggregate(fillEnabled, style.fillEnabled);
     this.syncColorAggregate(
       fillColor,
       elements.libraryShapeFillColorSwatches,
-      style.fillColor,
-      "#ffffff",
+      style.fillColor.state === "uniform" && style.fillColor.value === DEFAULT_LIBRARY_SHAPE_STYLE.fillColor
+        ? { state: "uniform", value: null } : style.fillColor,
+      DEFAULT_LIBRARY_SHAPE_STYLE.fillColor,
       "libraryShapeFillColorSwatch",
       "default"
     );
     this.syncTextAggregate(fillOpacity, style.fillOpacity, String);
     const fillDisabled = style.fillEnabled.state === "uniform" && !style.fillEnabled.value;
     fillColor.disabled = fillDisabled;
+    elements.libraryShapeFillColorSwatches.forEach(swatch => { swatch.disabled = fillDisabled; });
     fillOpacity.disabled = fillDisabled;
   }
 
@@ -1665,6 +1691,7 @@ export class SchematicPropertyPanelController {
     }
     const cellSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-cell]");
     const libraryShapeLineStyle = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-line-style]");
+    const arrow = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-arrow]");
     const libraryShapeFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-library-shape-fill-enabled]");
     const labelVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-visible]");
     const valueVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-value-visible]");
@@ -1686,6 +1713,14 @@ export class SchematicPropertyPanelController {
     const couplingColorInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-color]");
     if (libraryShapeLineStyle && isLibraryShapeLineStyle(libraryShapeLineStyle.value)) {
       this.callbacks.onLibraryShapeStyleChange?.("lineStyle", libraryShapeLineStyle.value);
+    }
+    const endpoint = arrow?.dataset.propertyLibraryShapeArrow;
+    if (arrow && !arrow.disabled) {
+      if ((endpoint === "startArrow" || endpoint === "endArrow") && isLibraryShapeArrowType(arrow.value)) {
+        this.callbacks.onLibraryShapeStyleChange?.(endpoint, arrow.value);
+      } else if ((endpoint === "startArrowSize" || endpoint === "endArrowSize") && isLibraryShapeArrowSize(arrow.value)) {
+        this.callbacks.onLibraryShapeStyleChange?.(endpoint, arrow.value);
+      }
     }
     if (libraryShapeFillEnabled) {
       this.callbacks.onLibraryShapeStyleChange?.("fillEnabled", this.checkboxValue(libraryShapeFillEnabled));
@@ -1931,6 +1966,15 @@ export class SchematicPropertyPanelController {
       event.preventDefault();
       const value = swatch.dataset.noteBackgroundSwatch;
       this.callbacks.onNoteBackgroundChange?.(value === "none" ? null : value ?? "");
+      return;
+    }
+    const fillSwatch = this.closestInRoot<HTMLButtonElement>(event, "[data-library-shape-fill-color-swatch]");
+    if (fillSwatch) {
+      event.preventDefault();
+      if (!fillSwatch.disabled) {
+        const value = fillSwatch.dataset.libraryShapeFillColorSwatch;
+        this.callbacks.onLibraryShapeStyleChange?.("fillColor", value === "default" ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : value ?? "");
+      }
       return;
     }
     const componentColorSwatch = this.closestInRoot<HTMLButtonElement>(event, "[data-component-color-swatch]");

@@ -4,6 +4,7 @@ import { junctionId, junctionPointFromId } from "../junctionIdentity";
 import type { Point, SchematicDocument } from "../types";
 import { clonePoints, normalizeWirePath, samePath } from "../wire/wireGeometry";
 import { moveJunctionAppearances } from "../networkColorModel";
+import { isLibraryShapeType } from "../libraryShapeStyleModel";
 import { snapLibraryShapeCenterToVertices } from "../libraryShapeGeometry";
 import {
   applySelectedJunctionMoveTopology,
@@ -217,7 +218,7 @@ export function applySelectionMoveTransaction(input: ApplySelectionMoveTransacti
 
     if (componentId !== input.transaction.activeComponentId) {
       const center = { x: start.x + delta.x, y: start.y + delta.y };
-      const next = instance.type === "rectangle" || instance.type === "triangle"
+      const next = isLibraryShapeType(instance.type)
         ? snapLibraryShapeCenterToVertices(instance, center)
         : snapPoint(center);
       if (!samePoint({ x: instance.x, y: instance.y }, next)) {

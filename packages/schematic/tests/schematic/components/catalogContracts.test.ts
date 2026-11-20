@@ -108,6 +108,7 @@ const EXPECTED_ANALYSIS_MODELS: Readonly<Record<ComponentType, AnalysisModel>> =
   transmissionGate: "blackBox",
   rectangle: "blackBox",
   triangle: "blackBox",
+  polyline: "blackBox",
   integrator: "blackBox",
   differentiator: "blackBox",
   delay: "blackBox",
@@ -229,7 +230,8 @@ describe("schematic catalog contracts", () => {
       "switch",
       "transmissionGate",
       "rectangle",
-      "triangle"
+      "triangle",
+      "polyline"
     ]);
     noScalarTypes.forEach((type) => {
       expect(getComponentDef(type).valueKey, type).toBeUndefined();

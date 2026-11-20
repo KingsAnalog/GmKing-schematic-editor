@@ -1,3 +1,5 @@
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { t } from "./schematicI18n";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER } from "./templates";
 import type { InstancePaletteItem } from "./instanceSelector";
@@ -97,7 +99,7 @@ const GROUPS: readonly DeviceLibraryGroup[] = [
     id: "shapes",
     label: "Shapes",
     labelKey: "library.shapes",
-    types: ["rectangle", "triangle"]
+    types: PALETTE_ORDER.filter(isLibraryShapeType)
   }
 ];
 
@@ -139,7 +141,10 @@ export function deviceItemName(item: InstancePaletteItem): string {
 }
 
 export function deviceItemLabel(item: InstancePaletteItem): string {
-  return isSchematicTemplateId(item) ? "Template" : getComponentDef(item).label;
+  if (isSchematicTemplateId(item)) return "Template";
+  if (item === "polyline") return t("library.openShape", "Open shape");
+  if (isLibraryShapeType(item)) return t("library.closedShape", "Closed shape");
+  return getComponentDef(item).label;
 }
 
 export function deviceItemAliases(item: InstancePaletteItem): readonly string[] {

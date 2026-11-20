@@ -3,6 +3,7 @@ import { createSchematicSvgElement } from "./schematicSvgDom";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { getSchematicTemplateDef, isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER, schematicTemplateBounds, type SchematicTemplateId } from "./templates";
 import { resolveComponentVisualModel } from "./componentVisualModel";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { renderComponentSvg } from "./componentSvgRenderer";
 import type { SymbolTemplateId, SymbolTemplateContext } from "./symbolTemplateModel";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
@@ -757,7 +758,7 @@ export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplat
   }, { ...context, preview: true });
   const def = model.def;
   const symbolContent = renderSymbolContentSvg(model.symbolContentLayout);
-  const previewPadding = type === "rectangle" || type === "triangle"
+  const previewPadding = isLibraryShapeType(type)
     ? Math.max(4, model.symbolStrokeWidth)
     : 0;
   const viewBox = `${-previewPadding} ${-previewPadding} ${def.size.width + 2 * previewPadding} ${def.size.height + 2 * previewPadding}`;

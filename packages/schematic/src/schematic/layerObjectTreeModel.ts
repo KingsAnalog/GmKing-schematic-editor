@@ -1,4 +1,5 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { junctionId } from "./junctionIdentity";
 import { normalizeLayers } from "./layers";
 import { layerObjectVisible, layerObjectZ } from "./layerObjectStateModel";
@@ -44,7 +45,7 @@ interface LayerObjectEntry {
 
 function componentNode(document: SchematicDocument, component: ComponentInstance): SchematicLayerObjectNode {
   const definition = resolveComponentDef(component);
-  const shape = component.type === "rectangle" || component.type === "triangle";
+  const shape = isLibraryShapeType(component.type);
   return {
     id: component.id,
     targetId: component.id,

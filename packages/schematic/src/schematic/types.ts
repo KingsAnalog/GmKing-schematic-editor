@@ -55,6 +55,7 @@ export type ComponentType =
   | "transmissionGate"
   | "rectangle"
   | "triangle"
+  | "polyline"
   | "integrator"
   | "differentiator"
   | "delay"
@@ -134,6 +135,7 @@ export interface ComponentDef {
   nameFormat?: ComponentNameFormat;
   centeredRefLabel?: boolean;
   bodyPolygon?: readonly Point[];
+  bodyPolyline?: readonly Point[];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];

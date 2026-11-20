@@ -1,5 +1,6 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
 import { TRIANGLE_VERTICES, TRIANGLE_MAX_COORDINATE, triangleVertexKey, triangleSettings, validTriangleSettings } from "./triangleComponentModel";
+import { parsePolylinePoints, POLYLINE_MAX_POINTS, POLYLINE_POINTS_VALUE_KEY } from "./polylineComponentModel";
 import { GRID_SIZE } from "./types";
 import { COMPONENT_CLOCK_OPTIONS, COMPONENT_CLOCK_VALUE_KEY, supportsOptionalClock } from "./clockModel";
 import { DFF_VALUE_KEYS, DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
@@ -13,6 +14,13 @@ import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
 import { validVoltageSourceFieldValue } from "./voltageSourceModel";
 import {
   isLibraryShapeType,
+  supportsLibraryShapeStyle,
+  LIBRARY_SHAPE_START_ARROW_VALUE_KEY,
+  LIBRARY_SHAPE_END_ARROW_VALUE_KEY,
+  LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY,
+  LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY,
+  LIBRARY_SHAPE_ARROW_TYPES,
+  LIBRARY_SHAPE_ARROW_SIZES,
   LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY,
   LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY,
   LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY,
@@ -64,6 +72,12 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration(INDUCTOR_DOT_VALUE_KEY, ["none", "p", "n"], only("inductor")),
   enumeration(INDUCTOR_TAP_VALUE_KEY, ["none", "top", "bottom"], only("inductor")),
   enumeration(INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS.map(option => option.id), only("inductor")),
+  { key: POLYLINE_POINTS_VALUE_KEY, supports: only("polyline"), valid: value => parsePolylinePoints(value) !== null,
+    expected: `2 to ${POLYLINE_MAX_POINTS} valid local points without consecutive duplicates` },
+  enumeration(LIBRARY_SHAPE_START_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
+  enumeration(LIBRARY_SHAPE_END_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
+  enumeration(LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_ARROW_SIZES, only("polyline")),
+  enumeration(LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_ARROW_SIZES, only("polyline")),
   ...TRIANGLE_VERTICES.flatMap(vertex => (["x", "y"] as const).map(axis => ({
     key: triangleVertexKey(vertex, axis), supports: only("triangle"),
     valid: (value: string) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) % (GRID_SIZE / 2) === 0 && Math.abs(Number(value)) <= TRIANGLE_MAX_COORDINATE,
@@ -98,17 +112,17 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration(
     LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY,
     booleanValues,
-    component => isLibraryShapeType(component.type)
+    component => supportsLibraryShapeStyle(component.type, "fillEnabled")
   ),
   {
     key: LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY,
-    supports: component => isLibraryShapeType(component.type),
+    supports: component => supportsLibraryShapeStyle(component.type, "fillColor"),
     valid: value => normalizeHexColor(value) !== null,
     expected: "a six-digit hex color"
   },
   {
     key: LIBRARY_SHAPE_FILL_OPACITY_VALUE_KEY,
-    supports: component => isLibraryShapeType(component.type),
+    supports: component => supportsLibraryShapeStyle(component.type, "fillOpacity"),
     valid: value => normalizeLibraryShapeFillOpacity(value) !== null,
     expected: "a number from 0 to 1"
   },
