@@ -15,17 +15,11 @@ import { SchematicEventLog } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
 import { getComponentDef } from "./catalog";
 import {
-  RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY,
   RECTANGLE_HEIGHT_VALUE_KEY,
-  RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY,
-  RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY,
-  RECTANGLE_TOP_PIN_COUNT_VALUE_KEY,
   RECTANGLE_WIDTH_VALUE_KEY
 } from "./rectangleComponentModel";
 import {
-  TRIANGLE_EDGES,
   TRIANGLE_VERTICES,
-  trianglePinCountKey,
   triangleVertexKey
 } from "./triangleComponentModel";
 import { defaultLayers, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
@@ -1281,7 +1275,21 @@ export class SchematicEditor implements SchematicHostedEditor {
       preview.setAttribute("class", "schematic-shape-draft-shape");
       overlay.append(preview);
     } else if (draft.kind === "triangle" && draft.points.length > 0) {
-      overlay.append(line([...draft.points, snappedCurrent]));
+      const segments: Array<readonly [Point, Point]> = [];
+      const appendSegment = (start: Point, end: Point) => {
+        if (start.x === end.x && start.y === end.y) return;
+        const duplicate = segments.some(([existingStart, existingEnd]) =>
+          (existingStart.x === start.x && existingStart.y === start.y && existingEnd.x === end.x && existingEnd.y === end.y)
+          || (existingStart.x === end.x && existingStart.y === end.y && existingEnd.x === start.x && existingEnd.y === start.y)
+        );
+        if (duplicate) return;
+        segments.push([start, end]);
+        overlay.append(line([start, end]));
+      };
+      for (let index = 1; index < draft.points.length; index += 1) {
+        appendSegment(draft.points[index - 1], draft.points[index]);
+      }
+      draft.points.forEach(point => appendSegment(point, snappedCurrent));
     }
     const screenSnap = this.worldToScreenPoint(snappedCurrent);
     const snapMarker = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -1323,24 +1331,17 @@ export class SchematicEditor implements SchematicHostedEditor {
     const def = getComponentDef(kind);
     const values: Record<string, string> = {
       ...(def.defaultValues ?? {}),
-      labelVisible: "false",
       "layer:id": this.activeLayerId
     };
     if (kind === "rectangle") {
       values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
       values[RECTANGLE_HEIGHT_VALUE_KEY] = String(height / SYMBOL_GRID_SIZE);
-      values[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY] = "0";
-      values[RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY] = "0";
-      values[RECTANGLE_TOP_PIN_COUNT_VALUE_KEY] = "0";
-      values[RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY] = "0";
     } else {
       const local = points.map(point => ({ x: point.x - center.x, y: point.y - center.y }));
       TRIANGLE_VERTICES.forEach((vertex, index) => {
         values[triangleVertexKey(vertex, "x")] = String(local[index].x);
         values[triangleVertexKey(vertex, "y")] = String(local[index].y);
       });
-      TRIANGLE_EDGES.forEach(edge => { values[trianglePinCountKey(edge)] = "0"; });
-      TRIANGLE_VERTICES.forEach(vertex => { values[`pinVisible:${vertex}`] = "false"; });
     }
     const component: ComponentInstance = {
       id: this.host.idFactory(),

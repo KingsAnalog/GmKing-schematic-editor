@@ -111,10 +111,36 @@ export const SymbolElement = (dia.Element as any).define(
       { tagName: "rect", selector: "rectangleResizeNe" },
       { tagName: "rect", selector: "rectangleResizeSe" },
       { tagName: "rect", selector: "rectangleResizeSw" },
-      ...TRIANGLE_VERTICES.flatMap(vertex => [
-        { tagName: "rect", selector: `triangleResize${vertex.toUpperCase()}` },
-        { tagName: "text", selector: `triangleVertex${vertex.toUpperCase()}` }
-      ])
+      ...TRIANGLE_VERTICES.map(vertex => (
+        { tagName: "rect", selector: `triangleResize${vertex.toUpperCase()}` }
+      ))
+    ]
+  }
+);
+
+/** Pure artwork cells contain no text or port nodes, including invisible ones. */
+export const LibraryShapeElement = (dia.Element as any).define(
+  "eda.LibraryShape",
+  {
+    attrs: {
+      frame: { fill: "transparent", stroke: "none", pointerEvents: "none" },
+      symbolBody: { fill: "none", stroke: "#111111", strokeWidth: 2 * SYMBOL_STROKE_WIDTH },
+      deleteCross: { fill: "none", stroke: "none", strokeWidth: 3, pointerEvents: "none" }
+    }
+  },
+  {
+    markup: [
+      { tagName: "rect", selector: "frame" },
+      { tagName: "path", selector: "symbolBody" },
+      { tagName: "path", selector: "deleteCross" },
+      ...["nw", "ne", "se", "sw"].map(corner => ({
+        tagName: "rect",
+        selector: `rectangleResize${corner[0].toUpperCase()}${corner.slice(1)}`
+      })),
+      ...TRIANGLE_VERTICES.map(vertex => ({
+        tagName: "rect",
+        selector: `triangleResize${vertex.toUpperCase()}`
+      }))
     ]
   }
 );
@@ -137,10 +163,11 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     ? `matrix(${-model.artworkScale} 0 0 ${model.artworkScale} ${model.def.size.width - model.frameBox.x} ${offset.y})`
     : `translate(${offset.x} ${offset.y})${model.artworkScale === 1 ? "" : ` scale(${model.artworkScale})`}`;
   const handleHalf = RECTANGLE_RESIZE_HANDLE_SIZE / 2;
-  const bodyLeft = SYMBOL_GRID_SIZE * model.artworkScale + offset.x;
-  const bodyRight = model.def.size.width - SYMBOL_GRID_SIZE * model.artworkScale + offset.x;
-  const bodyTop = SYMBOL_GRID_SIZE * model.artworkScale + offset.y;
-  const bodyBottom = model.def.size.height - SYMBOL_GRID_SIZE * model.artworkScale + offset.y;
+  const bodyInset = model.def.type === "rectangle" ? 0 : SYMBOL_GRID_SIZE * model.artworkScale;
+  const bodyLeft = bodyInset + offset.x;
+  const bodyRight = model.def.size.width - bodyInset + offset.x;
+  const bodyTop = bodyInset + offset.y;
+  const bodyBottom = model.def.size.height - bodyInset + offset.y;
   const resizeHandleAttrs = (
     corner: "nw" | "ne" | "se" | "sw",
     x: number,
@@ -159,22 +186,19 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     "data-rectangle-resize-handle": corner,
     "data-component-id": model.componentId
   });
-  const triangleHandleAttrs = Object.fromEntries(TRIANGLE_VERTICES.flatMap((vertex, index) => {
+  const triangleHandleAttrs = Object.fromEntries(TRIANGLE_VERTICES.map((vertex, index) => {
     const point = model.def.bodyPolygon?.[index];
     const x = model.def.size.width / 2 + (model.mirrored ? -(point?.x ?? 0) : point?.x ?? 0) + offset.x;
     const y = model.def.size.height / 2 + (point?.y ?? 0) + offset.y;
     const visible = !!point && model.resizeHandles && model.def.type === "triangle";
-    return [
-      [`triangleResize${vertex.toUpperCase()}`, { x: x - handleHalf, y: y - handleHalf,
-        width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
-        fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, opacity: visible ? 1 : 0,
-        pointerEvents: visible ? "all" : "none", cursor: "move",
-        "data-triangle-resize-handle": vertex, "data-component-id": model.componentId,
-        "aria-label": `Drag vertex ${vertex.toUpperCase()}` }],
-      [`triangleVertex${vertex.toUpperCase()}`, { x: x + 7, y: y - 7, text: vertex.toUpperCase(),
-        fill: "#005f9e", fontFamily: SCHEMATIC_FONT_STACK, fontSize: 9,
-        opacity: 0, pointerEvents: "none" }]
-    ];
+    return [`triangleResize${vertex.toUpperCase()}`, {
+      x: x - handleHalf, y: y - handleHalf,
+      width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
+      fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, opacity: visible ? 1 : 0,
+      pointerEvents: visible ? "all" : "none", cursor: "move",
+      "data-triangle-resize-handle": vertex, "data-component-id": model.componentId,
+      "aria-label": `Drag vertex ${vertex.toUpperCase()}`
+    }];
   }));
   return {
     ...triangleHandleAttrs,
@@ -453,11 +477,21 @@ export function makeComponentCell(
     y: instance.y - model.def.size.height / 2 + frame.y
   };
   const attrs = componentCellAttrsFromModel(model);
-  const element = new SymbolElement({
+  const libraryShape = instance.type === "rectangle" || instance.type === "triangle";
+  const shapeSelectors = [
+    "root", "frame", "symbolBody", "deleteCross",
+    "rectangleResizeNw", "rectangleResizeNe", "rectangleResizeSe", "rectangleResizeSw",
+    ...TRIANGLE_VERTICES.map(vertex => `triangleResize${vertex.toUpperCase()}`)
+  ];
+  const cellAttrs = libraryShape
+    ? Object.fromEntries(shapeSelectors.map(selector => [selector, attrs[selector]]))
+    : attrs;
+  const ElementClass = libraryShape ? LibraryShapeElement : SymbolElement;
+  const element = new ElementClass({
     id: model.preview ? PREVIEW_COMPONENT_ID : instance.id,
     position,
     size: { width: frame.width, height: frame.height },
-    attrs,
+    attrs: cellAttrs,
     ports: {
       groups: {
         pin: {
@@ -466,7 +500,7 @@ export function makeComponentCell(
           attrs: { portBody: attrs.portBody }
         }
       },
-      items: instance.type === "rectangle" || instance.type === "triangle" ? [] : model.def.pins.map((pin) => {
+      items: model.def.pins.map((pin) => {
         return {
           id: pin.id,
           group: "pin",

@@ -413,15 +413,13 @@ describe("schematic selection SVG export", () => {
     expect(unicodeHead.attr("refLabelTail/text")).toBe("3");
   });
 
-  it("keeps free rectangle names hidden", () => {
+  it.each(["rectangle", "triangle"] as const)("keeps pure %s cells free of text and ports", type => {
     expect(getComponentDef("resistor").nameFormat).toBe("schematic");
-    expect(getComponentDef("rectangle").nameFormat).toBe("literal");
+    expect(getComponentDef(type).nameFormat).toBe("literal");
 
-    ["PFD", "64C2", "PFD/CP", "÷2"].forEach((ref) => {
-      const cell = makeComponentCell(component("rectangle", ref, 100, 120));
-      expect(cell.attr("centeredRefLabel/opacity"), ref).toBe(0);
-      expect(cell.attr("label/opacity"), ref).toBe(0);
-    });
+    const cell = makeComponentCell(component(type, "PFD/CP", 100, 120));
+    expect(cell.markup).not.toContain('"text"');
+    expect(cell.prop("ports/items")).toEqual([]);
   });
 
   it("applies component label defaults and per-instance visibility overrides", () => {

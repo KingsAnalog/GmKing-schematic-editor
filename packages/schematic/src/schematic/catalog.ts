@@ -1,6 +1,6 @@
 import { SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type ComponentType, type ComponentVariantDef, type ComponentVariantId, type PinDef, type TerminalClass } from "./types";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
-import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize, trianglePinGeometry, triangleVertexPinGeometry } from "./triangleComponentModel";
+import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
 import {
   boxedComponentPinPoint,
   boxedComponentSize,
@@ -18,7 +18,6 @@ import {
 import {
   DEFAULT_RECTANGLE_SETTINGS,
   rectangleDefaultValues,
-  rectanglePins,
   rectangleSettings,
   rectangleSize
 } from "./rectangleComponentModel";
@@ -91,7 +90,6 @@ const MOS_SIZE = { width: 100, height: 100 };
 const OPERATOR_SIZE = { width: 4 * SYMBOL_GRID_SIZE, height: 4 * SYMBOL_GRID_SIZE };
 const ANNOTATION_SIZE = { width: 180, height: 30 };
 const DEFAULT_RECTANGLE_SIZE = rectangleSize(DEFAULT_RECTANGLE_SETTINGS);
-const DEFAULT_RECTANGLE_PINS = rectanglePins(DEFAULT_RECTANGLE_SETTINGS);
 
 const TWO_TERMINAL_PINS: PinDef[] = [
   { id: "p", label: "+", role: "p", x: -40, y: 0 },
@@ -915,9 +913,8 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     valuePrefix: "X",
     defaultValues: rectangleDefaultValues(),
     nameFormat: "literal",
-    centeredRefLabel: true,
     size: DEFAULT_RECTANGLE_SIZE,
-    pins: DEFAULT_RECTANGLE_PINS,
+    pins: [],
     symbol: "rectangle"
   }),
   triangle: component({
@@ -927,16 +924,10 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     aliases: ["tri", "三角形"],
     terminalClass: "dynamic",
     valuePrefix: "X",
-    defaultValues: {
-      ...triangleSettingsValues(DEFAULT_TRIANGLE_SETTINGS),
-      ...Object.fromEntries(TRIANGLE_VERTICES.map(vertex => [`pinVisible:${vertex}`, "false"]))
-    },
-    editablePinVisibility: true,
-    editablePinVisibilityIds: [...TRIANGLE_VERTICES],
+    defaultValues: triangleSettingsValues(DEFAULT_TRIANGLE_SETTINGS),
     nameFormat: "literal",
-    centeredRefLabel: true,
     size: triangleSize(DEFAULT_TRIANGLE_SETTINGS),
-    pins: [...trianglePinGeometry(DEFAULT_TRIANGLE_SETTINGS), ...triangleVertexPinGeometry(DEFAULT_TRIANGLE_SETTINGS)].map(lead => lead.pin),
+    pins: [],
     bodyPolygon: TRIANGLE_VERTICES.map(vertex => DEFAULT_TRIANGLE_SETTINGS.vertices[vertex]),
     symbol: "triangle"
   }),
@@ -1040,7 +1031,7 @@ function resolveComponentConfiguration(component: ComponentInstance | ComponentT
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
   if (base.type === "triangle" && typeof component !== "string") {
     const settings = triangleSettings(component);
-    return { ...base, size: triangleSize(settings), pins: [...trianglePinGeometry(settings), ...triangleVertexPinGeometry(settings)].map(lead => lead.pin), bodyPolygon: TRIANGLE_VERTICES.map(vertex => settings.vertices[vertex]) };
+    return { ...base, size: triangleSize(settings), pins: [], bodyPolygon: TRIANGLE_VERTICES.map(vertex => settings.vertices[vertex]) };
   }
   if (base.type === "inductor" && typeof component !== "string") {
     const tap = inductorTap(component);
@@ -1082,7 +1073,7 @@ function resolveComponentConfiguration(component: ComponentInstance | ComponentT
     return {
       ...base,
       size: rectangleSize(settings),
-      pins: rectanglePins(settings)
+      pins: []
     };
   }
   const requestedVariantId = typeof component === "string"

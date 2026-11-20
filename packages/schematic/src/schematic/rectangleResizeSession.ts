@@ -1,20 +1,22 @@
 import { componentScale } from "./componentScaleModel";
+import { snapLibraryShapeCenterToVertices } from "./libraryShapeGeometry";
 import { buildVisibleJunctions } from "./connectivity";
 import {
   cloneSchematicDocument
 } from "./document/documentModel";
 import { applyNormalizedDocumentWires } from "./document/documentWires";
 import { componentPinPoints } from "./document/documentGeometryModel";
-import { rotatePoint, snapPoint } from "./geometry";
+import { rotatePoint } from "./geometry";
 import { remapNetLabelsAfterWirePathChange } from "./netLabelModel";
 import { pruneJunctionAppearances } from "./networkColorModel";
 import {
   normalizeRectangleSettings,
+  RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID,
   rectangleSettings,
   rectangleSettingsValues,
   type RectangleSettings
 } from "./rectangleComponentModel";
-import { SYMBOL_GRID_SIZE, type Point, type SchematicDocument, type Wire } from "./types";
+import { GRID_SIZE, SYMBOL_GRID_SIZE, type Point, type SchematicDocument, type Wire } from "./types";
 import {
   applyWireMoveTopology,
   captureWireMoveTopology
@@ -107,8 +109,8 @@ export class RectangleResizeSession {
     }, -active.rotation);
     const nextSettings = normalizeRectangleSettings({
       ...active.settings,
-      widthGrid: Math.round(Math.abs(localDelta.x) / (SYMBOL_GRID_SIZE * componentScale(component))),
-      heightGrid: Math.round(Math.abs(localDelta.y) / (SYMBOL_GRID_SIZE * componentScale(component)))
+      widthGrid: Math.round(Math.abs(localDelta.x) / (GRID_SIZE * componentScale(component))) * RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID,
+      heightGrid: Math.round(Math.abs(localDelta.y) / (GRID_SIZE * componentScale(component))) * RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID
     });
     Object.assign(component.values, rectangleSettingsValues(nextSettings));
 
@@ -117,7 +119,7 @@ export class RectangleResizeSession {
       x: signs.x * nextSettings.widthGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2,
       y: signs.y * nextSettings.heightGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2
     }, active.rotation);
-    const center = snapPoint({
+    const center = snapLibraryShapeCenterToVertices(component, {
       x: active.opposite.x + centerOffset.x,
       y: active.opposite.y + centerOffset.y
     });

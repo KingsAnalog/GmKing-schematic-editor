@@ -188,22 +188,18 @@ describe("schematic property panel projection", () => {
     expect(projected?.valueVisible).toEqual(mixed);
   });
 
-  it("projects rectangle dimensions and side pin counts with mixed values", () => {
+  it("projects only pure rectangle dimensions with mixed values", () => {
     const first = fixtureComponent("rectangle", "X1", 40, 40);
     const second = fixtureComponent("rectangle", "X2", 160, 40);
     setRectangleProperty(second, "width", 8);
-    setRectangleProperty(second, "topPins", 3);
 
     const projected = project(targets({ components: [first, second] })).component;
 
     expect(projected?.value).toBeUndefined();
+    expect(projected?.libraryShape).toBe(true);
     expect(projected?.rectangle).toEqual({
       widthGrid: mixed,
-      heightGrid: uniform(2),
-      leftPins: uniform(1),
-      rightPins: uniform(1),
-      topPins: mixed,
-      bottomPins: uniform(0)
+      heightGrid: uniform(2)
     });
   });
 

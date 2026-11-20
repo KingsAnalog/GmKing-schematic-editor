@@ -855,6 +855,10 @@ export class SchematicPropertyPanelController {
       );
       this.syncSelectAggregate(elements.cellSelect, component.cellType);
     }
+    const refRow = elements.refInput.closest<HTMLElement>(".property-row");
+    const labelVisibilityRow = elements.labelVisibilityInput.closest<HTMLElement>(".property-row");
+    if (refRow) refRow.hidden = !!component.libraryShape;
+    if (labelVisibilityRow) labelVisibilityRow.hidden = !!component.libraryShape;
     this.syncTextAggregate(elements.refInput, component.ref);
     this.syncCheckboxAggregate(elements.labelVisibilityInput, component.labelVisible);
     if (elements.valueVisibilityRow) {
@@ -910,16 +914,13 @@ export class SchematicPropertyPanelController {
     }
     this.syncInductor(elements, component.inductor);
     if (elements.rectangleFields) elements.rectangleFields.hidden = !component.rectangle;
-    if (elements.triangleFields) elements.triangleFields.hidden = !component.triangle;
-    if (component.triangle) elements.triangleInputs.forEach(input => {
-      this.syncTextAggregate(input, component.triangle![input.dataset.propertyTrianglePins as TriangleEdge], String);
-    });
-    if (component.rectangle && elements.rectangleInputs.length === 6) {
+    if (elements.triangleFields) elements.triangleFields.hidden = true;
+    if (component.rectangle && elements.rectangleInputs.length === 2) {
       elements.rectangleInputs.forEach((input) => {
         const property = input.dataset.propertyRectangle as RectangleProperty;
         this.syncTextAggregate(
           input,
-          component.rectangle![rectangleSettingsKey(property)],
+          component.rectangle![property === "width" ? "widthGrid" : "heightGrid"],
           String
         );
       });
@@ -1863,14 +1864,6 @@ export class SchematicPropertyPanelController {
   private couplingIdFromPanel() {
     return this.root.querySelector<HTMLElement>("[data-property-coupling-form]")?.dataset.couplingId ?? "";
   }
-}
-
-function rectangleSettingsKey(property: RectangleProperty) {
-  return property === "width"
-    ? "widthGrid"
-    : property === "height"
-      ? "heightGrid"
-      : property;
 }
 
 function isGainPolarity(value: string | undefined): value is GainPolarity {

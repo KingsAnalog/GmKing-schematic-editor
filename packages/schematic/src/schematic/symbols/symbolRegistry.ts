@@ -295,7 +295,7 @@ const SYMBOL_DEFINITIONS: Record<string, SymbolDefinition> = {
   amp: ANALOG_BUFFER_SYMBOL_DEFINITION,
   singleInputGm: SINGLE_INPUT_AMPLIFIER_SYMBOL_DEFINITION,
   rectangle: {
-    body: rectangleFrameSymbol,
+    body: (width, height) => rectangleFrameSymbol(width, height, 0),
     strokeWidth: (lineWidth) => 2 * lineWidth
   },
   triangle: {

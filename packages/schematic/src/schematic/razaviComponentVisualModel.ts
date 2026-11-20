@@ -52,9 +52,7 @@ import { operatorSymbol, plusPinRoleSymbols } from "./symbols/operatorSymbols";
 import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbols/switchSymbols";
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
-import { rectangleLeadSymbol } from "./symbols/rectangleSymbols";
-import { triangleFrameSymbol, triangleLeadSymbol } from "./symbols/triangleSymbols";
-import { triangleSettings, trianglePinGeometry, triangleVertexPinGeometry } from "./triangleComponentModel";
+import { triangleFrameSymbol } from "./symbols/triangleSymbols";
 import { functionBlockGain, supportsFunctionBlockGain, resolveFunctionBlockModel } from "./functionBlockModel";
 import { componentLocalFrameBox, componentSymbolBounds } from "./view-geometry";
 import type { ComponentDef, ComponentInstance, GainPolarity, Point } from "./types";
@@ -564,14 +562,8 @@ export function resolveRazaviComponentVisualModel(
           visible: visiblePinIds.has(pin.id)
         }]))
       )
-    : def.symbol === "triangle"
-      ? triangleLeadSymbol(def.size.width, def.size.height,
-        [...trianglePinGeometry(triangleSettings(instance)), ...triangleVertexPinGeometry(triangleSettings(instance))]
-          .filter(({ pin }) => def.pins.some(active => active.id === pin.id)))
-    : def.symbol === "rectangle"
-      ? rectangleLeadSymbol(def.size.width, def.size.height, def.pins)
-      : functionBlockModel
-        ? functionBlockModel.leadPath
+    : functionBlockModel
+      ? functionBlockModel.leadPath
       : "";
   const levels = normalizeComparatorLevels(instance.values.levels ?? def.defaultValues?.levels);
   const gainPolarity = componentGainPolarity(instance);

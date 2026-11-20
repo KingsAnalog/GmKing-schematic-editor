@@ -194,6 +194,20 @@ function normalizeComponentValues(document: SchematicDocument) {
     if (component.type === "rectangle") {
       Object.assign(component.values, rectangleSettingsValues(rectangleSettings(component)));
     }
+    if (component.type === "rectangle" || component.type === "triangle") {
+      // Pure outlines never retain legacy electrical-pin or invisible-label state.
+      Object.keys(component.values).forEach(key => {
+        if (key === "labelVisible"
+          || key === "valueVisible"
+          || key.startsWith("rectanglePinCount:")
+          || key.startsWith("trianglePinCount:")
+          || key.startsWith("pinVisible:")
+          || key.startsWith("pinSymbolVisible:")
+          || key.startsWith("pinMode:")) {
+          delete component.values[key];
+        }
+      });
+    }
     if (
       !isTransistorComponentType(component.type)
       || component.values[TRANSISTOR_CIRCLE_VALUE_KEY] !== "true"

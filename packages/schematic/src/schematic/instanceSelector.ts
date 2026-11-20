@@ -757,8 +757,12 @@ export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplat
   }, { ...context, preview: true });
   const def = model.def;
   const symbolContent = renderSymbolContentSvg(model.symbolContentLayout);
+  const previewPadding = type === "rectangle" || type === "triangle"
+    ? Math.max(4, model.symbolStrokeWidth)
+    : 0;
+  const viewBox = `${-previewPadding} ${-previewPadding} ${def.size.width + 2 * previewPadding} ${def.size.height + 2 * previewPadding}`;
   return `
-    <svg class="palette-symbol-preview" viewBox="0 0 ${def.size.width} ${def.size.height}" aria-hidden="true" focusable="false">
+    <svg class="palette-symbol-preview" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
       ${model.path ? `<path d="${escapeAttribute(model.path)}" fill="none" stroke="currentColor" stroke-width="${model.symbolStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"></path>` : ""}
       ${model.accentPath ? `<path d="${escapeAttribute(model.accentPath)}" fill="none" stroke="currentColor" stroke-width="${model.accentStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"></path>` : ""}
       ${model.pinMarksPath ? `<path d="${escapeAttribute(model.pinMarksPath)}" fill="none" stroke="currentColor" stroke-width="${SYMBOL_STROKE_WIDTH}" stroke-linecap="square" stroke-linejoin="miter"></path>` : ""}

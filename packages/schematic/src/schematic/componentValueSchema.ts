@@ -1,12 +1,12 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
-import { TRIANGLE_EDGES, TRIANGLE_VERTICES, TRIANGLE_MAX_COORDINATE, TRIANGLE_MAX_PIN_COUNT, trianglePinCountKey, triangleVertexKey, triangleSettings, validTriangleSettings } from "./triangleComponentModel";
+import { TRIANGLE_VERTICES, TRIANGLE_MAX_COORDINATE, triangleVertexKey, triangleSettings, validTriangleSettings } from "./triangleComponentModel";
 import { GRID_SIZE } from "./types";
 import { COMPONENT_CLOCK_OPTIONS, COMPONENT_CLOCK_VALUE_KEY, supportsOptionalClock } from "./clockModel";
 import { DFF_VALUE_KEYS, DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
 import { DIFFERENTIAL_OUTPUTS_SAME_VALUE_KEY } from "./differentialOutputModel";
 import { FILTER_KIND_OPTIONS, FILTER_KIND_VALUE_KEY, FUNCTION_BLOCK_TIME_DOMAIN_OPTIONS, FUNCTION_BLOCK_TIME_DOMAIN_VALUE_KEY, isFunctionBlockType } from "./functionBlockModel";
 import { INDUCTOR_DOT_VALUE_KEY, INDUCTOR_TAP_VALUE_KEY, INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS } from "./inductorModel";
-import { RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY, RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY, RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID, RECTANGLE_MAX_SIZE_GRID, RECTANGLE_MAX_PIN_COUNT } from "./rectangleComponentModel";
+import { RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY, RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID, RECTANGLE_MAX_SIZE_GRID } from "./rectangleComponentModel";
 import { SPNT_POSITION_VALUE_KEY, validSpntPosition } from "./spntSwitchModel";
 import { isTransistorComponentType, TRANSISTOR_CIRCLE_VALUE_KEY } from "./transistorCircleModel";
 import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
@@ -29,14 +29,6 @@ const booleanValues = ["true", "false"] as const;
 function enumeration(key: string, values: readonly string[], supports = anyComponent): ComponentValueRule {
   return { key, supports, valid: value => values.includes(value), expected: `one of ${values.join(", ")}` };
 }
-function integer(key: string, min: number, max: number): ComponentValueRule {
-  return {
-    key, supports: only("rectangle"),
-    valid: value => Number.isInteger(Number(value)) && Number(value) >= min && Number(value) <= max,
-    expected: `an integer from ${min} to ${max}`
-  };
-}
-
 /** Stored keys, capabilities and validation are shared by editing and decoding.
  * Formula/parameter strings use the component's declared value key.
  * Other stored settings must be declared in this table.
@@ -55,15 +47,10 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration(INDUCTOR_DOT_VALUE_KEY, ["none", "p", "n"], only("inductor")),
   enumeration(INDUCTOR_TAP_VALUE_KEY, ["none", "top", "bottom"], only("inductor")),
   enumeration(INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS.map(option => option.id), only("inductor")),
-  ...TRIANGLE_EDGES.map(edge => ({
-    key: trianglePinCountKey(edge), supports: only("triangle"),
-    valid: (value: string) => value.trim() !== "" && Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= TRIANGLE_MAX_PIN_COUNT,
-    expected: `an integer from 0 to ${TRIANGLE_MAX_PIN_COUNT}`
-  })),
   ...TRIANGLE_VERTICES.flatMap(vertex => (["x", "y"] as const).map(axis => ({
     key: triangleVertexKey(vertex, axis), supports: only("triangle"),
-    valid: (value: string) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) % GRID_SIZE === 0 && Math.abs(Number(value)) <= TRIANGLE_MAX_COORDINATE,
-    expected: "a triangle vertex coordinate on the canvas grid"
+    valid: (value: string) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) % (GRID_SIZE / 2) === 0 && Math.abs(Number(value)) <= TRIANGLE_MAX_COORDINATE,
+    expected: "a triangle vertex coordinate on the 5 px local grid"
   }))),
   ...[RECTANGLE_WIDTH_VALUE_KEY, RECTANGLE_HEIGHT_VALUE_KEY].map(key => ({
     key, supports: only("rectangle"),
@@ -74,7 +61,6 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
       && Number.isInteger(Number(value) / RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID),
     expected: `a multiple of ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} from ${RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID} to ${RECTANGLE_MAX_SIZE_GRID}`
   })),
-  ...[RECTANGLE_LEFT_PIN_COUNT_VALUE_KEY, RECTANGLE_RIGHT_PIN_COUNT_VALUE_KEY, RECTANGLE_TOP_PIN_COUNT_VALUE_KEY, RECTANGLE_BOTTOM_PIN_COUNT_VALUE_KEY].map(key => integer(key, 0, RECTANGLE_MAX_PIN_COUNT)),
   { key: SPNT_POSITION_VALUE_KEY, supports: only("spntSwitch"), valid: (value, component) => validSpntPosition(component, value), expected: "a switch position from 0 (open) to the number of throws" },
   { key: "vsource:", prefix: true, supports: only("voltageSource"), valid: (value, _component, key) => validVoltageSourceFieldValue(key, value), expected: "a valid voltage source setting" },
   {
@@ -100,6 +86,18 @@ export function componentSupportsProperty(component: ComponentInstance, key: str
 
 export function componentValueIssue(component: ComponentInstance): ComponentValueIssue | null {
   for (const [key, value] of Object.entries(component.values)) {
+    // Older files could contain electrical configuration on library artwork.
+    // Decoding accepts it once; document restoration removes it before use.
+    if ((component.type === "rectangle" || component.type === "triangle")
+      && (key === "labelVisible"
+        || key === "valueVisible"
+        || key.startsWith("rectanglePinCount:")
+        || key.startsWith("trianglePinCount:")
+        || key.startsWith("pinVisible:")
+        || key.startsWith("pinSymbolVisible:")
+        || key.startsWith("pinMode:"))) {
+      continue;
+    }
     const rule = componentValueRule(key);
     if (!rule) {
       if (key === resolveComponentDef(component).valueKey) continue;

@@ -58,7 +58,6 @@ import {
 } from "./netResolution";
 import { resolvedWireAppearance } from "./wire/wireDecoration";
 import { rectangleSettings } from "./rectangleComponentModel";
-import { TRIANGLE_EDGES, triangleSettings } from "./triangleComponentModel";
 import {
   FILTER_KIND_OPTIONS,
   filterKindForInstance,
@@ -204,6 +203,7 @@ function buildComponentInput(
   const input: SchematicPropertyPanelComponentInput = {
     ref: aggregateValues(components.map((component) => component.ref)),
     labelVisible: aggregateValues(components.map(componentLabelVisible)),
+    libraryShape: components.every(component => component.type === "rectangle" || component.type === "triangle"),
     color: aggregateValues(components.map(componentCustomColor)),
     scale: {
       label: "Size",
@@ -236,17 +236,8 @@ function buildComponentInput(
     const settings = components.map(rectangleSettings);
     input.rectangle = {
       widthGrid: aggregateValues(settings.map((value) => value.widthGrid)),
-      heightGrid: aggregateValues(settings.map((value) => value.heightGrid)),
-      leftPins: aggregateValues(settings.map((value) => value.leftPins)),
-      rightPins: aggregateValues(settings.map((value) => value.rightPins)),
-      topPins: aggregateValues(settings.map((value) => value.topPins)),
-      bottomPins: aggregateValues(settings.map((value) => value.bottomPins))
+      heightGrid: aggregateValues(settings.map((value) => value.heightGrid))
     };
-  }
-
-  if (components.every(component => component.type === "triangle")) {
-    const settings = components.map(triangleSettings);
-    input.triangle = Object.fromEntries(TRIANGLE_EDGES.map(edge => [edge, aggregateValues(settings.map(value => value.pins[edge]))])) as typeof input.triangle;
   }
 
   if (components.every((component) => componentSupportsProperty(component, "filterKind"))) {

@@ -296,36 +296,14 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
         )
       )
     ),
-    el("div", { class: "property-triangle-fields", "data-property-triangle-fields": true, hidden: true }, ...["ab", "bc", "ca"].map(edge =>
-      el("label", { class: "property-row" },
-        el("span", {}, `${edge.toUpperCase()} pins`),
-        el("input", { type: "number", min: "0", max: "1024", step: "1", "data-property-triangle-pins": edge })
-      )
-    )),
     el("div", { class: "property-rectangle-fields", "data-property-rectangle-fields": true, hidden: true },
       el("label", { class: "property-row" },
         el("span", {}, "Width (grid)"),
-        el("input", { type: "number", min: "2", max: "4096", step: "1", "data-property-rectangle": "width" })
+        el("input", { type: "number", min: "0.5", max: "4096", step: "0.5", "data-property-rectangle": "width" })
       ),
       el("label", { class: "property-row" },
         el("span", {}, "Height (grid)"),
-        el("input", { type: "number", min: "2", max: "4096", step: "1", "data-property-rectangle": "height" })
-      ),
-      el("label", { class: "property-row" },
-        el("span", {}, "Left pins"),
-        el("input", { type: "number", min: "0", max: "1024", step: "1", "data-property-rectangle": "leftPins" })
-      ),
-      el("label", { class: "property-row" },
-        el("span", {}, "Right pins"),
-        el("input", { type: "number", min: "0", max: "1024", step: "1", "data-property-rectangle": "rightPins" })
-      ),
-      el("label", { class: "property-row" },
-        el("span", {}, "Top pins"),
-        el("input", { type: "number", min: "0", max: "1024", step: "1", "data-property-rectangle": "topPins" })
-      ),
-      el("label", { class: "property-row" },
-        el("span", {}, "Bottom pins"),
-        el("input", { type: "number", min: "0", max: "1024", step: "1", "data-property-rectangle": "bottomPins" })
+        el("input", { type: "number", min: "0.5", max: "4096", step: "0.5", "data-property-rectangle": "height" })
       )
     ),
     el("div", { class: "property-row", "data-property-time-domain-row": true, hidden: true },

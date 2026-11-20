@@ -1,7 +1,6 @@
 import type { VoltageSourceField } from "./voltageSourceModel";
 import type { MosArrowView, MosPinView } from "./mosViewModel";
 import type { RectangleSettings } from "./rectangleComponentModel";
-import type { TriangleEdge } from "./triangleComponentModel";
 import type { FilterKind, FunctionBlockTimeDomain } from "./functionBlockModel";
 import type {
   DffActiveLevel,
@@ -128,10 +127,11 @@ export interface SchematicPropertyPanelComponentInput {
   mosThickGate?: AggregateValue<boolean>;
   transistorCircle?: AggregateValue<boolean>;
   inductor?: SchematicPropertyPanelInductorInput;
+  /** Pure library shapes have no name, label, or electrical pin controls. */
+  libraryShape?: boolean;
   rectangle?: {
     [Property in keyof RectangleSettings]: AggregateValue<number>;
   };
-  triangle?: Record<TriangleEdge, AggregateValue<number>>;
 }
 
 export interface SchematicPropertyPanelNoteInput {

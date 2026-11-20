@@ -185,6 +185,7 @@ function normalizePanelInput(input: any): SchematicPropertyPanelInput {
           ? undefined
           : aggregate(input.component.cellType),
         cells: input.component.cells,
+        libraryShape: input.component.libraryShape,
         scale: input.component.scale,
         inductorLayout: input.component.inductorLayout === undefined ? undefined : aggregate(input.component.inductorLayout),
         ref: aggregate(input.component.ref),
@@ -391,11 +392,7 @@ function createPropertyPanelFixture(callbacks: ConstructorParameters<typeof Sche
   const rectangleFields = componentForm.appendChild(element(document, "propertyRectangleFields"));
   const rectangleInputs = [
     "width",
-    "height",
-    "leftPins",
-    "rightPins",
-    "topPins",
-    "bottomPins"
+    "height"
   ].map((property) => {
     const input = element(document, "propertyRectangle");
     input.dataset.propertyRectangle = property;
@@ -642,21 +639,18 @@ describe("SchematicPropertyPanelController", () => {
       hasSelection: true,
       component: {
         ...cellInput("rectangle"),
+        libraryShape: true,
         ref: "X1",
         rectangle: {
           widthGrid: 4,
-          heightGrid: 2,
-          leftPins: 1,
-          rightPins: 1,
-          topPins: 0,
-          bottomPins: 0
+          heightGrid: 2
         }
       }
     });
 
     expect(fixture.rectangleFields.hidden).toBe(false);
     expect(fixture.rectangleInputs.map((input) => input.value))
-      .toEqual(["4", "2", "1", "1", "0", "0"]);
+      .toEqual(["4", "2"]);
     const width = fixture.rectangleInputs[0];
     fixture.root.dispatchEvent(new FakeEvent("focusin", width));
     width.value = "8";

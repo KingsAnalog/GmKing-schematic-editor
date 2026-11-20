@@ -3,8 +3,8 @@ import { boxedFrameSymbol, boxedLeadSymbol } from "./boxedSymbols";
 
 export { boxedFrameSymbol, boxedLeadSymbol } from "./boxedSymbols";
 
-export function rectangleFrameSymbol(width: number, height: number) {
-  return boxedFrameSymbol(width, height);
+export function rectangleFrameSymbol(width: number, height: number, inset?: number) {
+  return boxedFrameSymbol(width, height, inset);
 }
 
 export function rectangleLeadSymbol(width: number, height: number, pins: readonly PinDef[]) {
