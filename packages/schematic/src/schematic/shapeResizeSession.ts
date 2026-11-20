@@ -1,4 +1,7 @@
 import { arcPoints, setArcVertex } from "./arcComponentModel";
+import { circleAxisPoints, circleSize, setCircleAxis } from "./circleComponentModel";
+import { isVertexLibraryShapeType, type VertexLibraryShapeType } from "./libraryShapeStyleModel";
+import { polygonPoints, setPolygonVertex } from "./polygonComponentModel";
 import { setPolylineVertex, polylinePoints } from "./polylineComponentModel";
 import { snapPoint } from "./geometry";
 import { t } from "./schematicI18n";
@@ -6,13 +9,28 @@ import { cloneSchematicDocument } from "./document/documentModel";
 import { executeSchematicPropertyBatchCommand } from "./propertyBatchCommands";
 import { RectangleResizeSession, type RectangleResizeHandle } from "./rectangleResizeSession";
 import { isTriangleVertex, type TriangleVertex } from "./triangleComponentModel";
-import type { Point, SchematicDocument } from "./types";
+import type { ComponentInstance, Point, SchematicDocument } from "./types";
 
 export type ShapeResizeHandle = RectangleResizeHandle | TriangleVertex | number;
 
 type VertexResize = { componentId: string; baseline: SchematicDocument } & (
-  { kind: "triangle"; vertex: TriangleVertex } | { kind: "polyline" | "arc"; vertex: number }
+  { kind: "triangle"; vertex: TriangleVertex } | { kind: VertexLibraryShapeType; vertex: number }
 );
+
+const vertexEditors = {
+  arc: { points: arcPoints, set: setArcVertex },
+  polyline: { points: polylinePoints, set: setPolylineVertex },
+  circle: { points: (component: ComponentInstance) => circleAxisPoints(circleSize(component)), set: setCircleAxis },
+  polygon: { points: polygonPoints, set: setPolygonVertex }
+};
+
+const vertexResizeMessages = {
+  triangle: "Triangle reshaped.",
+  arc: "Arc reshaped.",
+  polyline: "Polyline reshaped.",
+  circle: "Ellipse resized.",
+  polygon: "Polygon reshaped."
+};
 
 /** Shares the editor's pointer lifecycle while retaining each shape's geometry rules. */
 export class ShapeResizeSession {
@@ -30,8 +48,8 @@ export class ShapeResizeSession {
       this.vertexResize = { kind: "triangle", componentId, vertex: handle, baseline: cloneSchematicDocument(this.document) };
       return true;
     }
-    if (typeof handle === "number" && (component.type === "polyline" || component.type === "arc")) {
-      const points = component.type === "arc" ? arcPoints(component) : polylinePoints(component);
+    if (typeof handle === "number" && isVertexLibraryShapeType(component.type)) {
+      const points = vertexEditors[component.type].points(component);
       if (!points[handle]) return false;
       this.vertexResize = { kind: component.type, componentId, vertex: handle, baseline: cloneSchematicDocument(this.document) };
       return true;
@@ -50,7 +68,7 @@ export class ShapeResizeSession {
       if (result.kind === "rejected") return { active: true, changed: false, componentId: active.componentId };
     } else {
       const component = next.components.find(item => item.id === active.componentId);
-      const setVertex = active.kind === "arc" ? setArcVertex : setPolylineVertex;
+      const setVertex = vertexEditors[active.kind].set;
       if (!component || !setVertex(component, active.vertex, pointer)) {
         return { active: true, changed: false, componentId: active.componentId };
       }
@@ -64,8 +82,7 @@ export class ShapeResizeSession {
     if (!active) return this.rectangle.commit();
     this.vertexResize = null;
     const changed = JSON.stringify(this.document) !== JSON.stringify(active.baseline);
-    const status = active.kind === "triangle" ? "Triangle reshaped."
-      : active.kind === "arc" ? t("arc.reshaped", "Arc reshaped.") : t("polyline.reshaped", "Polyline reshaped.");
+    const status = t(`${active.kind}.reshaped`, vertexResizeMessages[active.kind]);
     return { kind: "committed" as const, changed, status: changed ? status : "" };
   }
   cancel() {

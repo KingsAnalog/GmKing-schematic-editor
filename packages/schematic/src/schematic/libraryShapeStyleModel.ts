@@ -108,14 +108,19 @@ const VALUE_KEYS: Readonly<Record<LibraryShapeStyleProperty, string>> = {
 };
 
 export type OpenLibraryShapeType = Extract<ComponentType, "polyline" | "arc">;
-export type LibraryShapeType = "rectangle" | "triangle" | OpenLibraryShapeType;
+export type VertexLibraryShapeType = OpenLibraryShapeType | "circle" | "polygon";
+export type LibraryShapeType = "rectangle" | "triangle" | VertexLibraryShapeType;
+
+export function isVertexLibraryShapeType(type: string): type is VertexLibraryShapeType {
+  return type === "circle" || type === "polygon" || isOpenLibraryShapeType(type);
+}
 
 export function isOpenLibraryShapeType(type: string): type is OpenLibraryShapeType {
   return type === "polyline" || type === "arc";
 }
 
 export function isLibraryShapeType(type: string): type is LibraryShapeType {
-  return type === "rectangle" || type === "triangle" || isOpenLibraryShapeType(type);
+  return type === "rectangle" || type === "triangle" || isVertexLibraryShapeType(type);
 }
 
 export function supportsLibraryShapeStyle(type: ComponentType, property: LibraryShapeStyleProperty) {
@@ -125,7 +130,7 @@ export function supportsLibraryShapeStyle(type: ComponentType, property: Library
     case "startArrow":
     case "endArrow":
     case "startArrowSize":
-    case "endArrowSize": return type === "polyline";
+    case "endArrowSize": return isOpenLibraryShapeType(type);
     case "fillEnabled":
     case "fillColor":
     case "fillOpacity": return !isOpenLibraryShapeType(type);
@@ -150,6 +155,7 @@ export function libraryShapeStyle(
   component: Pick<ComponentInstance, "type" | "values">
 ): LibraryShapeStyle {
   const values = component.values;
+  const open = isOpenLibraryShapeType(component.type);
   return {
     strokeWidth: normalizeLibraryShapeStrokeWidth(values[LIBRARY_SHAPE_STROKE_WIDTH_VALUE_KEY])
       ?? DEFAULT_LIBRARY_SHAPE_STYLE.strokeWidth,
@@ -160,9 +166,9 @@ export function libraryShapeStyle(
       ? normalizeLibraryShapeCornerRadius(values[LIBRARY_SHAPE_CORNER_RADIUS_VALUE_KEY])
         ?? DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius
       : DEFAULT_LIBRARY_SHAPE_STYLE.cornerRadius,
-    fillEnabled: !isOpenLibraryShapeType(component.type) && values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
-    startArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_START_ARROW_VALUE_KEY]) : "none",
-    endArrow: component.type === "polyline" ? readArrowType(values[LIBRARY_SHAPE_END_ARROW_VALUE_KEY]) : "none",
+    fillEnabled: !open && values[LIBRARY_SHAPE_FILL_ENABLED_VALUE_KEY] === "true",
+    startArrow: open ? readArrowType(values[LIBRARY_SHAPE_START_ARROW_VALUE_KEY]) : "none",
+    endArrow: open ? readArrowType(values[LIBRARY_SHAPE_END_ARROW_VALUE_KEY]) : "none",
     startArrowSize: readArrowSize(values[LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY]),
     endArrowSize: readArrowSize(values[LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY]),
     fillColor: normalizeHexColor(values[LIBRARY_SHAPE_FILL_COLOR_VALUE_KEY])

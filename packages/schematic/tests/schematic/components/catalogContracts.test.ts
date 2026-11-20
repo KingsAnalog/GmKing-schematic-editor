@@ -110,6 +110,8 @@ const EXPECTED_ANALYSIS_MODELS: Readonly<Record<ComponentType, AnalysisModel>> =
   triangle: "blackBox",
   polyline: "blackBox",
   arc: "blackBox",
+  circle: "blackBox",
+  polygon: "blackBox",
   integrator: "blackBox",
   differentiator: "blackBox",
   delay: "blackBox",
@@ -233,6 +235,8 @@ describe("schematic catalog contracts", () => {
       "rectangle",
       "triangle",
       "polyline",
+      "circle",
+      "polygon",
       "arc"
     ]);
     noScalarTypes.forEach((type) => {

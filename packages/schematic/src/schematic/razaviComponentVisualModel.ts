@@ -52,9 +52,9 @@ import { operatorSymbol, plusPinRoleSymbols } from "./symbols/operatorSymbols";
 import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbols/switchSymbols";
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
-import { quadraticArcSymbol } from "./symbols/arcSymbols";
+import { arcArtwork } from "./symbols/arcSymbols";
 import { polylineArtwork } from "./symbols/polylineSymbols";
-import { triangleFrameSymbol } from "./symbols/triangleSymbols";
+import { closedPolygonPath } from "./symbols/closedShapeSymbols";
 import { rectangleFrameSymbol } from "./symbols/rectangleSymbols";
 import { isLibraryShapeType, LIBRARY_SHAPE_LINE_DASHARRAYS, libraryShapeStyle } from "./libraryShapeStyleModel";
 import { functionBlockGain, supportsFunctionBlockGain, resolveFunctionBlockModel } from "./functionBlockModel";
@@ -508,13 +508,13 @@ export function resolveRazaviComponentVisualModel(
     : "";
   const freeLibraryShape = isLibraryShapeType(def.type);
   const shapeStyle = libraryShapeStyle(instance);
-  const polyline = def.bodyPolyline ? polylineArtwork(def.size.width, def.size.height, def.bodyPolyline, shapeStyle) : null;
-  const path = polyline
-    ? polyline.path
-    : def.bodyArc
-    ? quadraticArcSymbol(def.size.width, def.size.height, def.bodyArc)
+  const openShape = def.bodyPolyline
+    ? polylineArtwork(def.size.width, def.size.height, def.bodyPolyline, shapeStyle)
+    : def.bodyArc ? arcArtwork(def.size.width, def.size.height, def.bodyArc, shapeStyle) : null;
+  const path = openShape
+    ? openShape.path
     : def.bodyPolygon
-    ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon)
+    ? closedPolygonPath(def.size.width, def.size.height, def.bodyPolygon)
     : def.type === "rectangle"
       ? rectangleFrameSymbol(def.size.width, def.size.height, 0, shapeStyle.cornerRadius)
     : isPlanarInductor(instance)
@@ -594,8 +594,8 @@ export function resolveRazaviComponentVisualModel(
         clock
       ) ?? symbolAccentPath(def.symbol, def.size.width, def.size.height);
   const dotTerminal = def.type === "inductor" ? inductorDotTerminal(instance) : "none";
-  const markerPath = polyline
-    ? polyline.markers
+  const markerPath = openShape
+    ? openShape.markers
     : isPlanarInductor(instance)
     ? planarInductorDot(def.size.width, def.size.height, dotTerminal)
     : dotTerminal !== "none"

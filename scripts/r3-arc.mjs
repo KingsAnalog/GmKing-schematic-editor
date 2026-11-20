@@ -22,6 +22,29 @@ async function touch(x, y) {
 }
 
 const pathOnCanvas = () => evaluate(page, () => document.querySelector("[joint-selector='arcHit']")?.getAttribute("d"));
+const arcArtwork = () => evaluate(page, () => {
+  const arc = document.querySelector("[joint-selector='arcHit']").closest("[model-id]");
+  return {
+    shaft: arc.querySelector("[joint-selector='symbolBody']").getAttribute("d"),
+    arrows: arc.querySelector("[joint-selector='symbolMarker']").getAttribute("d") ?? ""
+  };
+});
+async function selectArc() {
+  const selectionPoint = await evaluate(page, () => {
+    const path = document.querySelector("[joint-selector='arcHit']");
+    const point = path.getPointAtLength(path.getTotalLength() * 0.64).matrixTransform(path.getScreenCTM());
+    return { x: point.x, y: point.y };
+  });
+  await click(selectionPoint.x, selectionPoint.y);
+}
+const setArrow = (property, value) => evaluate(page, (field, next) => {
+  const select = document.querySelector(`[data-property-library-shape-arrow="${field}"]`);
+  if (select.disabled || ![...select.options].some(option => option.value === next)) {
+    throw new Error(`Unavailable arc arrow setting: ${field} = ${next}`);
+  }
+  select.value = next;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}, property, value);
 
 try {
   browser = await launchBrowser();
@@ -99,13 +122,56 @@ try {
   assert.equal(await pathOnCanvas(), initial);
   await clickSelector(page, "[data-command='redo']");
   assert.equal(await pathOnCanvas(), reshaped);
+  await selectArc();
+  assert.deepEqual(await arcArtwork(), { shaft: reshaped, arrows: "" });
+  await setArrow("startArrow", "asmeFilled");
+  const firstArrow = await arcArtwork();
+  assert.equal(firstArrow.arrows.match(/M /g).length, 1);
+  assert.notEqual(firstArrow.shaft, reshaped);
+  await setArrow("startArrowSize", "small");
+  await setArrow("endArrow", "diamond");
+  const twoArrows = await arcArtwork();
+  assert.equal(twoArrows.arrows.match(/M /g).length, 2);
+  assert.notEqual(twoArrows.shaft, firstArrow.shaft);
+  await setArrow("endArrowSize", "large");
+  const resized = await arcArtwork();
+  assert.notEqual(resized.arrows, twoArrows.arrows);
+  await clickSelector(page, "[data-command='undo']");
+  assert.deepEqual(await arcArtwork(), twoArrows);
+  await clickSelector(page, "[data-command='redo']");
+  assert.deepEqual(await arcArtwork(), resized);
+  assert.equal(await pathOnCanvas(), reshaped);
 
-  await waitFor(page, () => Object.keys(localStorage).some(key =>
-    key.startsWith("adc-helper-schematic:") && localStorage.getItem(key)?.includes('"arcPoints":')
-  ), "Arc was not saved");
+  await waitFor(page, () => Object.keys(localStorage).some(key => {
+    const value = localStorage.getItem(key);
+    return key.startsWith("adc-helper-schematic:") && value?.includes('"arcPoints":')
+      && value.includes('"libraryShapeStartArrow":"asmeFilled"') && value.includes('"libraryShapeEndArrowSize":"large"');
+  }), "Arc arrows were not saved");
   await navigate(page, server.url);
   await waitFor(page, () => Boolean(document.querySelector("[joint-selector='arcHit']")), "Saved arc was not restored");
   assert.equal(await pathOnCanvas(), reshaped);
+  assert.deepEqual(await arcArtwork(), resized);
+
+  await selectArc();
+  await setArrow("startArrowSize", "medium");
+  await setArrow("endArrow", "asmeFilled");
+  await setArrow("endArrowSize", "medium");
+  const [tightStart, tightEnd, handle] = await handles();
+  const tightThrough = { x: tightStart.x + (tightEnd.x - tightStart.x) / 4, y: tightStart.y - 17 };
+  await mouse("mousePressed", handle.x, handle.y, 1);
+  await mouse("mouseMoved", tightThrough.x, tightThrough.y, 1);
+  await mouse("mouseReleased", tightThrough.x, tightThrough.y);
+  const tightSizes = (await arcArtwork()).arrows.split(" Z").filter(Boolean).map(head => {
+    const [tipX, tipY, x1, y1, x2, y2] = head.match(/-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/gi).map(Number);
+    return {
+      length: Math.hypot((x1 + x2) / 2 - tipX, (y1 + y2) / 2 - tipY),
+      width: Math.hypot(x1 - x2, y1 - y2)
+    };
+  });
+  assert.equal(tightSizes.length, 2);
+  for (const { length, width } of tightSizes) {
+    assert.ok(Math.abs(length - 24) < 1e-6 && Math.abs(width - 16) < 1e-6, JSON.stringify(tightSizes));
+  }
 
   await page.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
   await page.send("Emulation.setTouchEmulationEnabled", { enabled: true });
@@ -133,7 +199,37 @@ try {
   assert.equal(mobile.width, 375);
   assert.match(mobile.path, / Q /);
   assert.equal(mobile.curveHeight, 0, "A collinear third point should commit a straight shape");
-  console.log(JSON.stringify({ ok: true, preview: draft.path, reshaped, mobile }));
+  await evaluate(page, () => {
+    document.querySelector("[data-command='library']").click();
+    document.querySelector("[data-sidebar-tab='properties']").click();
+  });
+  await waitFor(page, () => {
+    const controls = [...document.querySelectorAll("[data-property-library-shape-arrow]")];
+    return controls.length === 4 && controls.every(control => {
+      const { width, left, right } = control.getBoundingClientRect();
+      return width > 0 && left >= 0 && right <= innerWidth;
+    });
+  }, "Dark mobile arc arrow controls did not fit");
+  const contrast = await evaluate(page, () => {
+    const control = document.querySelector("[data-property-library-shape-arrow='endArrow']");
+    const luminance = color => color.match(/\d+/g).slice(0, 3).reduce((sum, channel, index) => {
+      const value = Number(channel) / 255;
+      return sum + [0.2126, 0.7152, 0.0722][index] * (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    }, 0);
+    return ["light", "dark"].map(theme => {
+      document.documentElement.dataset.effectiveTheme = theme;
+      const { color, backgroundColor } = getComputedStyle(control);
+      const [dark, light] = [luminance(color), luminance(backgroundColor)].sort((a, b) => a - b);
+      return (light + 0.05) / (dark + 0.05);
+    });
+  });
+  assert.ok(contrast.every(ratio => ratio >= 4.5), `Low contrast on the arrow control: ${contrast}`);
+  await setArrow("endArrow", "open");
+  assert.match(await evaluate(page, () => {
+    const lastArc = [...document.querySelectorAll("[joint-selector='arcHit']")].at(-1).closest("[model-id]");
+    return lastArc.querySelector("[joint-selector='symbolMarker']").getAttribute("d");
+  }), /^M /);
+  console.log(JSON.stringify({ ok: true, preview: draft.path, reshaped, tightSizes, mobile }));
 } finally {
   page?.close();
   await browser?.close();

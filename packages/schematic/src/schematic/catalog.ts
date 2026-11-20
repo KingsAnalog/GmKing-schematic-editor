@@ -1,5 +1,8 @@
 import { SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type ComponentType, type ComponentVariantDef, type ComponentVariantId, type PinDef, type TerminalClass } from "./types";
 import { arcPoints, arcSize, DEFAULT_ARC_POINTS } from "./arcComponentModel";
+import { circleSize } from "./circleComponentModel";
+import { libraryPathSize } from "./libraryPathPoints";
+import { DEFAULT_POLYGON_POINTS, polygonPoints } from "./polygonComponentModel";
 import { DEFAULT_POLYLINE_POINTS, polylinePoints, polylineSize } from "./polylineComponentModel";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
 import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
@@ -948,6 +951,31 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     bodyPolyline: DEFAULT_POLYLINE_POINTS,
     symbol: "polyline"
   }),
+  circle: component({
+    type: "circle",
+    label: "CIRCLE",
+    hotLabel: "circle",
+    aliases: ["ellipse", "圆", "圆形", "椭圆"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: circleSize({ values: {} }),
+    pins: [],
+    symbol: "circle"
+  }),
+  polygon: component({
+    type: "polygon",
+    label: "POLYGON",
+    hotLabel: "polygon",
+    aliases: ["多边形"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: libraryPathSize(DEFAULT_POLYGON_POINTS),
+    pins: [],
+    bodyPolygon: DEFAULT_POLYGON_POINTS,
+    symbol: "polygon"
+  }),
   arc: component({
     type: "arc",
     label: "ARC",
@@ -1023,6 +1051,8 @@ export const PALETTE_ORDER: ComponentType[] = [
   "transmissionGate",
   "rectangle",
   "triangle",
+  "circle",
+  "polygon",
   "polyline",
   "arc",
   "nmos",
@@ -1061,6 +1091,13 @@ export function resolveComponentPinOptions(component: ComponentInstance | Compon
 
 function resolveComponentConfiguration(component: ComponentInstance | ComponentType): ComponentDef {
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
+  if (base.type === "circle" && typeof component !== "string") {
+    return { ...base, size: circleSize(component) };
+  }
+  if (base.type === "polygon" && typeof component !== "string") {
+    const points = polygonPoints(component);
+    return { ...base, size: libraryPathSize(points), bodyPolygon: points };
+  }
   if (base.type === "arc" && typeof component !== "string") {
     const points = arcPoints(component);
     return { ...base, size: arcSize(points), bodyArc: points };

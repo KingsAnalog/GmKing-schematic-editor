@@ -456,10 +456,17 @@ try {
   await evaluate(page, () => document.querySelector("[data-command='library']")?.click());
   await waitFor(page, () => document.querySelector("[data-schematic-shell]")?.classList.contains("is-left-panel-visible"),
     "mobile left drawer did not open");
+  await waitFor(page, () => {
+    const tab = document.querySelector("[data-sidebar-tab='properties']");
+    const rect = tab?.getBoundingClientRect();
+    return Boolean(rect?.width && tab.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)));
+  }, "mobile Properties tab is not yet clickable");
   await clickSelector(page, "[data-sidebar-tab='properties']");
-  await waitFor(page, () => document.querySelector("[data-property-library-shape-fill-fields]")?.hidden === false,
-    "mobile shape properties did not open");
-  await new Promise(resolve => setTimeout(resolve, 400));
+  await waitFor(page, () => {
+    const fields = document.querySelector("[data-property-library-shape-fill-fields]");
+    const panel = document.querySelector("[data-schematic-property-editor]")?.getBoundingClientRect();
+    return !fields?.hidden && panel?.width > 0 && panel.left >= 0;
+  }, "mobile shape properties did not open");
   const mobilePanel = await evaluate(page, () => {
     const panel = document.querySelector("[data-schematic-property-editor]");
     const bounds = panel?.getBoundingClientRect();

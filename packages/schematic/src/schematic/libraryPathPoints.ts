@@ -37,6 +37,13 @@ export function parseLibraryPathPoints(value: string, options: PathPointOptions 
   return validPathPoints(points, options) ? points : null;
 }
 
+export function libraryPathSize(points: readonly Point[]) {
+  return {
+    width: Math.max(GRID_SIZE, ...points.map(point => 2 * Math.abs(point.x))),
+    height: Math.max(GRID_SIZE, ...points.map(point => 2 * Math.abs(point.y)))
+  };
+}
+
 function boundsCenter(points: readonly Point[]) {
   const xs = points.map(point => point.x);
   const ys = points.map(point => point.y);

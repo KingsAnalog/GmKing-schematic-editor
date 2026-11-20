@@ -1,5 +1,5 @@
-import { createLibraryPathGeometry, LIBRARY_PATH_MAX_POINTS, parseLibraryPathPoints, setLibraryPathVertex } from "./libraryPathPoints";
-import { GRID_SIZE, type ComponentInstance, type Point } from "./types";
+import { createLibraryPathGeometry, LIBRARY_PATH_MAX_POINTS, libraryPathSize, parseLibraryPathPoints, setLibraryPathVertex } from "./libraryPathPoints";
+import type { ComponentInstance, Point } from "./types";
 
 export const POLYLINE_POINTS_VALUE_KEY = "polylinePoints";
 export const POLYLINE_MAX_POINTS = LIBRARY_PATH_MAX_POINTS;
@@ -14,12 +14,7 @@ export function polylinePoints(component: Pick<ComponentInstance, "values">): re
   return (value === undefined ? null : parsePolylinePoints(value)) ?? DEFAULT_POLYLINE_POINTS;
 }
 
-export function polylineSize(points: readonly Point[]) {
-  return {
-    width: Math.max(GRID_SIZE, ...points.map(point => 2 * Math.abs(point.x))),
-    height: Math.max(GRID_SIZE, ...points.map(point => 2 * Math.abs(point.y)))
-  };
-}
+export const polylineSize = libraryPathSize;
 
 export function createPolylineGeometry(points: readonly Point[]) {
   return createLibraryPathGeometry(points, POLYLINE_POINTS_VALUE_KEY);

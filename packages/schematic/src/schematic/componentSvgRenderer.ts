@@ -38,7 +38,7 @@ export function renderComponentSvg(
       stroke: model.isAnnotation ? "none" : model.color,
       strokeWidth: model.symbolStrokeWidth,
       strokeDasharray: model.symbolStrokeDasharray ?? "none",
-      ...(model.def.type === "polyline" ? { strokeLinejoin: "round" } : {}),
+      ...(model.def.type === "polyline" || model.def.type === "polygon" ? { strokeLinejoin: "round" } : {}),
       opacity: model.symbolOpacity
     }),
     renderPath("symbolAccent", model.accentPath, {

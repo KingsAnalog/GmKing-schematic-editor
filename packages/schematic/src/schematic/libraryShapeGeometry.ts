@@ -1,6 +1,7 @@
 import { componentScale } from "./componentScaleModel";
 import { rotatePoint, snapPoint } from "./geometry";
 import { arcPoints } from "./arcComponentModel";
+import { polygonPoints } from "./polygonComponentModel";
 import { polylinePoints } from "./polylineComponentModel";
 import { rectangleSettings } from "./rectangleComponentModel";
 import { TRIANGLE_VERTICES, triangleSettings } from "./triangleComponentModel";
@@ -36,6 +37,9 @@ export function libraryShapeVertices(
   if (instance.type === "arc") {
     return arcPoints(instance).map(point => transformOutlinePoint(instance, center, point));
   }
+  if (instance.type === "polygon") {
+    return polygonPoints(instance).map(point => transformOutlinePoint(instance, center, point));
+  }
   if (instance.type === "polyline") {
     return polylinePoints(instance).map(point => transformOutlinePoint(instance, center, point));
   }
@@ -44,6 +48,10 @@ export function libraryShapeVertices(
 
 /** Apply the outline vertices' shared grid correction to the stored cell center. */
 export function snapLibraryShapeCenterToVertices(instance: ComponentInstance, center: Point): Point {
+  if (instance.type === "circle") {
+    const delta = snapPoint({ x: center.x - instance.x, y: center.y - instance.y });
+    return { x: instance.x + delta.x, y: instance.y + delta.y };
+  }
   const outline = libraryShapeVertices(instance, center);
   const vertices = instance.type === "arc" ? outline.slice(0, 2) : outline;
   if (vertices.length === 0) return snapPoint(center);

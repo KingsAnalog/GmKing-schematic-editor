@@ -1,6 +1,8 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
 import { TRIANGLE_VERTICES, TRIANGLE_MAX_COORDINATE, triangleVertexKey, triangleSettings, validTriangleSettings } from "./triangleComponentModel";
 import { ARC_POINTS_VALUE_KEY, parseArcPoints } from "./arcComponentModel";
+import { CIRCLE_RADIUS_VALUE_KEYS, parseCircleRadius } from "./circleComponentModel";
+import { POLYGON_POINTS_VALUE_KEY, parsePolygonPoints } from "./polygonComponentModel";
 import { parsePolylinePoints, POLYLINE_MAX_POINTS, POLYLINE_POINTS_VALUE_KEY } from "./polylineComponentModel";
 import { GRID_SIZE } from "./types";
 import { COMPONENT_CLOCK_OPTIONS, COMPONENT_CLOCK_VALUE_KEY, supportsOptionalClock } from "./clockModel";
@@ -15,6 +17,7 @@ import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
 import { validVoltageSourceFieldValue } from "./voltageSourceModel";
 import {
   isLibraryShapeType,
+  isOpenLibraryShapeType,
   supportsLibraryShapeStyle,
   LIBRARY_SHAPE_START_ARROW_VALUE_KEY,
   LIBRARY_SHAPE_END_ARROW_VALUE_KEY,
@@ -75,12 +78,18 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration(INDUCTOR_LAYOUT_VALUE_KEY, INDUCTOR_LAYOUT_OPTIONS.map(option => option.id), only("inductor")),
   { key: POLYLINE_POINTS_VALUE_KEY, supports: only("polyline"), valid: value => parsePolylinePoints(value) !== null,
     expected: `2 to ${POLYLINE_MAX_POINTS} valid local points without consecutive duplicates` },
+  ...Object.values(CIRCLE_RADIUS_VALUE_KEYS).map(key => ({
+    key, supports: only("circle"), valid: (value: string) => parseCircleRadius(value) !== null,
+    expected: "a radius within the supported shape dimensions"
+  })),
+  { key: POLYGON_POINTS_VALUE_KEY, supports: only("polygon"), valid: value => parsePolygonPoints(value) !== null,
+    expected: "three or more distinct, non-collinear local polygon vertices" },
   { key: ARC_POINTS_VALUE_KEY, supports: only("arc"), valid: value => parseArcPoints(value) !== null,
     expected: "three local points with distinct endpoints within the supported arc bounds" },
-  enumeration(LIBRARY_SHAPE_START_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
-  enumeration(LIBRARY_SHAPE_END_ARROW_VALUE_KEY, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], only("polyline")),
-  enumeration(LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_ARROW_SIZES, only("polyline")),
-  enumeration(LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_ARROW_SIZES, only("polyline")),
+  ...[LIBRARY_SHAPE_START_ARROW_VALUE_KEY, LIBRARY_SHAPE_END_ARROW_VALUE_KEY].map(key =>
+    enumeration(key, [...LIBRARY_SHAPE_ARROW_TYPES, ...booleanValues], component => isOpenLibraryShapeType(component.type))),
+  ...[LIBRARY_SHAPE_START_ARROW_SIZE_VALUE_KEY, LIBRARY_SHAPE_END_ARROW_SIZE_VALUE_KEY].map(key =>
+    enumeration(key, LIBRARY_SHAPE_ARROW_SIZES, component => isOpenLibraryShapeType(component.type))),
   ...TRIANGLE_VERTICES.flatMap(vertex => (["x", "y"] as const).map(axis => ({
     key: triangleVertexKey(vertex, axis), supports: only("triangle"),
     valid: (value: string) => value.trim() !== "" && Number.isFinite(Number(value)) && Number(value) % (GRID_SIZE / 2) === 0 && Math.abs(Number(value)) <= TRIANGLE_MAX_COORDINATE,

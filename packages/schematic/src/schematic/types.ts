@@ -57,6 +57,8 @@ export type ComponentType =
   | "triangle"
   | "polyline"
   | "arc"
+  | "circle"
+  | "polygon"
   | "integrator"
   | "differentiator"
   | "delay"

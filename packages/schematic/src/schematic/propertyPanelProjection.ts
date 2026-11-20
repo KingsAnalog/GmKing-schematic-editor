@@ -225,7 +225,7 @@ function buildComponentInput(
       ...(components.every(component => component.type === "rectangle")
         ? { cornerRadius: aggregateValues(styles.map(style => style.cornerRadius)) }
         : {}),
-      ...(components.every(component => component.type === "polyline") ? {
+      ...(components.every(component => isOpenLibraryShapeType(component.type)) ? {
         startArrow: aggregateValues(styles.map(style => style.startArrow)),
         endArrow: aggregateValues(styles.map(style => style.endArrow)),
         startArrowSize: aggregateValues(styles.map(style => style.startArrowSize)),

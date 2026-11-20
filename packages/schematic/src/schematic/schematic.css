@@ -1405,7 +1405,7 @@
   pointer-events: none;
 }
 
-.schematic-polyline-finish {
+.schematic-shape-finish {
   position: absolute;
   z-index: 21;
   inset-block-start: 12px;
@@ -1420,18 +1420,18 @@
   cursor: pointer;
 }
 
-.schematic-polyline-finish:disabled {
+.schematic-shape-finish:disabled {
   color: var(--schematic-ui-muted);
   cursor: default;
 }
 
-.schematic-polyline-finish:focus-visible {
+.schematic-shape-finish:focus-visible {
   outline: 2px solid var(--schematic-focus);
   outline-offset: 2px;
 }
 
 .schematic-shape-draft[hidden],
-.schematic-polyline-finish[hidden] {
+.schematic-shape-finish[hidden] {
   display: none;
 }
 

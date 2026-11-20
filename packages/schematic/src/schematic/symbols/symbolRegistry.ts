@@ -92,6 +92,8 @@ import {
   dacPentagonSymbol,
   dacSymbol
 } from "./converterSymbols";
+import { DEFAULT_POLYGON_POINTS } from "../polygonComponentModel";
+import { closedPolygonPath, ellipseSymbol } from "./closedShapeSymbols";
 import { quadraticArcSymbol } from "./arcSymbols";
 import { polylineFrameSymbol } from "./polylineSymbols";
 import { rectangleFrameSymbol } from "./rectangleSymbols";
@@ -302,6 +304,8 @@ const SYMBOL_DEFINITIONS: Record<string, SymbolDefinition> = {
   },
   polyline: { body: polylineFrameSymbol },
   arc: { body: quadraticArcSymbol },
+  circle: { body: ellipseSymbol },
+  polygon: { body: (width, height) => closedPolygonPath(width, height, DEFAULT_POLYGON_POINTS) },
   triangle: {
     body: (width, height) => triangleFrameSymbol(width, height),
     strokeWidth: (lineWidth) => 2 * lineWidth

@@ -2,7 +2,7 @@ import { resolveComponentDef } from "./catalog";
 import { scaleComponentDefinition } from "./componentScaleModel";
 import { quadraticArc } from "./arcGeometry";
 import { polylineFrameSymbol } from "./symbols/polylineSymbols";
-import { triangleFrameSymbol } from "./symbols/triangleSymbols";
+import { closedPolygonPath } from "./symbols/closedShapeSymbols";
 import { rotatePoint, snapPoint } from "./geometry";
 import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { snapLibraryShapeCenterToVertices } from "./libraryShapeGeometry";
@@ -278,7 +278,7 @@ function componentPathBounds(def: ComponentDef): { rect: Rect; padding: number }
   if (def.bodyArc) return [{ rect: componentFrameBox(def), padding: symbolStrokeWidth(def.symbol) / 2 }];
   return [
     { data: def.bodyPolyline ? polylineFrameSymbol(def.size.width, def.size.height, def.bodyPolyline)
-      : def.bodyPolygon ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon) : symbolPath(def.symbol, def.size.width, def.size.height), padding: symbolStrokeWidth(def.symbol) / 2 },
+      : def.bodyPolygon ? closedPolygonPath(def.size.width, def.size.height, def.bodyPolygon) : symbolPath(def.symbol, def.size.width, def.size.height), padding: symbolStrokeWidth(def.symbol) / 2 },
     { data: symbolAccentPath(def.symbol, def.size.width, def.size.height), padding: symbolAccentStrokeWidth(def.symbol) / 2 },
     { data: symbolMarkerPath(def.symbol, def.size.width, def.size.height), padding: 0 }
   ]

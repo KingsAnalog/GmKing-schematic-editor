@@ -9,7 +9,7 @@ export function componentScale(instance: Pick<ComponentInstance, "scale">): Comp
 
 export function supportsComponentScale(type: ComponentType, scale: unknown): scale is ComponentScale {
   return COMPONENT_SCALES.some(value => value === scale)
-    && (scale !== 0.5 || !["rectangle", "triangle", "polyline", "arc", "spntSwitch"].includes(type));
+    && (scale !== 0.5 || !["rectangle", "triangle", "polyline", "arc", "polygon", "spntSwitch"].includes(type));
 }
 
 export function setComponentScale(instance: ComponentInstance, scale: unknown) {

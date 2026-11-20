@@ -14,9 +14,12 @@ import { RightDockController, type RightDockState, type RightDockView } from "./
 import { SchematicEventLog } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
 import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
+import { createCircleGeometry } from "./circleComponentModel";
+import { LIBRARY_PATH_MAX_POINTS } from "./libraryPathPoints";
+import { createPolygonGeometry } from "./polygonComponentModel";
 import { quadraticArcSymbol } from "./symbols/arcSymbols";
-import { createPolylineGeometry, POLYLINE_MAX_POINTS } from "./polylineComponentModel";
-import { isLibraryShapeType, isOpenLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
+import { createPolylineGeometry } from "./polylineComponentModel";
+import { isLibraryShapeType, isVertexLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
 import { t } from "./schematicI18n";
 import { getComponentDef } from "./catalog";
 import { RECTANGLE_RESIZE_HANDLE_SELECTORS } from "./componentRenderer";
@@ -260,6 +263,17 @@ const FIT_BOUNDS_MARGIN = 28;
 const NOTE_COMMIT_DEBOUNCE_MS = 400;
 // Shape creation follows the visible 10 px canvas grid.
 const LIBRARY_SHAPE_DRAW_GRID_SIZE = GRID_SIZE;
+const VERTEX_SHAPE_GEOMETRY = {
+  arc: createArcGeometry,
+  circle: createCircleGeometry,
+  polygon: createPolygonGeometry,
+  polyline: createPolylineGeometry
+};
+const SHAPE_FINISH_MIN_VERTICES = { polyline: 2, polygon: 3 };
+
+function isPathDraft(kind: LibraryShapeType | undefined): kind is keyof typeof SHAPE_FINISH_MIN_VERTICES {
+  return kind === "polyline" || kind === "polygon";
+}
 
 type SchematicEditorOptions = SchematicEditorMountElements;
 type MoveBehavior = SelectionMoveBehavior;
@@ -302,7 +316,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private libraryShapeDraw: { kind: LibraryShapeType; points: Point[] } | null = null;
   private libraryShapeDragStart: Point | null = null;
   private shapeDraftOverlay: SVGSVGElement | null = null;
-  private polylineFinishButton: HTMLButtonElement | null = null;
+  private shapeFinishButton: HTMLButtonElement | null = null;
   private placementPointerStart: { x: number; y: number; blank: boolean; maxDistance: number } | null = null;
   private lastLoggedStatus = "";
   private lastHadSelection = false;
@@ -377,10 +391,11 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private readonly handleShapeResizePointerDown = (event: PointerEvent) => {
     const handle = (event.target as Element | null)?.closest<SVGElement>(
-      "[data-rectangle-resize-handle], [data-triangle-resize-handle], [data-polyline-vertex], [data-arc-vertex]"
+      "[data-rectangle-resize-handle], [data-triangle-resize-handle], [data-shape-vertex]"
     );
     if (
       !handle
+      || this.libraryShapeDraw
       || event.button !== 0
       || this.transientToolSession.mode !== "select"
       || this.selectionSession.selectedIds.size !== 1
@@ -389,7 +404,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     const componentId = handle.getAttribute("data-component-id") ?? "";
-    const vertex = handle.getAttribute("data-polyline-vertex") ?? handle.getAttribute("data-arc-vertex");
+    const vertex = handle.getAttribute("data-shape-vertex");
     const resizeHandle: ShapeResizeHandle = vertex === null
       ? (handle.getAttribute("data-rectangle-resize-handle") ?? handle.getAttribute("data-triangle-resize-handle")) as ShapeResizeHandle
       : Number(vertex);
@@ -1233,9 +1248,11 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (this.shapeDraftOverlay) this.shapeDraftOverlay.removeAttribute("hidden");
     this.options.shellEl.classList.add("is-drawing-shape");
     const layout = this.options.layout;
-    if (isOpenLibraryShapeType(kind) && layout?.isNarrow?.()) layout.closePanel("left");
-    if (kind === "polyline") {
-      const button = this.ensurePolylineFinishButton();
+    if (isVertexLibraryShapeType(kind) && layout?.isNarrow?.()) layout.closePanel("left");
+    if (isPathDraft(kind)) {
+      const button = this.ensureShapeFinishButton();
+      button.className = `schematic-shape-finish schematic-${kind}-finish`;
+      button.textContent = kind === "polyline" ? t("polyline.finish", "Finish polyline") : t("polygon.finish", "Finish polygon");
       button.hidden = false;
       button.disabled = true;
     }
@@ -1243,7 +1260,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       rectangle: "Rectangle: click the first grid point, then drag or click the opposite point. Esc cancels.",
       triangle: "Triangle: click three grid points. Esc cancels.",
       polyline: t("polyline.draw", "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels."),
-      arc: t("arc.firstPoint", "Arc: click the left endpoint.")
+      arc: t("arc.firstPoint", "Arc: click the left endpoint."),
+      circle: t("circle.drawCenter", "Circle: click a grid point to set the center."),
+      polygon: t("polygon.draw", "Polygon: add vertices, then click the first point, press Enter, or choose Finish polygon. Esc cancels.")
     };
     this.setStatus(instructions[kind]);
     this.focusCanvas();
@@ -1253,7 +1272,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const { signal } = this.lifecycleController;
     this.options.paperEl.addEventListener("pointerdown", (event) => {
       const draft = this.libraryShapeDraw;
-      if (!draft || event.button !== 0 || event.target === this.polylineFinishButton) return;
+      if (!draft || event.button !== 0 || event.target === this.shapeFinishButton) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       const point = this.libraryShapeSnap(this.localPointFromClient(event.clientX, event.clientY));
@@ -1267,13 +1286,18 @@ export class SchematicEditor implements SchematicHostedEditor {
         }
         return;
       }
-      if (draft.kind === "polyline") {
-        const previous = draft.points.at(-1);
-        if (draft.points.length < POLYLINE_MAX_POINTS && (!previous || pointKey(previous) !== pointKey(point))) {
+      if (isPathDraft(draft.kind)) {
+        this.placePathPoint(draft.kind, draft.points, point);
+        return;
+      }
+      if (draft.kind === "circle") {
+        if (draft.points.length === 0) {
           draft.points.push(point);
+          this.previewLibraryShapeDraw(point);
+          this.setStatus(t("circle.drawRadius", "Circle: move to preview and click to set the radius."));
+        } else {
+          this.finishLibraryShapeDraw([draft.points[0], point]);
         }
-        if (this.polylineFinishButton) this.polylineFinishButton.disabled = draft.points.length < 2;
-        this.previewLibraryShapeDraw(point);
         return;
       }
       if (draft.kind === "arc") {
@@ -1285,15 +1309,15 @@ export class SchematicEditor implements SchematicHostedEditor {
       else this.previewLibraryShapeDraw(point);
     }, { capture: true, signal });
     this.options.paperEl.addEventListener("click", (event) => {
-      if (!this.libraryShapeDraw || event.target === this.polylineFinishButton) return;
+      if (!this.libraryShapeDraw || event.target === this.shapeFinishButton) return;
       event.preventDefault();
       event.stopImmediatePropagation();
     }, { capture: true, signal });
     this.options.paperEl.addEventListener("dblclick", (event) => {
-      if (!this.libraryShapeDraw || event.target === this.polylineFinishButton) return;
+      if (!this.libraryShapeDraw || event.target === this.shapeFinishButton) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      this.finishPolylineDraw();
+      this.finishPathDraw();
     }, { capture: true, signal });
     this.options.paperEl.addEventListener("pointermove", (event) => {
       if (!this.libraryShapeDraw) return;
@@ -1310,6 +1334,21 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.finishLibraryShapeDraw([start, end]);
       }
     }, { signal });
+  }
+
+  private placePathPoint(kind: keyof typeof SHAPE_FINISH_MIN_VERTICES, points: Point[], point: Point) {
+    const minimum = SHAPE_FINISH_MIN_VERTICES[kind];
+    const key = pointKey(point);
+    if (kind === "polygon" && points.length >= minimum && pointKey(points[0]) === key) {
+      this.finishPathDraw();
+      return;
+    }
+    const from = kind === "polygon" ? 0 : Math.max(0, points.length - 1);
+    if (points.length < LIBRARY_PATH_MAX_POINTS && !points.slice(from).some(vertex => pointKey(vertex) === key)) {
+      points.push(point);
+    }
+    if (this.shapeFinishButton) this.shapeFinishButton.disabled = points.length < minimum;
+    this.previewLibraryShapeDraw(point);
   }
 
   private placeArcPoint(points: Point[], point: Point) {
@@ -1330,27 +1369,27 @@ export class SchematicEditor implements SchematicHostedEditor {
       : t("arc.throughPoint", "Arc: click the third point on the curve."));
   }
 
-  private ensurePolylineFinishButton() {
-    if (this.polylineFinishButton) return this.polylineFinishButton;
+  private ensureShapeFinishButton() {
+    if (this.shapeFinishButton) return this.shapeFinishButton;
     const button = this.host.ownerDocument.createElement("button");
     button.type = "button";
-    button.className = "schematic-polyline-finish";
-    button.textContent = t("polyline.finish", "Finish polyline");
     const { signal } = this.lifecycleController;
     button.addEventListener("pointerdown", event => event.stopPropagation(), { signal });
     button.addEventListener("mousedown", event => event.stopPropagation(), { signal });
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.finishPolylineDraw();
+      this.finishPathDraw();
     }, { signal });
     this.options.paperEl.append(button);
-    this.polylineFinishButton = button;
+    this.shapeFinishButton = button;
     return button;
   }
 
-  private finishPolylineDraw() {
+  private finishPathDraw() {
     const draft = this.libraryShapeDraw;
-    if (draft?.kind === "polyline" && draft.points.length >= 2) this.finishLibraryShapeDraw(draft.points);
+    if (draft && isPathDraft(draft.kind) && draft.points.length >= SHAPE_FINISH_MIN_VERTICES[draft.kind]) {
+      this.finishLibraryShapeDraw(draft.points);
+    }
   }
 
   private libraryShapeSnap(point: Point) {
@@ -1403,11 +1442,27 @@ export class SchematicEditor implements SchematicHostedEditor {
       preview.setAttribute("height", String(Math.max(0, bottomRight.y - topLeft.y)));
       preview.setAttribute("class", "schematic-shape-draft-shape");
       overlay.append(preview);
-    } else if (draft.kind === "polyline" && draft.points.length > 0) {
-      const last = draft.points.at(-1)!;
-      if (draft.points.length > 1) overlay.append(line(draft.points));
-      if (draft.points.length < POLYLINE_MAX_POINTS && pointKey(last) !== pointKey(snappedCurrent)) {
-        overlay.append(line([last, snappedCurrent]));
+    } else if (draft.kind === "circle" && draft.points.length > 0) {
+      const center = this.worldToScreenPoint(draft.points[0]);
+      const edge = this.worldToScreenPoint(snappedCurrent);
+      const preview = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+      preview.setAttribute("cx", String(center.x));
+      preview.setAttribute("cy", String(center.y));
+      preview.setAttribute("r", String(Math.hypot(edge.x - center.x, edge.y - center.y)));
+      preview.setAttribute("class", "schematic-shape-draft-shape");
+      overlay.append(preview);
+    } else if (isPathDraft(draft.kind) && draft.points.length > 0) {
+      const { points } = draft;
+      const first = points[0];
+      const last = points.at(-1)!;
+      const atFirst = pointKey(first) === pointKey(snappedCurrent);
+      const atLast = pointKey(last) === pointKey(snappedCurrent);
+      if (points.length > 1) overlay.append(line(points));
+      if (draft.kind === "polyline") {
+        if (points.length < LIBRARY_PATH_MAX_POINTS && !atLast) overlay.append(line([last, snappedCurrent]));
+      } else {
+        if (!atLast && !(atFirst && points.length === 2)) overlay.append(line([last, snappedCurrent]));
+        if (!atFirst && points.length >= 2 && !(atLast && points.length === 2)) overlay.append(line([snappedCurrent, first]));
       }
     } else if (draft.kind === "arc" && draft.points.length > 0) {
       const arc = [...draft.points, snappedCurrent];
@@ -1451,7 +1506,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private clearLibraryShapeDraw() {
     this.libraryShapeDraw = null;
     this.libraryShapeDragStart = null;
-    if (this.polylineFinishButton) this.polylineFinishButton.hidden = true;
+    if (this.shapeFinishButton) this.shapeFinishButton.hidden = true;
     if (this.shapeDraftOverlay) {
       this.shapeDraftOverlay.setAttribute("hidden", "");
       this.shapeDraftOverlay.replaceChildren();
@@ -1463,11 +1518,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     const draft = this.libraryShapeDraw;
     if (!draft) return;
     const kind = draft.kind;
-    const geometry = kind === "arc" ? createArcGeometry(points) : kind === "polyline" ? createPolylineGeometry(points) : null;
-    if (isOpenLibraryShapeType(kind) && !geometry) {
-      this.setStatus(kind === "arc"
-        ? t("arc.invalid", "Choose a third point within the supported drawing area.")
-        : t("polyline.outOfRange", "Polyline exceeds the supported dimensions."));
+    const geometry = isVertexLibraryShapeType(kind) ? VERTEX_SHAPE_GEOMETRY[kind](points) : null;
+    if (isVertexLibraryShapeType(kind) && !geometry) {
+      const invalid = {
+        arc: t("arc.invalid", "Choose a third point within the supported drawing area."),
+        circle: t("circle.invalidRadius", "Choose a different radius point within the supported dimensions."),
+        polygon: t("polygon.invalid", "Choose at least three non-collinear vertices within the supported dimensions."),
+        polyline: t("polyline.outOfRange", "Polyline exceeds the supported dimensions.")
+      };
+      this.setStatus(invalid[kind]);
       return;
     }
     this.clearLibraryShapeDraw();
@@ -1523,7 +1582,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       rectangle: "Rectangle created.",
       triangle: "Triangle created.",
       polyline: t("polyline.created", "Polyline created."),
-      arc: t("arc.created", "Arc created.")
+      arc: t("arc.created", "Arc created."),
+      circle: t("circle.created", "Circle created. Drag the handles to resize it into an ellipse."),
+      polygon: t("polygon.created", "Polygon created.")
     };
     this.setStatus(created[kind]);
   }
@@ -2250,10 +2311,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (!ownsKeyboardTarget) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
-    if (key === "enter" && !editable && this.libraryShapeDraw?.kind === "polyline") {
+    if (key === "enter" && !editable && isPathDraft(this.libraryShapeDraw?.kind)) {
       event.preventDefault();
       event.stopPropagation();
-      this.finishPolylineDraw();
+      this.finishPathDraw();
       return;
     }
     if (key === "escape" && this.libraryShapeDraw) {
@@ -4525,9 +4586,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       const componentId = cell.get("componentId");
       if (!componentId) return;
       const selected = componentId === selectedShape?.id && !this.presentationMode;
-      const openShape = cell.get("openShape");
-      if (typeof openShape === "string" && isOpenLibraryShapeType(openShape)) {
-        cell.attr(`${openShape}Handles/display`, selected ? "inline" : "none");
+      const vertexShape = cell.get("vertexShape");
+      if (typeof vertexShape === "string" && isVertexLibraryShapeType(vertexShape)) {
+        cell.attr(`${vertexShape}Handles/display`, selected ? "inline" : "none");
         return;
       }
       const visible = selected && selectedShape?.type === "rectangle";

@@ -10,8 +10,10 @@ import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { PREVIEW_COMPONENT_ID } from "./previewIds";
 import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
+import { quadraticArcSymbol } from "./symbols/arcSymbols";
 import { polylineFrameSymbol } from "./symbols/polylineSymbols";
-import { isLibraryShapeType, isOpenLibraryShapeType } from "./libraryShapeStyleModel";
+import { circleAxisPoints } from "./circleComponentModel";
+import { isLibraryShapeType, isOpenLibraryShapeType, isVertexLibraryShapeType } from "./libraryShapeStyleModel";
 import { t } from "./schematicI18n";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
 import { SCHEMATIC_FONT_STACK } from "./schematicFont";
@@ -230,7 +232,7 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
       stroke: model.isAnnotation ? "none" : model.color,
       strokeWidth: model.symbolStrokeWidth,
       strokeDasharray: model.symbolStrokeDasharray ?? "none",
-      ...(model.def.type === "polyline" ? { strokeLinejoin: "round" } : {}),
+      ...(model.def.type === "polyline" || model.def.type === "polygon" ? { strokeLinejoin: "round" } : {}),
       opacity: model.symbolOpacity,
       cursor: model.preview ? "default" : "move",
       pointerEvents: model.preview ? "none" : "auto"
@@ -490,11 +492,13 @@ export function makeComponentCell(
   };
   const attrs = componentCellAttrsFromModel(model);
   const libraryShape = isLibraryShapeType(instance.type);
-  const polyline = model.def.bodyPolyline;
-  const openShape = isOpenLibraryShapeType(instance.type) ? instance.type : null;
-  const points = polyline ?? model.def.bodyArc;
-  const hitSelector = `${openShape}Hit`;
-  const handlesSelector = `${openShape}Handles`;
+  const { bodyPolyline: polyline, bodyArc: arc } = model.def;
+  const openShape = isOpenLibraryShapeType(instance.type);
+  const vertexShape = isVertexLibraryShapeType(instance.type) ? instance.type : null;
+  const points = polyline ?? arc ?? (instance.type === "polygon" ? model.def.bodyPolygon
+    : instance.type === "circle" ? circleAxisPoints(model.def.size) : undefined);
+  const hitSelector = `${vertexShape}Hit`;
+  const handlesSelector = `${vertexShape}Handles`;
   const shapeSelectors = [
     "root", "frame", "symbolBody", "deleteCross",
     ...RECTANGLE_RESIZE_HANDLE_SELECTORS,
@@ -503,12 +507,19 @@ export function makeComponentCell(
   const cellAttrs = libraryShape
     ? Object.fromEntries(shapeSelectors.map(selector => [selector, attrs[selector]]))
     : attrs;
-  const vertexLabels = openShape === "arc"
+  const vertexLabels = vertexShape === "arc"
     ? [t("arc.dragStart", "Drag start point"), t("arc.dragEnd", "Drag end point"), t("arc.dragThrough", "Drag point on arc")]
-    : [];
+    : vertexShape === "circle"
+      ? [
+        t("circle.dragTop", "Resize from top"),
+        instance.mirrored ? t("circle.dragLeft", "Resize from left") : t("circle.dragRight", "Resize from right"),
+        t("circle.dragBottom", "Resize from bottom"),
+        instance.mirrored ? t("circle.dragRight", "Resize from right") : t("circle.dragLeft", "Resize from left")
+      ]
+      : [];
   const vertexMarkup = points?.map((point, index) => {
-    const selector = `${openShape}Vertex${index}`;
-    const isArc = openShape === "arc";
+    const selector = `${vertexShape}Vertex${index}`;
+    const isArc = vertexShape === "arc";
     const isThroughPoint = isArc && index === 2;
     const size = isArc ? (isThroughPoint ? 7 : 10) : RECTANGLE_RESIZE_HANDLE_SIZE;
     const half = size / 2;
@@ -518,16 +529,21 @@ export function makeComponentCell(
       x: x - half, y: y - half, width: size, height: size,
       ...(isThroughPoint ? { transform: `rotate(45 ${x} ${y})` } : isArc ? { rx: half, ry: half } : {}),
       fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, cursor: "move",
-      [`data-${openShape}-vertex`]: index, "data-component-id": instance.id,
+      [`data-${vertexShape}-vertex`]: index, "data-shape-vertex": index, "data-component-id": instance.id,
       "aria-label": vertexLabels[index] ?? `${t("polyline.vertex", "Drag vertex")} ${index + 1}`
     };
     return { tagName: "rect", selector };
   });
   if (vertexMarkup) {
-    if (polyline) cellAttrs.symbolMarker = attrs.symbolMarker;
+    if (openShape) cellAttrs.symbolMarker = attrs.symbolMarker;
+    // Keep the full centerline interactive when an arrow shortens the rendered shaft.
+    const untrimmedPath = polyline ? polylineFrameSymbol : arc ? quadraticArcSymbol : null;
+    const path = untrimmedPath && points
+      ? untrimmedPath(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
+        points.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale })))
+      : model.path;
     cellAttrs[hitSelector] = {
-      d: polyline ? polylineFrameSymbol(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
-        polyline.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale }))) : model.path,
+      d: path,
       transform: attrs.symbolBody.transform, fill: "none",
       stroke: "transparent", strokeWidth: Math.max(12 / model.artworkScale, model.symbolStrokeWidth),
       pointerEvents: model.preview ? "none" : "stroke", cursor: "move"
@@ -543,7 +559,7 @@ export function makeComponentCell(
     ...(vertexMarkup ? { markup: [
       { tagName: "rect", selector: "frame" },
       { tagName: "path", selector: "symbolBody" },
-      ...(polyline ? [{ tagName: "path", selector: "symbolMarker" }] : []),
+      ...(openShape ? [{ tagName: "path", selector: "symbolMarker" }] : []),
       { tagName: "path", selector: hitSelector },
       { tagName: "path", selector: "deleteCross" },
       { tagName: "g", selector: handlesSelector, children: vertexMarkup }
@@ -570,7 +586,7 @@ export function makeComponentCell(
     }
   });
   element.set("componentId", instance.id);
-  if (openShape) element.set("openShape", openShape);
+  if (vertexShape) element.set("vertexShape", vertexShape);
   element.set("preview", model.preview);
   element.rotate(instance.rotation, true, { x: instance.x, y: instance.y });
   return element;

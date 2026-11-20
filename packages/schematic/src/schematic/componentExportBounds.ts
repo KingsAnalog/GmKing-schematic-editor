@@ -28,17 +28,18 @@ export function componentExportBounds(instance: ComponentInstance, options: Comp
     rects.push({ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
   };
 
-  if (instance.type === "arc") {
+  const isArc = instance.type === "arc";
+  if (isArc || instance.type === "circle" || instance.type === "polygon") {
     const { x, y, width, height } = rects[0];
     const padding = model.symbolStrokeWidth * model.artworkScale / 2;
-    return { x: x - padding, y: y - padding, width: width + 2 * padding, height: height + 2 * padding };
+    rects[0] = { x: x - padding, y: y - padding, width: width + 2 * padding, height: height + 2 * padding };
+    if (!isArc || !model.markerPath) return rects[0];
   }
 
-  if (instance.type === "polyline") {
-    [
-      { path: model.path, padding: model.symbolStrokeWidth / 2 },
-      { path: model.markerPath, padding: 0 }
-    ].forEach(({ path, padding }) => {
+  if (isArc || instance.type === "polyline") {
+    const paths = [{ path: model.markerPath, padding: 0 }];
+    if (!isArc) paths.push({ path: model.path, padding: model.symbolStrokeWidth / 2 });
+    paths.forEach(({ path, padding }) => {
       const bounds = svgPathBounds(path);
       if (!bounds) return;
       const scale = model.artworkScale;

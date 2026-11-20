@@ -1,9 +1,10 @@
 import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES } from "../triangleComponentModel";
 import type { Point } from "../types";
+import { closedPolygonPath } from "./closedShapeSymbols";
 import { line, path } from "./symbolPrimitives";
 
 export function triangleFrameSymbol(width: number, height: number, vertices: readonly Point[] = TRIANGLE_VERTICES.map(id => DEFAULT_TRIANGLE_SETTINGS.vertices[id])) {
-  return vertices.map((point, index) => `${index ? "L" : "M"} ${width / 2 + point.x} ${height / 2 + point.y}`).join(" ") + " Z";
+  return closedPolygonPath(width, height, vertices);
 }
 
 export function triangleLeadSymbol(width: number, height: number, leads: readonly { contact: Point; pin: Point }[]) {

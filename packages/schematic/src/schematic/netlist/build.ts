@@ -27,7 +27,7 @@ import {
   type NetlistDeviceConfig
 } from "./profiles";
 
-const SKIP_TYPES = new Set<ComponentType>(["gnd", "vdd", "annotation", "rectangle", "triangle", "polyline", "arc"]);
+const SKIP_TYPES = new Set<ComponentType>(["gnd", "vdd", "annotation", "rectangle", "triangle", "polyline", "arc", "circle", "polygon"]);
 const PASSIVE_TYPES = new Set<ComponentType>(["resistor", "capacitor", "inductor"]);
 const SOURCE_TYPES = new Set<ComponentType>(["voltageSource", "currentSource", "battery"]);
 const MOS_TYPES = new Set<ComponentType>(["nmos", "pmos"]);
