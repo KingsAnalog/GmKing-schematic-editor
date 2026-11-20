@@ -176,6 +176,7 @@ export type WireRouteMode = "orthogonal" | "freeAngle";
 
 export interface Wire {
   id: string;
+  layerId?: string;
   points: Point[];
   routeMode: WireRouteMode;
   appearance?: WireAppearance;
@@ -204,6 +205,7 @@ export interface NetLabelAttachment {
 
 export interface NetLabel {
   id: string;
+  layerId?: string;
   name: string;
   attachment: NetLabelAttachment;
 }
@@ -227,6 +229,7 @@ export type SchematicLayerObjectStates = Record<string, SchematicLayerObjectStat
 export interface SchematicNote {
   rotation?: 0 | 90 | 180 | 270;
   id: string;
+  layerId?: string;
   x: number;
   y: number;
   width: number;

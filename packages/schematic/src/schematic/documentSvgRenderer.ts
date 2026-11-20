@@ -4,8 +4,8 @@ import {
 } from "./document/documentModel";
 import { pointKey } from "./geometry";
 import { junctionId } from "./junctionIdentity";
-import { layerObjectDisplayed } from "./layerObjectStateModel";
-import { buildSchematicLayerObjectTree } from "./layerObjectTreeModel";
+import { resolveLayerObjects } from "./layerObjectStateModel";
+import { layerObjectStackIds } from "./layerObjectTreeModel";
 import { renderSchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
@@ -56,10 +56,9 @@ export function renderSchematicDocumentSvg(
   const netLabelStatuses = Object.fromEntries(
     Array.from(topology.netResolution.labelStates, ([id, state]) => [id, state.status])
   );
-  const displayed = (id: string) => layerObjectDisplayed(document, id);
-  const layerObjectOrder = buildSchematicLayerObjectTree(document)
-    .reverse()
-    .flatMap(group => group.objects.reverse().map(object => object.id));
+  const projection = resolveLayerObjects(document, topology.connectivity.junctionMembers);
+  const { displayed } = projection;
+  const layerObjectOrder = layerObjectStackIds({ ...document, junctions: junctionPoints }, projection);
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,

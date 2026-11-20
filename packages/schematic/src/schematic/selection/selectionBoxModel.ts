@@ -1,4 +1,5 @@
 import { snapPoint, wireSegments } from "../geometry";
+import { resolveLayerObjects } from "../layerObjectStateModel";
 import { inductorCouplingGeometry } from "../inductorCouplingGeometry";
 import { mergeMixedSelection, setMixedSelection, type SchematicSelectionState } from "./selectionModel";
 import type { ToolMode } from "../toolState";
@@ -94,7 +95,8 @@ export function collectSelectionBoxHits(
     })
     .map((note) => note.id);
 
-  return { ...geometry, ids, noteIds };
+  const { selectable } = resolveLayerObjects(document);
+  return { ...geometry, ids: ids.filter(selectable), noteIds: noteIds.filter(selectable) };
 }
 
 export function projectFinishedSelectionBox(input: FinishedSelectionBoxProjectionInput): FinishedSelectionBoxIntent {

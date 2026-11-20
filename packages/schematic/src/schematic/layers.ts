@@ -23,6 +23,12 @@ export function normalizeLayers(layers: readonly SchematicLayer[] | undefined): 
   });
 }
 
+/** Ties implicit assignments to a stable layer ID regardless of display order. */
+export function defaultSchematicLayer(layers: readonly SchematicLayer[]): SchematicLayer {
+  return layers.find(layer => layer.id === DEFAULT_LAYER_ID)
+    ?? layers.reduce((first, layer) => layer.id < first.id ? layer : first, layers[0]);
+}
+
 export function nextLayerId(layers: readonly SchematicLayer[]) {
   const ids = new Set(layers.map(layer => layer.id));
   let index = layers.length + 1;

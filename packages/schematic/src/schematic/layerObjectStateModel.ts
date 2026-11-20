@@ -1,4 +1,6 @@
-import { normalizeLayers } from "./layers";
+import { buildConnectivity, type ConnectivityResult } from "./connectivity";
+import { junctionPointFromId } from "./junctionIdentity";
+import { defaultSchematicLayer, normalizeLayers } from "./layers";
 import type {
   SchematicContent,
   SchematicLayerObjectState,
@@ -34,12 +36,46 @@ export function layerObjectVisible(document: LayerObjectStateContent, id: string
   return document.layerObjectStates?.[id]?.visible !== false;
 }
 
-export function layerObjectDisplayed(document: LayerObjectStateContent, id: string) {
-  if (!layerObjectVisible(document, id)) return false;
+/** Resolves ownership and effective visibility for one document projection. */
+export function resolveLayerObjects(
+  document: SchematicContent,
+  junctionMembers?: ConnectivityResult["junctionMembers"]
+) {
   const layers = normalizeLayers(document.layers);
-  const component = document.components.find(candidate => candidate.id === id);
-  const layerId = component?.values["layer:id"] ?? layers[0]?.id ?? "layer-1";
-  return layers.find(layer => layer.id === layerId)?.visible !== false;
+  const fallback = defaultSchematicLayer(layers);
+  const byId = new Map(layers.map(layer => [layer.id, layer]));
+  const order = new Map(layers.map((layer, index) => [layer.id, index]));
+  const assignments = new Map<string, string | undefined>();
+  document.components.forEach(component => assignments.set(component.id, component.values["layer:id"]));
+  for (const objects of [document.wires, document.netLabels, document.notes]) {
+    objects.forEach(object => assignments.set(object.id, object.layerId));
+  }
+  document.inductorCouplings?.forEach(coupling => assignments.set(coupling.id, undefined));
+
+  const assignedLayer = (id: string) => byId.get(assignments.get(id) ?? "") ?? fallback;
+  const assignedVisible = (id: string) => layerObjectVisible(document, id) && assignedLayer(id).visible;
+  const membersFor = (id: string) => {
+    if (assignments.has(id) || !junctionPointFromId(id)) return undefined;
+    junctionMembers ??= buildConnectivity(document).junctionMembers;
+    return junctionMembers.get(id);
+  };
+  const orderOf = (layerId: string) => order.get(layerId) ?? -1;
+  const layerOf = (id: string) => {
+    const members = membersFor(id);
+    if (!members?.size) return assignedLayer(id);
+    // A junction is stacked with its topmost visible conductor.
+    const visible = [...members].filter(assignedVisible);
+    return (visible.length ? visible : [...members]).map(assignedLayer)
+      .reduce((highest, layer) => orderOf(layer.id) > orderOf(highest.id) ? layer : highest);
+  };
+  const displayed = (id: string) => {
+    const members = membersFor(id);
+    return members?.size
+      ? layerObjectVisible(document, id) && [...members].some(assignedVisible)
+      : assignedVisible(id);
+  };
+  const selectable = (id: string) => displayed(id) && !layerOf(id).locked;
+  return { layers, layerOf, displayed, selectable };
 }
 
 export function setLayerObjectVisible(

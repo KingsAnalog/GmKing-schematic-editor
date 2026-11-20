@@ -199,6 +199,7 @@ function formatSchematicWires(wires: readonly Wire[]) {
       const fields = [
         `"points": ${stringifyInline(wire.points)}`,
         `"routeMode": ${JSON.stringify(wire.routeMode)}`,
+        ...(wire.layerId === undefined ? [] : [`"layerId": ${JSON.stringify(wire.layerId)}`]),
         ...(wire.appearance !== undefined
           ? [`"appearance": ${stringifyInline(wire.appearance)}`]
           : []),
@@ -230,6 +231,7 @@ function formatSchematicNotes(notes: readonly SchematicNote[]) {
         `"x": ${JSON.stringify(note.x)}`,
         `"y": ${JSON.stringify(note.y)}`,
         `"width": ${JSON.stringify(note.width)}`,
+        ...(note.layerId === undefined ? [] : [`"layerId": ${JSON.stringify(note.layerId)}`]),
         ...(note.height !== undefined ? [`"height": ${JSON.stringify(note.height)}`] : []),
         ...(note.rotation !== undefined ? [`"rotation": ${JSON.stringify(note.rotation)}`] : []),
         `"format": ${JSON.stringify(note.format)}`,
@@ -470,9 +472,9 @@ function decodeWire(value: unknown, path: string): Wire {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "points", "routeMode", "appearance", "temporarilyDeleted"],
+    ["id", "points", "routeMode", "appearance", "temporarilyDeleted", "layerId"],
     path,
-    ["appearance", "temporarilyDeleted"]
+    ["appearance", "temporarilyDeleted", "layerId"]
   );
   const points = requireArray(source.points, `${path}.points`)
     .map((point, index) => decodePoint(point, `${path}.points[${index}]`));
@@ -497,6 +499,7 @@ function decodeWire(value: unknown, path: string): Wire {
     points,
     routeMode
   };
+  if (hasOwn(source, "layerId")) wire.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
   if (hasOwn(source, "appearance")) wire.appearance = decodeWireAppearance(source.appearance, `${path}.appearance`);
   if (hasOwn(source, "temporarilyDeleted")) {
     wire.temporarilyDeleted = requireBoolean(source.temporarilyDeleted, `${path}.temporarilyDeleted`);
@@ -594,12 +597,13 @@ function decodeJunctionAppearance(value: unknown, path: string): JunctionAppeara
 
 function decodeNetLabel(value: unknown, path: string): NetLabel {
   const source = requireObject(value, path);
-  requireExactKeys(source, ["id", "name", "attachment"], path);
+  requireExactKeys(source, ["id", "name", "attachment", "layerId"], path, ["layerId"]);
   const attachment = requireObject(source.attachment, `${path}.attachment`);
   requireExactKeys(attachment, ["wireId", "point"], `${path}.attachment`);
   return {
     id: requireNonEmptyString(source.id, `${path}.id`),
     name: requireNonEmptyString(source.name, `${path}.name`),
+    ...(hasOwn(source, "layerId") ? { layerId: requireNonEmptyString(source.layerId, `${path}.layerId`) } : {}),
     attachment: {
       wireId: requireString(attachment.wireId, `${path}.attachment.wireId`),
       point: decodePoint(attachment.point, `${path}.attachment.point`)
@@ -611,9 +615,9 @@ function decodeNote(value: unknown, path: string): SchematicNote {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx"],
+    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx", "layerId"],
     path,
-    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx"]
+    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx", "layerId"]
   );
   const width = requireFiniteNumber(source.width, `${path}.width`);
   if (width <= 0) invalid(`${path}.width`, "a positive finite number");
@@ -625,6 +629,7 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     format: requireEnum(source.format, ["plain", "markdown"] as const, `${path}.format`),
     text: requireString(source.text, `${path}.text`)
   };
+  if (hasOwn(source, "layerId")) note.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
   if (hasOwn(source, "height")) {
     const height = requireFiniteNumber(source.height, `${path}.height`);
     if (height <= 0) invalid(`${path}.height`, "a positive finite number");
@@ -774,6 +779,7 @@ function snapshotWire(wire: Wire): Wire {
     id: wire.id,
     points: wire.points.map(snapshotPoint),
     routeMode: wire.routeMode,
+    ...(wire.layerId === undefined ? {} : { layerId: wire.layerId }),
     ...(wire.appearance !== undefined
       ? { appearance: snapshotWireAppearance(wire.appearance) }
       : {}),
@@ -825,6 +831,7 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
   return {
     id: label.id,
     name: label.name,
+    ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
     attachment: {
       wireId: label.attachment.wireId,
       point: snapshotPoint(label.attachment.point)
@@ -894,6 +901,7 @@ function assertUniqueLayerIds(layers: readonly SchematicLayer[]) {
 function snapshotNote(note: SchematicNote): SchematicNote {
   return {
     id: note.id,
+    ...(note.layerId === undefined ? {} : { layerId: note.layerId }),
     x: note.x,
     y: note.y,
     width: note.width,

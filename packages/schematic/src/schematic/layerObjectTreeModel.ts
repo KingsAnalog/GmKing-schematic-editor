@@ -1,8 +1,7 @@
 import { resolveComponentDef, resolveComponentPinOptions } from "./catalog";
 import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { junctionId } from "./junctionIdentity";
-import { normalizeLayers } from "./layers";
-import { layerObjectVisible, layerObjectZ } from "./layerObjectStateModel";
+import { layerObjectVisible, layerObjectZ, resolveLayerObjects } from "./layerObjectStateModel";
 import type { ComponentInstance, SchematicDocument, SchematicLayer } from "./types";
 
 export type SchematicLayerObjectKind =
@@ -25,6 +24,7 @@ export interface SchematicLayerObjectNode {
   label: string;
   visible: boolean;
   visibilityEditable: boolean;
+  displayed: boolean;
   reorderable: boolean;
   children: SchematicLayerObjectNode[];
   temporarilyDeleted: boolean;
@@ -43,7 +43,14 @@ interface LayerObjectEntry {
   sequence: number;
 }
 
-function componentNode(document: SchematicDocument, component: ComponentInstance): SchematicLayerObjectNode {
+export function layerObjectStackIds(
+  document: SchematicDocument, projection = resolveLayerObjects(document)
+): string[] {
+  return buildSchematicLayerObjectTree(document, projection).reverse()
+    .flatMap(group => group.objects.reverse().map(object => object.id));
+}
+
+function componentNode(document: SchematicDocument, component: ComponentInstance, displayed: boolean): SchematicLayerObjectNode {
   const definition = resolveComponentDef(component);
   const shape = isLibraryShapeType(component.type);
   return {
@@ -53,6 +60,7 @@ function componentNode(document: SchematicDocument, component: ComponentInstance
     kind: shape ? "shape" : "component",
     label: `${definition.hotLabel} ${component.ref}`,
     visible: layerObjectVisible(document, component.id),
+    displayed,
     visibilityEditable: true,
     reorderable: true,
     temporarilyDeleted: component.temporarilyDeleted === true,
@@ -66,6 +74,7 @@ function componentNode(document: SchematicDocument, component: ComponentInstance
         kind: "pin",
         label: `Pin ${pin.label}`,
         visible: definition.pins.some(candidate => candidate.id === pin.id),
+        displayed,
         visibilityEditable,
         reorderable: false,
         children: [],
@@ -83,19 +92,18 @@ function noteLabel(text: string, id: string) {
 
 /**
  * Projects every durable/derived canvas object into the existing logical layers.
- * Objects without a layer assignment currently belong to the first layer.
+ * The shared layer projection resolves all object membership.
  * Groups and top-level objects are presented top-most first. Pin rows remain
  * attached to their component and do not participate in stacking order.
  */
-export function buildSchematicLayerObjectTree(document: SchematicDocument): SchematicLayerObjectGroup[] {
-  const layers = normalizeLayers(document.layers);
-  const defaultLayerId = layers[0]?.id ?? "layer-1";
+export function buildSchematicLayerObjectTree(
+  document: SchematicDocument, projection = resolveLayerObjects(document)
+): SchematicLayerObjectGroup[] {
+  const { layers, layerOf, displayed } = projection;
   const entries: LayerObjectEntry[] = [];
   let sequence = 0;
-  const add = (
-    node: SchematicLayerObjectNode,
-    layerId = defaultLayerId
-  ) => {
+  const add = (node: SchematicLayerObjectNode) => {
+    const layerId = layerOf(node.id).id;
     entries.push({ node, layerId, z: layerObjectZ(document, node.id), sequence: sequence++ });
   };
   const topLevel = (
@@ -111,6 +119,7 @@ export function buildSchematicLayerObjectTree(document: SchematicDocument): Sche
     kind,
     label,
     visible: layerObjectVisible(document, id),
+    displayed: displayed(id),
     visibilityEditable: true,
     reorderable: true,
     children: [],
@@ -125,9 +134,7 @@ export function buildSchematicLayerObjectTree(document: SchematicDocument): Sche
     add(topLevel(wire.id, "wire", `Wire ${wire.id}`, "cell", wire.temporarilyDeleted === true));
   });
   document.components.forEach((component) => {
-    const assigned = component.values["layer:id"];
-    const layerId = assigned && layers.some(layer => layer.id === assigned) ? assigned : defaultLayerId;
-    add(componentNode(document, component), layerId);
+    add(componentNode(document, component, displayed(component.id)));
   });
   document.junctions.forEach((point) => {
     const id = junctionId(point);

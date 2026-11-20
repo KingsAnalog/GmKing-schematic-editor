@@ -17,6 +17,7 @@ export interface SchematicSelectionExportInput extends SymbolTemplateContext {
   netLabels: NetLabel[];
   netLabelStatuses?: Readonly<Record<string, NetLabelStatus>>;
   notes: SchematicNote[];
+  layerObjectOrder?: readonly string[];
   presentationMode?: boolean;
   padding?: number;
   renderedNoteHtml?: Readonly<Record<string, string>>;

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { resolveLayerObjects } from "../../../src/schematic/layerObjectStateModel";
+import { collectSelectionBoxHits } from "../../../src/schematic/selection/selectionBoxModel";
 import { createEmptySchematicDocument } from "../../../src/schematic/document/documentModel";
 import {
   buildSchematicLayerObjectTree,
@@ -74,7 +76,7 @@ describe("schematic layer object tree", () => {
     expect(baseNodes.find(node => node.id === "note-1")?.targetType).toBe("note");
   });
 
-  it("uses the first layer for unassigned or stale objects and preserves z order", () => {
+  it("uses the default layer for unassigned or invalid assignments and preserves z order", () => {
     const document = createEmptySchematicDocument();
     const lower = { ...fixtureComponent("rectangle", "X1", 0, 0), id: "lower" };
     const higher = {
@@ -134,6 +136,29 @@ describe("schematic layer object tree", () => {
     const output = component?.children.find(pin => pin.id === "pin:adc:out");
     expect(input).toMatchObject({ visible: true, visibilityEditable: false, reorderable: false });
     expect(output).toMatchObject({ visible: false, visibilityEditable: true, reorderable: false });
+  });
+
+  it("keeps implicit assignments on the default layer when layers are reordered", () => {
+    const document = createEmptySchematicDocument();
+    document.layers!.unshift({ id: "layer-2", name: "Overlay", visible: true, locked: true });
+    document.notes.push(fixtureNote("base-note"), { ...fixtureNote("overlay-note"), layerId: "layer-2" });
+    document.wires.push({ ...fixtureWire("overlay-wire", [{ x: 0, y: 0 }, { x: 100, y: 0 }]), layerId: "layer-2" });
+    document.netLabels.push({
+      id: "base-label", name: "OUT", layerId: "missing",
+      attachment: { wireId: "overlay-wire", point: { x: 0, y: 0 } }
+    });
+    const projection = resolveLayerObjects(document);
+    expect(projection.layerOf("base-note").id).toBe("layer-1");
+    expect(projection.layerOf("base-label").id).toBe("layer-1");
+    expect(projection.layerOf("overlay-wire").id).toBe("layer-2");
+    expect(projection.displayed("overlay-wire")).toBe(true);
+    expect(projection.selectable("overlay-wire")).toBe(false);
+    const tree = buildSchematicLayerObjectTree(document, projection);
+    expect(tree[0].objects.map(object => object.id)).toEqual(["base-note", "base-label"]);
+    expect(tree[1].objects.map(object => object.id)).toEqual(["overlay-note", "overlay-wire"]);
+    const hits = collectSelectionBoxHits(document, { x: -1000, y: -1000 }, { x: 1000, y: 1000 });
+    expect(hits.ids).toEqual(["base-label"]);
+    expect(hits.noteIds).toEqual(["base-note"]);
   });
 
   it("returns an empty tree row for a new document", () => {

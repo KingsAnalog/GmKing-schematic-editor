@@ -11,6 +11,8 @@ These rules apply to the independent schematic library, standalone Web workspace
 
 ## Document and connectivity model
 
+- Schematic Editor is in closed beta. Document formats may change directly without legacy import compatibility or migrations. Update current readers, writers, validation, and tests together, and revisit this policy before public release.
+
 - Every component definition must declare explicit pins with stable IDs, labels, and roles. Preserve those IDs in saved documents and netlists.
 - Component values and editable display settings are part of the document model. Serialize them through the document codec and preserve them when changing component variants or hosts.
 - All component positions, pin endpoints, and wire nodes snap to the 10 px grid (`GRID_SIZE`). Symbol geometry uses a separate 20 px design unit (`SYMBOL_GRID_SIZE`); changing snapping density must not resize symbols. Wire geometry may use either `orthogonal` or `freeAngle` through the existing `routeMode` field; do not introduce a second wire data shape.

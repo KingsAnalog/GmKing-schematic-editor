@@ -216,6 +216,29 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
 
+  await evaluate(page, () => window.layersSmoke.editor.transact(draft => {
+    for (const wire of draft.wires.filter(wire => wire.id === "wire-a" || wire.id.startsWith("wire-a-segment-"))) {
+      wire.layerId = "layer-2";
+    }
+    draft.netLabels[0].layerId = "layer-2";
+    draft.notes[0].layerId = "layer-2";
+  }, { origin: "editor", reason: "assigned-layer-fixture" }));
+  const resolvedLayers = await evaluate(page, () => ["wire-a", "label-1", "note-1", "junction-200-100"].map(id =>
+    document.querySelector(`[data-layer-object-select='${id}']`)?.closest("[data-layer-id]")?.dataset.layerId
+  ));
+  assert(resolvedLayers.every(id => id === "layer-2"), "assigned objects and junction are not grouped on the upper layer", resolvedLayers);
+  await evaluate(page, () => document.querySelector("[data-layer-visible='layer-2']").click());
+  const displayed = await evaluate(page, () => ({
+    wire: !!document.querySelector("[model-id='wire-a']"),
+    label: !!document.querySelector("[model-id='label-1']"),
+    note: !!document.querySelector("[data-note-id='note-1']"),
+    junctionLayer: document.querySelector("[data-layer-object-select='junction-200-100']")
+      ?.closest("[data-layer-id]")?.dataset.layerId
+  }));
+  assert(!displayed.wire && !displayed.label && !displayed.note && displayed.junctionLayer === "layer-1",
+    "cross-layer visibility or junction ownership disagrees with the object tree", displayed);
+  await evaluate(page, () => document.querySelector("[data-layer-visible='layer-2']").click());
+
   const desktopShot = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   await fs.writeFile(path.join(outDir, "r3-layers-desktop.png"), Buffer.from(desktopShot.data, "base64"));
 

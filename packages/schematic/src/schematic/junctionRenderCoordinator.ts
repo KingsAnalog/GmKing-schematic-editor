@@ -1,8 +1,8 @@
-import { buildVisibleJunctions, presentationJunctions } from "./connectivity";
+import { buildConnectivity, type ConnectivityResult } from "./connectivity";
 import { pointKey } from "./geometry";
 import type { SchematicGraphAdapter, SchematicGraphCell } from "./graphAdapter";
 import { junctionId } from "./junctionIdentity";
-import { layerObjectDisplayed } from "./layerObjectStateModel";
+import { resolveLayerObjects } from "./layerObjectStateModel";
 import { resolveSchematicNets, type NetResolution } from "./netResolution";
 import { pruneJunctionAppearances } from "./networkColorModel";
 import type { Point, SchematicDocument } from "./types";
@@ -26,6 +26,7 @@ export interface SchematicJunctionRenderCoordinatorOptions<
   graphAdapter: SchematicGraphAdapter<Cell>;
   makeJunctionCell: (point: Point) => Cell;
   getPresentationMode: () => boolean;
+  onLiveRefresh?: () => void;
   requestAnimationFrame?: JunctionRequestAnimationFrame;
   cancelAnimationFrame?: JunctionCancelAnimationFrame;
 }
@@ -70,15 +71,16 @@ export class SchematicJunctionRenderCoordinator<
     const currentResolution = resolution ?? resolveSchematicNets(this.options.document);
     this.options.document.junctions = currentResolution.connectivity.junctions.map((point) => ({ ...point }));
     pruneJunctionAppearances(this.options.document);
-    this.refreshViews();
+    this.refreshViews(currentResolution.connectivity);
     return currentResolution;
   }
 
-  refreshViews() {
-    const junctions = (this.options.getPresentationMode()
-      ? presentationJunctions(this.options.document)
-      : this.options.document.junctions)
-      .filter(point => layerObjectDisplayed(this.options.document, junctionId(point)));
+  refreshViews(connectivity?: ConnectivityResult) {
+    const { document } = this.options;
+    if (this.options.getPresentationMode()) connectivity ??= buildConnectivity(document);
+    const { displayed } = resolveLayerObjects(document, connectivity?.junctionMembers);
+    const junctions = (this.options.getPresentationMode() ? connectivity!.presentationJunctions : document.junctions)
+      .filter(point => displayed(junctionId(point)));
     const retainedKeys = new Set(junctions.map((point) => pointKey(point)));
 
     Array.from(this.junctionCellIds).forEach((id) => {
@@ -101,9 +103,11 @@ export class SchematicJunctionRenderCoordinator<
   }
 
   private refreshLive() {
-    this.options.document.junctions = buildVisibleJunctions(this.options.document);
+    const connectivity = buildConnectivity(this.options.document);
+    this.options.document.junctions = connectivity.junctions;
     pruneJunctionAppearances(this.options.document);
-    this.refreshViews();
+    this.refreshViews(connectivity);
+    this.options.onLiveRefresh?.();
   }
 
   private requestFrame(callback: (timestamp: number) => void) {

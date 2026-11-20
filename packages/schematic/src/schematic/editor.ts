@@ -31,9 +31,10 @@ import {
   TRIANGLE_VERTICES,
   triangleVertexKey
 } from "./triangleComponentModel";
-import { defaultLayers, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
+import { defaultSchematicLayer, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
 import {
   buildSchematicLayerObjectTree,
+  layerObjectStackIds,
   type SchematicLayerObjectNode
 } from "./layerObjectTreeModel";
 import {
@@ -42,7 +43,7 @@ import {
   type LayerObjectMoveDirection
 } from "./layerObjectCommands";
 import {
-  layerObjectDisplayed,
+  resolveLayerObjects,
   setLayerObjectVisible as setLayerObjectVisibleState
 } from "./layerObjectStateModel";
 import { setComponentPinVisibility } from "./pinConfigurationModel";
@@ -730,6 +731,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       graphAdapter: this.graphAdapter,
       makeJunctionCell: makeJunctionViewCell,
       getPresentationMode: () => this.presentationMode,
+      onLiveRefresh: () => this.applyLayerObjectStackOrder(),
       requestAnimationFrame: (callback) => this.host.requestAnimationFrame(callback),
       cancelAnimationFrame: (handle) => this.host.cancelAnimationFrame(handle)
     });
@@ -1611,14 +1613,14 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     const id = this.activeLayerId;
-    if (this.document.components.some(component => this.componentLayerId(component) === id)) {
+    if (buildSchematicLayerObjectTree(this.document).some(group => group.layer.id === id && group.objectCount > 0)) {
       this.setStatus("Move or delete objects on this layer first.");
       return;
     }
     this.transact((draft) => {
       draft.layers = (draft.layers ?? []).filter(layer => layer.id !== id);
     }, { origin: "editor", reason: "delete-layer" });
-    this.activeLayerId = this.layers()[0]?.id ?? "layer-1";
+    this.activeLayerId = defaultSchematicLayer(this.layers()).id;
     this.renderLayersPanel();
   }
 
@@ -1687,7 +1689,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const list = this.options.paletteEl.querySelector<HTMLElement>("[data-layer-list]");
     if (!list) return;
     const layers = this.layers();
-    if (!layers.some(layer => layer.id === this.activeLayerId)) this.activeLayerId = layers[0]?.id ?? "layer-1";
+    if (!layers.some(layer => layer.id === this.activeLayerId)) this.activeLayerId = defaultSchematicLayer(layers).id;
     const doc = list.ownerDocument;
     const groups = buildSchematicLayerObjectTree(this.document);
     list.replaceChildren();
@@ -1807,7 +1809,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     select.dataset.layerObjectSelect = node.id;
     select.dataset.layerObjectTarget = node.targetId;
     select.dataset.layerObjectTargetType = node.targetType;
-    select.disabled = !layer.visible || layer.locked || !parentVisible || !node.visible;
+    select.disabled = layer.locked || !node.displayed || !parentVisible || !node.visible;
     select.title = !layer.visible
       ? "Layer is hidden"
       : layer.locked
@@ -1884,7 +1886,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       option.textContent = layer.name;
       return option;
     }));
-    select.value = component.values["layer:id"] ?? layers[0]?.id ?? "layer-1";
+    select.value = resolveLayerObjects(this.document).layerOf(component.id).id;
   }
 
   private bindMosParamEvents() {
@@ -2002,7 +2004,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
     paper.on("element:pointerdown", (view: any, event: MouseEvent) => {
       if (runtime !== this.activeRenderRuntime) return;
-      if (event.button !== 0) return;
+      if (event.button !== 0 || view.model.get("layerLocked")) return;
       if (this.inductorInteractions.pendingSourceId) return;
       const componentId = view.model.get("componentId");
       const netLabelId = view.model.get("netLabelId");
@@ -2140,7 +2142,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private handleLinkPointerDown(view: any, event: MouseEvent, x: number, y: number) {
     this.wireSegmentMove = null;
-    if (event.button !== 0 || this.transientToolSession.mode !== "select" || view.model.get("preview")) return;
+    if (event.button !== 0 || this.transientToolSession.mode !== "select" || view.model.get("preview") || view.model.get("layerLocked")) return;
     const wireId = view.model.get("wireId");
     const wire = this.document.wires.find((candidate) => candidate.id === wireId);
     if (wire) {
@@ -2209,11 +2211,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (event.button !== 0) return;
     event.stopPropagation();
     const point = snapPoint({ x, y });
+    const { selectable } = resolveLayerObjects(this.document);
     this.applyPointerClickTarget(
       projectLinkPointerClickTarget({
         model: view.model,
         point,
-        junctions: this.document.junctions,
+        junctions: this.document.junctions.filter(junction => selectable(junctionId(junction))),
         junctionHitPoint: this.localPointFromClient(event.clientX, event.clientY),
         junctionHitRadius: JUNCTION_MARKER_RADIUS
       }),
@@ -2235,6 +2238,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyPointerClickTarget(target: PointerClickTarget, event: MouseEvent) {
+    const objectId = target.kind === "pin" ? target.componentId : target.kind === "junction" ? target.selectionId : "id" in target ? target.id : null;
+    if (objectId && !resolveLayerObjects(this.document).selectable(objectId)) return;
     if (this.inductorInteractions.pendingSourceId) {
       this.inductorInteractions.applyInductorCouplingPartnerPick(target);
       return;
@@ -2620,14 +2625,26 @@ export class SchematicEditor implements SchematicHostedEditor {
         return color ? [[pointKey(point), color] as const] : [];
       })
     );
+    const projection = resolveLayerObjects(this.document, resolution.connectivity.junctionMembers);
+    const { displayed } = projection;
+    const visible = <T extends { id: string }>(objects: T[]) => objects.filter(object => displayed(object.id));
     const input = buildSelectionExportInput(
-      { ...selection, junctionPoints },
+      {
+        ...selection,
+        junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
+        components: visible(selection.components),
+        wires: visible(selection.wires),
+        netLabels: visible(selection.netLabels),
+        notes: visible(selection.notes),
+        relatedInductorCouplings: visible(selection.relatedInductorCouplings)
+      },
       this.presentationMode,
       netLabelStatuses,
       junctionColors,
       this.document.connections,
       this.document.symbolTemplate
     );
+    const layerObjectOrder = layerObjectStackIds({ ...this.document, junctions: input.junctionPoints }, projection);
     const renderedNotes = await Promise.all(input.notes.map(async (note) => {
       const rendered = await this.noteLayer.waitForRenderedNoteExport(note, { inlineStyles: true });
       return {
@@ -2639,6 +2656,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }));
     return {
       ...input,
+      layerObjectOrder,
       renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
       renderedNoteText: Object.fromEntries(renderedNotes.map(({ id, text }) => [id, text])),
       renderedNoteTextStyles: Object.fromEntries(renderedNotes.map(({ id, textStyle }) => [id, textStyle]))
@@ -2670,6 +2688,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const target = event.target;
     if (!(target instanceof this.host.ownerWindow.Element)) return null;
     const view = this.paper.findView?.(target);
+    if (view?.model?.get("layerLocked")) return null;
     return projectSchematicContextMenuTarget({ model: view?.model });
   }
 
@@ -2720,6 +2739,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       cell.prop("ports/groups/pin/attrs/portBody", attrs.portBody);
     });
     this.junctionRenderCoordinator.refreshViews();
+    this.applyLayerObjectStackOrder();
     if (clearedDeleteHover) {
       this.syncSelectionStyles({ cellIds: previousHoverIds, resolution: this.netResolutionCache });
       this.syncNoteSelectionStyles();
@@ -3692,30 +3712,38 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.selectionBoxController.forgetCell();
     this.deleteToolController.clearHover();
     this.graphAdapter.clear();
+    const resolution = resolveSchematicNets(this.document);
+    const projection = resolveLayerObjects(this.document, resolution.connectivity.junctionMembers);
+    const { displayed, selectable } = projection;
+    const ids = [...this.selectionSession.selectedIds];
+    const noteIds = [...this.selectionSession.selectedNoteIds];
+    if ([...ids, ...noteIds].some(id => !selectable(id))) {
+      this.selectionSession.setMixed(ids.filter(selectable), noteIds.filter(selectable));
+    }
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
-        .filter(coupling => layerObjectDisplayed(this.document, coupling.id))
+        .filter(coupling => displayed(coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
-    this.graphAdapter.addCells(this.sortedLayerCells());
+    this.graphAdapter.addCells(this.document.components.filter(component => displayed(component.id))
+      .map(component => this.makeComponentCell(component)));
     this.graphAdapter.addCells(
       this.document.wires
-        .filter(wire => layerObjectDisplayed(this.document, wire.id))
+        .filter(wire => displayed(wire.id))
         .map(wire => this.makeWireCell(wire))
     );
-    const resolution = resolveSchematicNets(this.document);
     this.netResolutionCache = resolution;
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
     this.graphAdapter.addCells((this.document.netLabels ?? [])
-      .filter(label => layerObjectDisplayed(this.document, label.id))
+      .filter(label => displayed(label.id))
       .map(label => makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
         status: resolution.labelStates.get(label.id)?.status
       }))
     );
     this.junctionRenderCoordinator.refreshFull(resolution);
-    this.applyLayerObjectStackOrder();
+    this.applyLayerObjectStackOrder(projection);
     this.syncSelectionStyles({ resolution });
     this.renderNotes();
     this.transientToolSession.projectActivePreview(
@@ -3835,51 +3863,19 @@ export class SchematicEditor implements SchematicHostedEditor {
     return parseJunctionKey(key);
   }
 
-  private layersById() {
-    const layers: SchematicLayer[] = this.document.layers ?? defaultLayers();
-    return {
-      index: new Map(layers.map((layer, index) => [layer.id, index])),
-      visible: new Map(layers.map(layer => [layer.id, layer.visible !== false])),
-      locked: new Map(layers.map(layer => [layer.id, layer.locked === true])),
-      first: layers[0]?.id ?? "layer-1"
-    };
-  }
-
-  private componentLayerId(component: ComponentInstance) {
-    const layers = this.layersById();
-    return component.values["layer:id"] ?? layers.first;
-  }
-
-  private sortedLayerCells() {
-    const layers = this.layersById();
-    return this.document.components
-      .filter(component => layerObjectDisplayed(this.document, component.id))
-      .sort((first, second) => {
-        const firstLayer = layers.index.get(this.componentLayerId(first)) ?? 0;
-        const secondLayer = layers.index.get(this.componentLayerId(second)) ?? 0;
-        if (firstLayer !== secondLayer) return firstLayer - secondLayer;
-        const firstZ = Number(first.values["layer:z"] ?? 0);
-        const secondZ = Number(second.values["layer:z"] ?? 0);
-        if (firstZ !== secondZ) return firstZ - secondZ;
-        return this.document.components.indexOf(first) - this.document.components.indexOf(second);
-      })
-      .map((component) => {
-        const layerId = this.componentLayerId(component);
-        const locked = layers.locked.get(layerId) === true;
-        const cell = this.makeComponentCell(component);
-        if (locked) cell.attr({ root: { pointerEvents: "none" } });
-        return cell;
-      });
-  }
-
-  private applyLayerObjectStackOrder() {
+  private applyLayerObjectStackOrder(projection = resolveLayerObjects(this.document)) {
     let z = 1;
-    const groups = buildSchematicLayerObjectTree(this.document);
+    const junctions = this.presentationMode ? presentationJunctions(this.document) : this.document.junctions;
+    const groups = buildSchematicLayerObjectTree({ ...this.document, junctions }, projection);
     groups.slice().reverse().forEach((group) => {
       group.objects.slice().reverse().forEach((object) => {
-        if (!layerObjectDisplayed(this.document, object.id)) return;
+        if (!object.displayed) return;
         const cell = this.graphAdapter.getCell(object.id);
-        if (cell) cell.set("z", z);
+        if (cell) {
+          cell.set("z", z);
+          cell.set("layerLocked", group.layer.locked);
+          if (group.layer.locked) cell.attr({ root: { pointerEvents: "none" } });
+        }
         z += 1;
       });
     });
@@ -3911,12 +3907,13 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private renderInductorCouplings() {
+    const { displayed } = resolveLayerObjects(this.document);
     this.graphAdapter.getCells().forEach((cell) => {
       if (cell.get("couplingId")) cell.remove();
     });
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
-        .filter(coupling => layerObjectDisplayed(this.document, coupling.id))
+        .filter(coupling => displayed(coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
@@ -4130,20 +4127,19 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private displayedNotesInStackOrder() {
+    const projection = resolveLayerObjects(this.document);
     const order = new Map(
-      buildSchematicLayerObjectTree(this.document)
-        .reverse()
-        .flatMap(group => group.objects.reverse().map(object => object.id))
-        .map((id, index) => [id, index])
+      layerObjectStackIds(this.document, projection).map((id, index) => [id, index])
     );
     return (this.document.notes ?? [])
-      .filter(note => layerObjectDisplayed(this.document, note.id))
+      .filter(note => projection.displayed(note.id))
       .sort((first, second) => (order.get(first.id) ?? -1) - (order.get(second.id) ?? -1));
   }
 
   private updateNoteLayerTransform() {
+    const { displayed } = resolveLayerObjects(this.document);
     this.noteLayer.updateTransform(
-      (this.document.notes ?? []).filter(note => layerObjectDisplayed(this.document, note.id)),
+      (this.document.notes ?? []).filter(note => displayed(note.id)),
       this.noteLayerState()
     );
     if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
@@ -4332,7 +4328,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private noteElementFromEvent(event: Event) {
-    return this.noteLayer.noteElementFromEvent(event);
+    const element = this.noteLayer.noteElementFromEvent(event);
+    const id = element?.dataset.noteId;
+    return id && resolveLayerObjects(this.document).selectable(id) ? element : null;
   }
 
   private noteById(id: string) {

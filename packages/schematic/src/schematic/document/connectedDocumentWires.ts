@@ -1,4 +1,5 @@
 import { connectionNodes } from "../connectionGraph";
+import { resolveLayerObjects } from "../layerObjectStateModel";
 import { pointKey, samePoint } from "../geometry";
 import { wireBodyKindValues, appearanceForNormalizedWire } from "../wire/wireDecoration";
 import type { Point, SchematicConnections, SchematicDocument, Wire } from "../types";
@@ -15,6 +16,7 @@ export function normalizeConnectedWires(
   normalizeGroup: (wires: Wire[], splitPoints: Point[]) => Wire[]
 ): { wires: Wire[]; connections: SchematicConnections } {
   const graph = document.connections;
+  const { layerOf } = resolveLayerObjects(document);
   const segments: ConnectedSegment[] = [];
   document.wires.forEach(wire => {
     for (let index = 1; index < wire.points.length; index++) {
@@ -23,7 +25,7 @@ export function normalizeConnectedWires(
       segments.push({
         wire: { ...wire, points: [start, end], appearance: appearanceForNormalizedWire(wire, start, end) },
         nodes: [graph.wires[wire.id][index - 1], graph.wires[wire.id][index]],
-        line: lineKey(start, end, wire)
+        line: lineKey(start, end, wire, layerOf(wire.id).id)
       });
     }
   });
@@ -50,7 +52,7 @@ export function normalizeConnectedWires(
     const arms = new Set<string>(), kinds = new Set<string>();
     node.wires.forEach(end => {
       const wire = sourceWires.get(end.wireId)!;
-      kinds.add(JSON.stringify([wire.routeMode, Boolean(wire.temporarilyDeleted), ...wireBodyKindValues(wire)]));
+      kinds.add(JSON.stringify([layerOf(wire.id).id, wire.routeMode, Boolean(wire.temporarilyDeleted), ...wireBodyKindValues(wire)]));
       [wire.points[end.index - 1], wire.points[end.index + 1]].forEach(neighbor => {
         if (!neighbor) return;
         const dx = neighbor.x - end.point.x, dy = neighbor.y - end.point.y, length = Math.hypot(dx, dy);
@@ -94,13 +96,13 @@ export function normalizeConnectedWires(
   };
 }
 
-function lineKey(start: Point, end: Point, wire: Wire) {
+function lineKey(start: Point, end: Point, wire: Wire, layerId: string) {
   let dx = end.x - start.x, dy = end.y - start.y;
   let a = Math.abs(dx), b = Math.abs(dy);
   while (b) [a, b] = [b, a % b];
   dx /= a; dy /= a;
   if (dx < 0 || (dx === 0 && dy < 0)) { dx = -dx; dy = -dy; }
-  return JSON.stringify([dx, dy, dx * start.y - dy * start.x, wire.routeMode, Boolean(wire.temporarilyDeleted), ...wireBodyKindValues(wire)]);
+  return JSON.stringify([dx, dy, dx * start.y - dy * start.x, layerId, wire.routeMode, Boolean(wire.temporarilyDeleted), ...wireBodyKindValues(wire)]);
 }
 
 function parsePoint(key: string): Point {

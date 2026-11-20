@@ -1,3 +1,6 @@
+import { applyNormalizedDocumentWires } from "../../../src/schematic/document/documentWires";
+import { resolveLayerObjects } from "../../../src/schematic/layerObjectStateModel";
+import { fixtureWire } from "../support/fixtures";
 import { fixtureDocument } from "../support/fixtureDocument";
 import { describe, expect, it } from "vitest";
 import { COMPONENT_CATALOG } from "../../../src/schematic/catalog";
@@ -143,6 +146,40 @@ describe("pure schematic SVG rendering", () => {
     expect(rendered.svg).not.toContain("data-note-id=");
     expect(rendered.topology.junctions).toContainEqual({ x: 40, y: 0 });
     expect(content.connections.wires.signal).toBeDefined();
+  });
+
+  it("keeps cross-layer wires connected and places a junction with its topmost visible wire", () => {
+    const point = { x: 40, y: 0 };
+    const layer2 = { id: "layer-2", name: "Overlay", visible: true, locked: false };
+    const document = fixtureDocument({
+      layers: [{ id: "layer-1", name: "Base", visible: true, locked: false }, layer2],
+      wires: [
+        fixtureWire("west", [{ x: 0, y: 0 }, point]),
+        { ...fixtureWire("east", [point, { x: 80, y: 0 }]), layerId: "layer-2" },
+        { ...fixtureWire("south", [point, { x: 40, y: 40 }]), layerId: "layer-2" }
+      ],
+      netLabels: [{ id: "tag", layerId: "layer-2", name: "OUT", attachment: { wireId: "east", point } }],
+      notes: [{ id: "note", layerId: "layer-2", x: 80, y: 80, width: 120, format: "plain" as const, text: "Overlay note" }]
+    });
+    applyNormalizedDocumentWires(document);
+    const render = () => renderSchematicDocumentSvg(document, { namespace: "layers", presentationMode: false });
+    const before = render();
+    const junctionId = "junction-40-0";
+    expect(document.wires.map(wire => wire.id).sort()).toEqual(["east", "south", "west"]);
+    expect(before.topology.connectivity.rootOfWire("east")).toBe(before.topology.connectivity.rootOfWire("west"));
+    expect(resolveLayerObjects(document).layerOf(junctionId).id).toBe("layer-2");
+
+    layer2.visible = false;
+    const after = render();
+    expect(resolveLayerObjects(document).layerOf(junctionId).id).toBe("layer-1");
+    expect(after.svg).toContain('data-junction="40,0"');
+    expect(after.svg).toContain('data-wire-id="west"');
+    expect(after.svg).not.toContain('data-wire-id="east"');
+    expect(after.svg).not.toContain('data-net-label-id="tag"');
+    expect(after.svg).not.toContain('data-note-id="note"');
+    expect(after.topology.netResolution.wireNetNames).toEqual(before.topology.netResolution.wireNetNames);
+    document.layerObjectStates = { west: { visible: false } };
+    expect(render().svg).not.toContain('data-junction="40,0"');
   });
 
   it("uses the Layers panel object order for all SVG object types", () => {

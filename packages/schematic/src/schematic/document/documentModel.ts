@@ -158,6 +158,7 @@ export function assignRestoredSchematicDocument(target: SchematicDocument, sourc
 function normalizeNetLabel(label: NetLabel): NetLabel {
   return {
     id: String(label.id),
+    ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
     name: String(label.name),
     attachment: {
       wireId: String(label.attachment.wireId),

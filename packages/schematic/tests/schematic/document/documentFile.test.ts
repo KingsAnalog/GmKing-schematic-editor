@@ -246,6 +246,26 @@ describe("single schematic document file codec", () => {
       .not.toContain('"layerObjectStates"');
   });
 
+  it("round trips assigned wire, label and note layers in the current document format", () => {
+    const document = documentFixture();
+    document.layers = [
+      { id: "layer-1", name: "Base", visible: true, locked: false },
+      { id: "layer-2", name: "Overlay", visible: true, locked: false }
+    ];
+    document.wires.forEach(wire => { wire.layerId = "layer-2"; });
+    document.netLabels.forEach(label => { label.layerId = "layer-2"; });
+    document.notes.forEach(note => { note.layerId = "layer-2"; });
+    const file = serializeSchematicDocumentFile(document);
+    const restored = parseSchematicDocumentFile(file);
+    for (const objects of [restored.wires, restored.netLabels, restored.notes]) {
+      expect(objects.length).toBeGreaterThan(0);
+      expect(objects.every(object => object.layerId === "layer-2")).toBe(true);
+    }
+    expect(restored.wires.some(wire => wire.id === "horizontal-segment-1")).toBe(true);
+    const normalized = serializeSchematicDocumentFile(restored);
+    expect(serializeSchematicDocumentFile(parseSchematicDocumentFile(normalized))).toBe(normalized);
+  });
+
   it("rejects malformed per-object layer state", () => {
     const invalidStates: unknown[] = [
       [],
