@@ -69,7 +69,10 @@ describe("renderSchematicTabShell", () => {
     expect(shell).toContain(
       'data-schematic-document-paste aria-label="Paste schematic JSON from clipboard into a new tab" title="Paste schematic JSON from clipboard into a new tab"'
     );
-    expect(shell).toContain('data-schematic-document-export aria-label="Export schematic" title="Export schematic"');
+    const dialogId = shell.match(/data-schematic-document-export aria-label="Export schematic" aria-haspopup="dialog" aria-controls="([^"]+)"/)?.[1];
+    expect(dialogId).toBeTruthy();
+    expect(shell).toContain(`<dialog class="schematic-document-export-dialog" id="${dialogId}"`);
+    expect(shell).toContain("data-schematic-export-hidden");
     expect(shell).toMatch(
       /<input id="schematic-shell-\d+-document-import-input" type="file" accept="\.json,application\/json" data-schematic-document-import-input hidden \/>/
     );

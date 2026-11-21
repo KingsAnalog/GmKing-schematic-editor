@@ -5,6 +5,8 @@ export interface SchematicDocumentTabItem {
   title: string;
 }
 
+export type SchematicDocumentExportFormat = "json" | "svg" | "png";
+
 /** Async callbacks own error reporting; DOM events dispatch them without waiting. */
 type SchematicTabAction<Args extends unknown[] = []> =
   | ((...args: Args) => void)
@@ -18,7 +20,7 @@ export interface SchematicDocumentTabsOptions {
   onRename?: SchematicTabAction<[id: string, title: string]>;
   onImport?: SchematicTabAction<[file: File]>;
   onImportFromClipboard?: SchematicTabAction;
-  onExport?(): void;
+  onExport?: SchematicTabAction<[format: SchematicDocumentExportFormat, includeHidden: boolean]>;
   onRetrySave?: SchematicTabAction;
 }
 
@@ -78,6 +80,7 @@ export class SchematicDocumentTabs {
     this.bindingController = null;
     this.bound = false;
     this.hideCloseSnackbar();
+    this.root.querySelector<HTMLDialogElement>("[data-schematic-document-export-dialog][open]")?.close();
     this.finishDrag();
     this.suppressNextTabClick = null;
     this.renameInput = null;
@@ -222,7 +225,26 @@ export class SchematicDocumentTabs {
       return;
     }
     if (target?.closest("[data-schematic-document-export]")) {
-      this.options.onExport?.();
+      const dialog = this.root.querySelector<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+      if (!dialog || dialog.open) return;
+      const hidden = dialog.querySelector<HTMLInputElement>("[data-schematic-export-hidden]");
+      if (hidden) hidden.checked = false;
+      dialog.showModal();
+      return;
+    }
+    const exportDialog = target?.closest<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+    if (exportDialog?.open) {
+      if (target?.closest("[data-schematic-export-cancel]")) {
+        exportDialog.close();
+        return;
+      }
+      const format = target?.closest<HTMLElement>("[data-schematic-export-format]")?.dataset.schematicExportFormat;
+      if (format === "json" || format === "svg" || format === "png") {
+        const includeHidden = format !== "json"
+          && exportDialog.querySelector<HTMLInputElement>("[data-schematic-export-hidden]")?.checked === true;
+        exportDialog.close();
+        void this.options.onExport?.(format, includeHidden);
+      }
       return;
     }
     if (target?.closest("[data-schematic-close-undo]")) {
@@ -387,6 +409,15 @@ export class SchematicDocumentTabs {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
+    const exportDialog = (event.target as HTMLElement | null)?.closest<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+    if (exportDialog?.open) {
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        exportDialog.close();
+      }
+      return;
+    }
     const rename = (event.target as HTMLElement | null)?.closest<HTMLInputElement>(
       "[data-schematic-document-rename]"
     );

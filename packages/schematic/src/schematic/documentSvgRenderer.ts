@@ -10,6 +10,7 @@ import { renderSchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
 import { svgIdFragment } from "./svgId";
+import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 import type { Rect } from "./view-geometry";
 import type { SchematicContent, SchematicDocument } from "./types";
 import { GRID_SIZE } from "./types";
@@ -20,6 +21,7 @@ export interface SchematicDocumentSvgOptions {
   namespace: string;
   padding?: number;
   presentationMode?: boolean;
+  includeHidden?: boolean;
   showGrid?: boolean;
   backgroundColor?: string | null;
 }
@@ -56,16 +58,20 @@ export function renderSchematicDocumentSvg(
   const netLabelStatuses = Object.fromEntries(
     Array.from(topology.netResolution.labelStates, ([id, state]) => [id, state.status])
   );
-  const projection = resolveLayerObjects(document, topology.connectivity.junctionMembers);
+  const projection = resolveLayerObjects(document, topology.connectivity.junctionMembers, {
+    includeHidden: options.includeHidden
+  });
   const { displayed } = projection;
   const layerObjectOrder = layerObjectStackIds({ ...document, junctions: junctionPoints }, projection);
+  const wires = document.wires.filter(wire => displayed(wire.id));
+  const wireEndpoints = new Map(wires.map(wire => [wire.id, wireEndpointConnections(document, wire)]));
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,
       components: document.components.filter(component => displayed(component.id)),
       inductorCouplings: (document.inductorCouplings ?? []).filter(coupling => displayed(coupling.id)),
-      wires: document.wires.filter(wire => displayed(wire.id)),
-      connections: document.connections,
+      wires,
+      wireEndpoints,
       junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
       junctionColors,
       netLabels: document.netLabels.filter(label => displayed(label.id)),

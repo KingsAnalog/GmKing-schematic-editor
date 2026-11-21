@@ -15,7 +15,7 @@ import type {
   SchematicHostedDocumentSession,
   SchematicWorkspacePort
 } from "./schematicEditorHostPorts";
-import type { SchematicDocumentTabsOptions } from "./schematicDocumentTabs";
+import type { SchematicDocumentExportFormat, SchematicDocumentTabsOptions } from "./schematicDocumentTabs";
 import type { SchematicDocument } from "./types";
 import { defaultSchematicView } from "./viewAdapter";
 
@@ -65,7 +65,7 @@ implements SchematicDocumentHostPort<EditorState> {
         title: "Imported schematic",
         document: await this.options.clipboard.readDocument()
       }), "Clipboard import failed"),
-      onExport: () => this.exportActive(),
+      onExport: (format, includeHidden) => this.exportActive(format, includeHidden),
       onRetrySave: () => this.runAction(() => this.retrySave())
     });
   }
@@ -389,14 +389,23 @@ implements SchematicDocumentHostPort<EditorState> {
     this.renderTabs();
   }
 
-  private exportActive() {
+  private async exportActive(format: SchematicDocumentExportFormat, includeHidden: boolean) {
     const session = this.activeSession();
     if (!session) return;
-    this.options.bridge.finishActiveEdits();
-    this.persistActive();
     try {
-      this.options.documentFiles.download(this.options.bridge.currentDocument(), session.title);
+      this.options.bridge.finishActiveEdits();
+      const document = this.options.bridge.currentDocument();
+      if (format === "json") {
+        void this.persistActive();
+        this.options.documentFiles.download(document, session.title);
+      } else {
+        await this.options.documentFiles.downloadImage(document, session.title, format, {
+          includeHidden,
+          presentationMode: this.options.bridge.currentPresentationMode()
+        });
+      }
     } catch (error) {
+      if (this.destroyed || this.activeDocumentId !== session.id) return;
       this.options.bridge.setStatus(
         error instanceof Error ? `Export failed: ${error.message}` : "Export failed."
       );

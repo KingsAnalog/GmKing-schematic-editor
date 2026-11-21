@@ -138,6 +138,7 @@ describe("SchematicWebHost", () => {
       finishActiveEdits: () => {},
       isDisposableBlank: () => true,
       currentDocument: createEmptySchematicDocument,
+      currentPresentationMode: () => false,
       applyClipboardDocument: () => {},
       setStatus: () => {},
       fit: () => {},

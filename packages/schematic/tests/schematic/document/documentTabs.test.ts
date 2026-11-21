@@ -32,6 +32,8 @@ class FakeDocument {
 class FakeElement {
   className = "";
   hidden = false;
+  checked = false;
+  open = false;
   textContent: string | null = null;
   title = "";
   type = "";
@@ -82,6 +84,10 @@ class FakeElement {
     replacement.parent = this.parent;
     this.parent = null;
   }
+
+  showModal() { this.open = true; }
+
+  close() { this.open = false; }
 
   get lastElementChild() {
     return this.children[this.children.length - 1] ?? null;
@@ -203,6 +209,12 @@ function createFixture() {
   const importButton = appendHook(root, "schematicDocumentImport");
   const pasteButton = appendHook(root, "schematicDocumentPaste");
   const exportButton = appendHook(root, "schematicDocumentExport");
+  const exportDialog = appendHook(root, "schematicDocumentExportDialog");
+  const exportHidden = appendHook(exportDialog, "schematicExportHidden");
+  const exportSvg = appendHook(exportDialog, "schematicExportFormat");
+  exportSvg.dataset.schematicExportFormat = "svg";
+  const exportJson = appendHook(exportDialog, "schematicExportFormat");
+  exportJson.dataset.schematicExportFormat = "json";
   const importInput = appendHook(root, "schematicDocumentImportInput");
   const closeSnackbar = appendHook(root, "schematicCloseSnackbar");
   const closeMessage = appendHook(closeSnackbar, "schematicCloseMessage");
@@ -220,6 +232,10 @@ function createFixture() {
     importButton,
     pasteButton,
     exportButton,
+    exportDialog,
+    exportHidden,
+    exportSvg,
+    exportJson,
     importInput,
     closeSnackbar,
     closeMessage,
@@ -437,7 +453,7 @@ describe("SchematicDocumentTabs", () => {
     const fixture = createFixture();
     const imported: File[] = [];
     let pasted = 0;
-    let exported = 0;
+    const exports: Array<[string, boolean]> = [];
     const controller = new SchematicDocumentTabs(fixture.root as unknown as HTMLElement, {
       onActivate: () => {},
       onClose: () => {},
@@ -446,9 +462,7 @@ describe("SchematicDocumentTabs", () => {
       onImportFromClipboard: () => {
         pasted += 1;
       },
-      onExport: () => {
-        exported += 1;
-      }
+      onExport: (format, includeHidden) => { exports.push([format, includeHidden]); }
     });
     controller.bind();
 
@@ -467,7 +481,21 @@ describe("SchematicDocumentTabs", () => {
     expect(imported).toEqual([file]);
     expect(fixture.importInput.value).toBe("");
     expect(pasted).toBe(1);
-    expect(exported).toBe(1);
+    expect(fixture.exportDialog.open).toBe(true);
+    expect(fixture.exportHidden.checked).toBe(false);
+    fixture.exportHidden.checked = true;
+    dispatch(fixture.root, "click", fixture.exportSvg);
+    expect(fixture.exportDialog.open).toBe(false);
+
+    dispatch(fixture.root, "click", fixture.exportButton);
+    expect(fixture.exportHidden.checked).toBe(false);
+    fixture.exportHidden.checked = true;
+    dispatch(fixture.root, "click", fixture.exportJson);
+    expect(exports).toEqual([["svg", true], ["json", false]]);
+
+    dispatch(fixture.root, "click", fixture.exportButton);
+    dispatch(fixture.root, "keydown", fixture.exportHidden, { key: "Escape" });
+    expect(fixture.exportDialog.open).toBe(false);
   });
 
   it("keeps close Undo and storage errors independent", () => {

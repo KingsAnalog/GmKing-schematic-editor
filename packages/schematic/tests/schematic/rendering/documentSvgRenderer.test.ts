@@ -182,6 +182,51 @@ describe("pure schematic SVG rendering", () => {
     expect(render().svg).not.toContain('data-junction="40,0"');
   });
 
+  it("includes both kinds of hidden objects for one render and sizes the result to their bounds", () => {
+    const document = decoratedContent();
+    document.layers = [
+      { id: "layer-1", name: "Circuit", visible: true, locked: true },
+      { id: "layer-2", name: "Comments", visible: false, locked: false }
+    ];
+    const note = document.notes.find(note => note.id === "plain-note")!;
+    note.layerId = "layer-2";
+    note.x = 1200;
+    document.layerObjectStates = {
+      R1: { visible: false, z: 4 },
+      "junction-40-0": { visible: false, z: 9 },
+      "net-label": { z: 3 }
+    };
+    const original = structuredClone(document);
+    const options = { namespace: "export", presentationMode: false };
+    const visible = renderSchematicDocumentSvg(document, options);
+    const all = renderSchematicDocumentSvg(document, { ...options, includeHidden: true });
+
+    expect(visible.svg).toContain('data-net-label-id="net-label"');
+    for (const marker of ['data-component-id="R1"', 'data-note-id="plain-note"', 'data-junction="40,0"']) {
+      expect(visible.svg).not.toContain(marker);
+      expect(all.svg).toContain(marker);
+    }
+    expect(all.svg.indexOf('data-net-label-id="net-label"')).toBeLessThan(all.svg.indexOf('data-component-id="R1"'));
+    expect(all.svg.indexOf('data-component-id="R1"')).toBeLessThan(all.svg.indexOf('data-note-id="plain-note"'));
+    expect(all.width).toBeGreaterThan(visible.width);
+    expect(all.topology.netResolution.wireNetNames).toEqual(visible.topology.netResolution.wireNetNames);
+    expect(document).toEqual(original);
+  });
+
+  it("keeps a visible arrow anchored to its physical node when the adjoining wire is hidden", () => {
+    const document = fixtureDocument({
+      wires: [
+        { ...fixtureWire("horizontal", [{ x: 0, y: 0 }, { x: 40, y: 0 }]), appearance: { variant: "signal", endMarker: "arrow" } },
+        fixtureWire("vertical", [{ x: 40, y: 0 }, { x: 40, y: 60 }])
+      ],
+      layerObjectStates: { vertical: { visible: false } }
+    });
+    const rendered = renderSchematicDocumentSvg(document, { namespace: "connected-end" });
+
+    expect(rendered.svg).not.toContain('data-wire-id="vertical"');
+    expect(rendered.svg).toContain('data-wire-endpoint="end" points="40,0 ');
+  });
+
   it("uses the Layers panel object order for all SVG object types", () => {
     const content = decoratedContent();
     content.layerObjectStates = Object.fromEntries([

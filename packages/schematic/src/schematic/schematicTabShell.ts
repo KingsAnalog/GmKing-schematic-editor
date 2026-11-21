@@ -24,6 +24,8 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
   const { el } = ui;
   const namespace = `schematic-shell-${nextShellNamespace++}`;
   const importInputId = `${namespace}-document-import-input`;
+  const exportDialogId = `${namespace}-document-export-dialog`;
+  const exportTitleId = `${namespace}-document-export-title`;
   const analysisIds = {
     inputP: `${namespace}-analysis-input-p`,
     inputN: `${namespace}-analysis-input-n`,
@@ -90,14 +92,34 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           type: "button",
           class: "schematic-document-tab-action",
           "data-schematic-document-export": true,
-          "aria-label": "Export schematic",
-          title: "Export schematic"
+          "aria-label": t("export.title", "Export schematic"),
+          "aria-haspopup": "dialog",
+          "aria-controls": exportDialogId,
+          title: t("export.title", "Export schematic")
         },
           el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
             el("path", { d: "M12 21V9" }),
             el("path", { d: "m7 14 5-5 5 5" }),
             el("path", { d: "M5 3h14" })
           )
+        ),
+        el("dialog", {
+          class: "schematic-document-export-dialog",
+          id: exportDialogId,
+          "aria-labelledby": exportTitleId,
+          "data-schematic-document-export-dialog": true
+        },
+          el("h2", { id: exportTitleId }, t("export.title", "Export schematic")),
+          el("label", {},
+            el("input", { type: "checkbox", "data-schematic-export-hidden": true }),
+            t("export.includeHidden", "Include hidden objects in images")
+          ),
+          el("div", { class: "schematic-document-export-formats" },
+            el("button", { type: "button", "data-schematic-export-format": "json" }, t("export.json", "Schematic JSON")),
+            el("button", { type: "button", "data-schematic-export-format": "svg" }, "SVG"),
+            el("button", { type: "button", "data-schematic-export-format": "png" }, "PNG")
+          ),
+          el("button", { type: "button", "data-schematic-export-cancel": true }, t("export.cancel", "Cancel"))
         ),
         el("input", {
           id: importInputId,

@@ -172,6 +172,62 @@
   background: #e9eef5;
 }
 
+.schematic-document-export-dialog {
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 18px;
+  border: 1px solid var(--schematic-ui-line);
+  border-radius: 8px;
+  background: var(--schematic-ui-panel);
+  color: var(--schematic-ui-ink);
+  font: 14px/1.4 var(--schematic-font-family);
+}
+
+.schematic-document-export-dialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+.schematic-document-export-dialog h2 {
+  margin: 0 0 14px;
+  font: 600 16px/1.4 var(--schematic-font-family);
+  color: inherit;
+}
+
+.schematic-document-export-dialog label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+}
+
+.schematic-document-export-dialog input {
+  margin: 0;
+}
+
+.schematic-document-export-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.schematic-document-export-dialog button {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--schematic-ui-line);
+  border-radius: 4px;
+  background: var(--schematic-ui-panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.schematic-document-export-dialog button:is(:hover, :focus-visible) {
+  outline: 2px solid var(--schematic-focus);
+  outline-offset: 1px;
+}
+
 .schematic-document-tab-list {
   display: flex;
   align-items: end;

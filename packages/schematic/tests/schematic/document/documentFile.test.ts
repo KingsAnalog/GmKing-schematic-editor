@@ -932,12 +932,11 @@ describe("Blob download helper", () => {
       click,
       remove
     };
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     vi.stubGlobal("document", {
+      defaultView: { setTimeout, URL: { createObjectURL, revokeObjectURL } },
       createElement: vi.fn(() => link),
       body: { appendChild }
     });
-    vi.stubGlobal("window", { setTimeout });
     const blob = new Blob(["{}"], { type: "application/json" });
 
     downloadBlob(blob, "adc.sch.json");
@@ -972,12 +971,11 @@ describe("Blob download helper", () => {
       click,
       remove
     };
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     vi.stubGlobal("document", {
+      defaultView: { setTimeout, URL: { createObjectURL, revokeObjectURL } },
       createElement: vi.fn(() => link),
       body: { appendChild: vi.fn() }
     });
-    vi.stubGlobal("window", { setTimeout });
 
     expect(() => downloadBlob(new Blob(["{}"]), "adc.sch.json")).toThrow("download blocked");
     expect(remove).toHaveBeenCalledOnce();

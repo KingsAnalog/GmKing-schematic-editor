@@ -27,7 +27,8 @@ import {
   wireDigitalDecorationGeometry,
   wireEndpointDecorationGeometry,
   wireStrokeWidth,
-  WIRE_DIGITAL_LABEL_FONT_SIZE
+  WIRE_DIGITAL_LABEL_FONT_SIZE,
+  type WireEndpointConnections
 } from "./wire/wireDecoration";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 import { wireColor } from "./networkColorModel";
@@ -54,6 +55,8 @@ export interface SchematicSvgScene extends SymbolTemplateContext {
   components: readonly ComponentInstance[];
   inductorCouplings?: readonly InductorCoupling[];
   wires: readonly Wire[];
+  /** Endpoint state calculated against the complete circuit, including hidden conductors. */
+  wireEndpoints?: ReadonlyMap<string, WireEndpointConnections>;
   junctionPoints: readonly Point[];
   junctionColors?: Readonly<Record<string, string>>;
   netLabels: readonly NetLabel[];
@@ -94,7 +97,7 @@ export function schematicSvgSceneBounds(scene: SchematicSvgScene, options: Pick<
     const geometry = inductorCouplingGeometry(scene, coupling);
     if (geometry) rects.push(geometry.bounds);
   });
-  scene.wires.forEach((wire) => rects.push(wireVisualBounds(wire, wireEndpointConnections(scene, wire))));
+  scene.wires.forEach((wire) => rects.push(wireVisualBounds(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire))));
   scene.junctionPoints.forEach((point) => rects.push({
     x: point.x - JUNCTION_RADIUS,
     y: point.y - JUNCTION_RADIUS,
@@ -129,7 +132,7 @@ export function renderSchematicSvgScene(
     })),
     ...scene.wires.map((wire) => ({
       id: wire.id,
-      svg: renderWire(wire, wireEndpointConnections(scene, wire))
+      svg: renderWire(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire))
     })),
     ...scene.components.map((component) => ({
       id: component.id,

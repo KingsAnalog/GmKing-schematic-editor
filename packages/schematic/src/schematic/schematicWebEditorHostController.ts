@@ -139,6 +139,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
       finishActiveEdits: () => editor.hostFinishActiveEdits(),
       isDisposableBlank: (session) => this.isDisposableBlank(session),
       currentDocument: () => editor.hostDocument(),
+      currentPresentationMode: () => editor.hostCaptureView().presentationMode,
       applyClipboardDocument: (document) => editor.hostBeginClipboardCopy(document),
       setStatus: (message) => editor.hostSetStatus(message),
       fit: () => editor.fit(),

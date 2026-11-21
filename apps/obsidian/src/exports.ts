@@ -38,6 +38,14 @@ export function showSchematicExportMenu(
       .setIcon("clipboard-paste")
       .onClick(() => { menu.hide(); source.onPaste?.(); }));
   });
+  if (!selection && !source.onPaste) {
+    for (const format of ["svg", "png"] as const) {
+      menu.addItem(item => item
+        .setTitle(`Copy as ${format.toUpperCase()} (include hidden objects)`)
+        .setIcon(format === "svg" ? "copy" : "image")
+        .onClick(() => void runExport(format, source, ownerDocument, false, true)));
+    }
+  }
   menu.onHide(() => onVisibilityChange?.(false));
   onVisibilityChange?.(true);
   menu.showAtPosition(position, ownerDocument);
@@ -48,7 +56,8 @@ async function runExport(
   format: "svg" | "png" | "json",
   source: SchematicExportSource,
   ownerDocument: Document,
-  selection: boolean
+  selection: boolean,
+  includeHidden = false
 ) {
   try {
     const content = selection
@@ -63,6 +72,7 @@ async function runExport(
       : renderSchematicDocumentSvg(content, {
           namespace: `${source.namespace}-export`,
           presentationMode: true,
+          includeHidden,
           showGrid: false,
           backgroundColor: null
         });

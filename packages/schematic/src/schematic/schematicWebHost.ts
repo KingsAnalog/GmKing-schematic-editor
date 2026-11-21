@@ -8,6 +8,7 @@ import type { SchematicEditorMountElements } from "./schematicTabShell";
 import { readSchematicDocumentFromClipboard } from "./schematicClipboardWebAdapter";
 import {
   downloadSchematicDocumentFile,
+  downloadSchematicDocumentImage,
   readSchematicDocumentFile
 } from "./schematicDocumentWebAdapter";
 import { SchematicDocumentTabs } from "./schematicDocumentTabs";
@@ -85,7 +86,8 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
     realm.navigator?.locks ? (key, write) => realm.navigator.locks.request(key, write) : undefined);
   const documentFiles: SchematicEditorHostServices["documentFiles"] = {
     read: (file) => readSchematicDocumentFile(file),
-    download: (document, title) => downloadSchematicDocumentFile(document, title)
+    download: (document, title) => downloadSchematicDocumentFile(document, title, ownerDocument),
+    downloadImage: (document, title, format, options) => downloadSchematicDocumentImage(document, title, format, options, ownerDocument)
   };
   const clipboardPort: SchematicEditorHostServices["clipboard"] = {
     readDocument: () => readSchematicDocumentFromClipboard(ownerWindow.navigator.clipboard)

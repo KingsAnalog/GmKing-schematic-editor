@@ -39,7 +39,8 @@ export function layerObjectVisible(document: LayerObjectStateContent, id: string
 /** Resolves ownership and effective visibility for one document projection. */
 export function resolveLayerObjects(
   document: SchematicContent,
-  junctionMembers?: ConnectivityResult["junctionMembers"]
+  junctionMembers?: ConnectivityResult["junctionMembers"],
+  { includeHidden = false } = {}
 ) {
   const layers = normalizeLayers(document.layers);
   const fallback = defaultSchematicLayer(layers);
@@ -52,7 +53,7 @@ export function resolveLayerObjects(
   }
 
   const assignedLayer = (id: string) => byId.get(assignments.get(id) ?? "") ?? fallback;
-  const assignedVisible = (id: string) => layerObjectVisible(document, id) && assignedLayer(id).visible;
+  const assignedVisible = (id: string) => includeHidden || (layerObjectVisible(document, id) && assignedLayer(id).visible);
   const membersFor = (id: string) => {
     if (assignments.has(id) || !junctionPointFromId(id)) return undefined;
     junctionMembers ??= buildConnectivity(document).junctionMembers;
@@ -70,7 +71,7 @@ export function resolveLayerObjects(
   const displayed = (id: string) => {
     const members = membersFor(id);
     return members?.size
-      ? layerObjectVisible(document, id) && [...members].some(assignedVisible)
+      ? (includeHidden || layerObjectVisible(document, id)) && [...members].some(assignedVisible)
       : assignedVisible(id);
   };
   const selectable = (id: string) => displayed(id) && !layerOf(id).locked;

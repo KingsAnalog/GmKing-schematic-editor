@@ -2684,6 +2684,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.document.symbolTemplate
     );
     const layerObjectOrder = layerObjectStackIds({ ...this.document, junctions: input.junctionPoints }, projection);
+    const wireEndpoints = new Map(input.wires.map(wire => [wire.id, wireEndpointConnections(this.document, wire)]));
     const renderedNotes = await Promise.all(input.notes.map(async (note) => {
       const rendered = await this.noteLayer.waitForRenderedNoteExport(note, { inlineStyles: true });
       return {
@@ -2695,6 +2696,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }));
     return {
       ...input,
+      wireEndpoints,
       layerObjectOrder,
       renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
       renderedNoteText: Object.fromEntries(renderedNotes.map(({ id, text }) => [id, text])),

@@ -271,6 +271,7 @@ function createFixture(
     finishActiveEdits: vi.fn(),
     isDisposableBlank: vi.fn(() => true),
     currentDocument: vi.fn(() => createEmptySchematicDocument()),
+    currentPresentationMode: vi.fn(() => false),
     applyClipboardDocument: vi.fn(),
     setStatus: vi.fn(),
     fit: vi.fn(),
@@ -280,7 +281,8 @@ function createFixture(
     workspace,
     documentFiles: {
       read: vi.fn(async () => ({ title: "Imported", document: createEmptySchematicDocument() })),
-      download: vi.fn()
+      download: vi.fn(),
+      downloadImage: vi.fn(async () => {})
     },
     clipboard: { readDocument: vi.fn(() => clipboardResult) },
     createId: vi.fn(() => `doc-${stateNumber + 1}`),

@@ -1,6 +1,10 @@
 type SchematicLanguage = "zh" | "en";
 
 const ZH: Record<string, string> = {
+  "export.title": "导出电路图",
+  "export.includeHidden": "在图像中包含隐藏对象",
+  "export.json": "电路 JSON",
+  "export.cancel": "取消",
   "layer.field": "图层",
   "layer.mixed": "多个图层",
   "layer.hiddenSuffix": "（隐藏）",

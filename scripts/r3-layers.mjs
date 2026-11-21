@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 import {
   serveDist,
@@ -37,6 +38,269 @@ function assert(condition, message, evidence) {
   if (!condition) throw new Error(`${message} ${JSON.stringify(evidence)}`);
 }
 
+async function importDocumentFile(json, filename) {
+  await evaluate(page, (json, filename) => {
+    const input = document.querySelector("[data-schematic-document-import-input]");
+    const files = new DataTransfer();
+    files.items.add(new File([json], filename, { type: "application/json" }));
+    input.files = files.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, json, filename);
+}
+
+async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId }) {
+  const baseline = await evaluate(page, () => {
+    const { editor, mountReadonlySchematicViewer, objectIds } = window.layersSmoke;
+    editor.transact(draft => {
+      draft.notes.push(
+        { id: "front-note", layerId: "layer-2", x: 100, y: 100, width: 120, format: "plain", text: "Front" },
+        { id: "back-note", layerId: "layer-2", x: 100, y: 100, width: 120, format: "plain", text: "Back" },
+        { id: "private-note", layerId: "layer-3", x: 2200, y: 100, width: 160, height: 80, format: "plain",
+          backgroundColor: "#ff0000", text: "Private" }
+      );
+      draft.layerObjectStates["front-note"] = { z: 20 };
+    }, { origin: "editor", reason: "image-export-fixture" });
+
+    const content = editor.getContent();
+    const host = document.createElement("div");
+    host.style.cssText = "width:320px;height:160px";
+    document.body.append(host);
+    const viewer = mountReadonlySchematicViewer(host, content);
+    const viewerIds = objectIds(host);
+    viewer.destroy();
+    host.remove();
+
+    const createUrl = URL.createObjectURL;
+    const click = HTMLAnchorElement.prototype.click;
+    const blobs = new Map();
+    URL.createObjectURL = function(blob) {
+      const url = createUrl.call(this, blob);
+      blobs.set(url, blob);
+      return url;
+    };
+    const downloads = window.layersSmoke.downloads = [];
+    HTMLAnchorElement.prototype.click = function() {
+      const blob = blobs.get(this.href);
+      if (this.download && blob) downloads.push({ filename: this.download, blob });
+      else click.call(this);
+    };
+    return { viewerIds, content: JSON.stringify(content) };
+  });
+  const trigger = "[data-schematic-document-export]";
+  const dialog = "[data-schematic-document-export-dialog][open]";
+  const hiddenInput = "[data-schematic-export-hidden]";
+  let downloadCount = 0;
+  const openExport = async () => {
+    await clickSelector(page, trigger);
+    await waitFor(page, selector => !!document.querySelector(selector), "Export schematic dialog did not open", { args: [dialog] });
+    assert(await evaluate(page, selector => !document.querySelector(selector).checked, hiddenInput),
+      "export dialog did not default to visible objects", {});
+  };
+  const download = async (format, includeHidden = false) => {
+    await openExport();
+    if (includeHidden) await clickSelector(page, hiddenInput);
+    await clickSelector(page, `[data-schematic-export-format='${format}']`);
+    await waitFor(page, count => window.layersSmoke.downloads.length === count, `${format} export did not download`, { args: [++downloadCount] });
+  };
+  await download("svg");
+  await download("svg", true);
+  await download("png");
+  await download("png", true);
+  await download("json", true);
+
+  const exported = await evaluate(page, async () => {
+    const { downloads, editor, objectIds } = window.layersSmoke;
+    const svgNodes = await Promise.all(downloads.slice(0, 2).map(async ({ blob }) =>
+      new DOMParser().parseFromString(await blob.text(), "image/svg+xml").documentElement));
+    const ids = svgNodes.map(objectIds);
+    const pngSizes = await Promise.all(downloads.slice(2, 4).map(async ({ blob }, index) => {
+      const image = await createImageBitmap(blob);
+      const svg = svgNodes[index];
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0);
+      const privateRect = svg.querySelector("[data-note-id='private-note'] rect");
+      let hiddenNoteColor;
+      if (privateRect) {
+        const [x, y, width, height] = svg.getAttribute("viewBox").split(" ").map(Number);
+        const sampleX = Number(privateRect.getAttribute("x")) + Number(privateRect.getAttribute("width")) / 2;
+        const sampleY = Number(privateRect.getAttribute("y")) + Number(privateRect.getAttribute("height")) - 6;
+        const px = (sampleX - x) * image.width / width;
+        const py = (sampleY - y) * image.height / height;
+        hiddenNoteColor = Array.from(context.getImageData(Math.floor(px), Math.floor(py), 1, 1).data);
+      }
+      image.close();
+      return { w: canvas.width, h: canvas.height, hiddenNoteColor,
+        svgWidth: +svg.getAttribute("width"), svgHeight: +svg.getAttribute("height") };
+    }));
+    return {
+      ids, pngSizes, files: downloads.map(item => [item.filename, item.blob.type]),
+      jsonText: await downloads[4].blob.text(),
+      currentContent: JSON.stringify(editor.getContent())
+    };
+  });
+  const [visible, all] = exported.ids;
+  assert(isDeepStrictEqual(visible, baseline.viewerIds) && visible.includes(branchId)
+    && visible.includes(shapeId) && visible.includes(copiedShapeId) && visible.includes("output-label")
+    && visible.indexOf("back-note") < visible.indexOf("front-note"), "viewer and default SVG differ in visibility or order", exported.ids);
+  assert(!visible.includes("private-note") && !visible.includes("locked-note") && !visible.includes(hiddenWireId)
+    && all.includes("private-note") && all.includes("locked-note") && all.includes(hiddenWireId),
+    "image visibility modes selected the wrong objects", exported.ids);
+  assert(exported.files.every(([file, mime], index) => file.endsWith([".svg", ".svg", ".png", ".png", ".sch.json"][index])
+    && mime === ["image/svg+xml", "image/svg+xml", "image/png", "image/png", "application/json"][index]),
+    "image or JSON file metadata is incorrect", exported.files);
+  assert(exported.pngSizes.every(size => size.w === size.svgWidth * 2 && size.h === size.svgHeight * 2)
+    && exported.pngSizes[1].w > exported.pngSizes[0].w
+    && exported.pngSizes[1].hiddenNoteColor?.[0] > 220 && exported.pngSizes[1].hiddenNoteColor?.[1] < 140,
+    "PNG does not match SVG bounds or the hidden note failed to rasterize", exported.pngSizes);
+  const json = JSON.parse(exported.jsonText).schematic;
+  assert(exported.currentContent === baseline.content && json.layers.find(layer => layer.id === "layer-3")?.visible === false
+    && json.layerObjectStates[hiddenWireId]?.visible === false,
+    "export mutated the document or lost JSON visibility state", { files: exported.files });
+
+  const checkDialogLayout = () => evaluate(page, selector => {
+    const box = document.querySelector(selector);
+    const button = box.querySelector("[data-schematic-export-format='svg']");
+    const buttonStyle = getComputedStyle(button);
+    const luminance = (rgb) => {
+      const channels = rgb.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(channel => {
+        const s = Number(channel) / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const values = [luminance(buttonStyle.color), luminance(buttonStyle.backgroundColor)].sort((a, b) => a - b);
+    const rect = box.getBoundingClientRect();
+    return { contrast: (values[1] + 0.05) / (values[0] + 0.05), left: rect.left, right: rect.right, viewport: innerWidth };
+  }, dialog);
+  await openExport();
+  const light = await checkDialogLayout();
+  assert(light.contrast >= 4.5, "Light export text contrast is insufficient", light);
+  await clickSelector(page, "[data-schematic-export-cancel]");
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
+  await evaluate(page, () => { document.documentElement.dataset.effectiveTheme = "dark"; });
+  await waitFor(page, () => document.querySelector("[data-schematic-shell]").classList.contains("is-layout-narrow"),
+    "375px export layout did not activate");
+  await openExport();
+  const dark = await checkDialogLayout();
+  assert(dark.viewport === 375 && dark.left >= 0 && dark.right <= 375 && dark.contrast >= 4.5,
+    "Dark mobile export dialog is clipped or has insufficient contrast", dark);
+  await pressKey("Escape");
+  await waitFor(page, selector => !document.querySelector(selector), "Escape did not close the export dialog", { args: [dialog] });
+  return exported.jsonText;
+}
+
+async function checkLayersRoundTrip(fixture, { selectInLayers, moveSelection, emptyCanvasPoint }) {
+  const priorTab = await evaluate(page, () => window.layersSmoke.editor.editor.activeHostedDocumentId);
+  await importDocumentFile(fixture, "r3-1f-layer-roundtrip.sch.json");
+  await waitFor(page, id => window.layersSmoke.editor.editor.activeHostedDocumentId !== id
+    && !!document.querySelector("[model-id='output-branch']"), "round-trip circuit did not load", { args: [priorTab] });
+
+  const shapeId = "roundtrip-shape";
+  await evaluate(page, id => window.layersSmoke.editor.transact(draft => {
+    draft.components.push({ id, type: "rectangle", ref: "X1", x: 790, y: 110, rotation: 0, mirrored: false, values: {} });
+  }, { origin: "editor", reason: "layer-roundtrip-fixture" }), shapeId);
+
+  const readContent = () => evaluate(page, () => window.layersSmoke.editor.getContent());
+  const readNetlists = () => evaluate(page, () => window.layersSmoke.netlists());
+  const baselineNetlists = await readNetlists();
+  assert(/\bR1\b/.test(baselineNetlists.spice) && /\bC1\b/.test(baselineNetlists.spice)
+    && baselineNetlists.diagnostics.every(item => item.severity !== "error"), "RC baseline netlist is invalid", baselineNetlists);
+  const expectNetlists = async stage => {
+    const actual = await readNetlists();
+    assert(isDeepStrictEqual(actual, baselineNetlists), `RC netlists or diagnostics changed after ${stage}`, actual);
+  };
+  const worldPoint = (x, y) => evaluate(page, (x, y) => {
+    const point = window.layersSmoke.editor.editor.paper.localToClientPoint(x, y);
+    return { x: point.x, y: point.y };
+  }, x, y);
+
+  await selectInLayers("output-branch");
+  await moveSelection("layer-1");
+  await selectInLayers(shapeId);
+  await moveSelection("layer-2");
+  const reassigned = await readContent();
+  const originalState = reassigned.layerObjectStates["output-branch"];
+  assert(reassigned.wires.find(wire => wire.id === "output-branch")?.layerId === "layer-1"
+    && reassigned.components.find(component => component.id === shapeId)?.values["layer:id"] === "layer-2",
+    "round-trip layer reassignment failed", reassigned.layerObjectStates);
+  await expectNetlists("layer reassignment");
+
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await evaluate(page, () => document.querySelector("[data-layer-select='layer-2']").click());
+  await clickSelector(page, "[data-command='wire']");
+  await clickPoint(await worldPoint(590, 60));
+  await clickPoint(await worldPoint(590, 130));
+  await pressKey("Enter");
+  await waitFor(page, () => !!document.querySelector("[model-id='junction-590-130']"), "Wire tool did not split the output conductor");
+  await pressKey("Escape");
+  const split = await readContent();
+  const { wireId: rightSegmentId, point: labelPoint } = split.netLabels.find(label => label.id === "output-label").attachment;
+  const rightSegment = split.wires.find(wire => wire.id === rightSegmentId);
+  const leftSegment = split.wires.find(wire => wire.id === "output-branch");
+  const branch = split.wires.find(wire => wire.layerId === "layer-2" && wire.points.some(point => point.x === 590 && point.y === 60));
+  assert(rightSegmentId !== "output-branch" && isDeepStrictEqual(labelPoint, { x: 630, y: 130 })
+    && [leftSegment, rightSegment].every(wire => wire?.layerId === "layer-1"
+      && isDeepStrictEqual(split.layerObjectStates[wire.id], originalState)),
+    "split did not preserve the output label, layer or stack position", { rightSegmentId, labelPoint, leftSegment, rightSegment });
+  assert(branch && split.connections.wires[branch.id].some(node =>
+    [leftSegment, rightSegment].every(wire => split.connections.wires[wire.id].includes(node))),
+    "the branch and both output segments do not share the physical node", split.connections.wires);
+  await expectNetlists("T-junction split");
+
+  await selectInLayers(shapeId);
+  await clickPoint(await worldPoint(675, 130), 8);
+  await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
+  await pressKey("c");
+  await clickPoint(await worldPoint(675, 150));
+  await waitFor(page, () => document.querySelector("[data-schematic-status]")?.textContent.includes("2 objects attached to cursor"),
+    "copy did not pick both the shape and the split wire");
+  await clickPoint(await emptyCanvasPoint());
+  await waitFor(page, () => window.layersSmoke.editor.getContent().components.filter(component => component.type === "rectangle").length === 2,
+    "the copied shape did not commit");
+  await pressKey("Escape");
+  const duplicated = await readContent();
+  const copiedShape = duplicated.components.find(component => component.type === "rectangle" && component.id !== shapeId);
+  const copiedWire = duplicated.wires.find(wire => !split.wires.some(previous => previous.id === wire.id));
+  assert(copiedShape?.values["layer:id"] === "layer-2" && copiedWire?.layerId === "layer-1"
+    && duplicated.layerObjectStates[copiedWire.id]?.z > originalState.z,
+    "mixed copy lost the shape or wire layer or the placement order", { copiedShape, copiedWire });
+  await expectNetlists("shape and wire copy");
+
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await evaluate(page, id => {
+    document.querySelector(`[data-layer-object-visible='${id}']`).click();
+    document.querySelector("[data-layer-visible='layer-3']").click();
+  }, rightSegmentId);
+  await waitFor(page, id => {
+    const content = window.layersSmoke.editor.getContent();
+    return content.layerObjectStates?.[id]?.visible === false && content.layers.find(layer => layer.id === "layer-3")?.visible === false
+      && !document.querySelector(`[model-id='${id}'], [data-note-id='locked-note']`)
+      && !!document.querySelector("[model-id='output-label']");
+  }, "single-object or whole-layer visibility did not reach the canvas", { args: [rightSegmentId] });
+  await expectNetlists("wire and layer visibility changes");
+
+  const json = await checkImageExport({ hiddenWireId: rightSegmentId, branchId: branch.id, shapeId, copiedShapeId: copiedShape.id });
+  const exportedContent = await readContent();
+  await expectNetlists("SVG, PNG and JSON export");
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 980, deviceScaleFactor: 1, mobile: false });
+  await navigate(page, server.url);
+  await waitFor(page, id => !!document.querySelector(`[model-id='${id}']`), "copied shape did not reload", { args: [copiedShape.id] });
+  const reloaded = await readContent();
+  assert(isDeepStrictEqual(reloaded, exportedContent), "reloading changed the circuit or Layers state", reloaded);
+  await expectNetlists("workspace reload");
+
+  const reloadedTab = await evaluate(page, () => window.layersSmoke.editor.editor.activeHostedDocumentId);
+  await importDocumentFile(json, "r3-1f-layer-roundtrip-export.sch.json");
+  await waitFor(page, id => window.layersSmoke.editor.editor.activeHostedDocumentId !== id,
+    "exported JSON did not open in a new document", { args: [reloadedTab] });
+  const imported = await readContent();
+  assert(isDeepStrictEqual(imported, exportedContent), "file round-trip changed the circuit or Layers state", imported);
+  await expectNetlists("JSON re-import");
+}
+
 try {
   await build({
     absWorkingDir: root,
@@ -44,11 +308,29 @@ try {
       resolveDir: root,
       contents: `
         import { renderSchematicTab, initSchematicEditor } from '@edahelper/schematic/web';
+        import { mountReadonlySchematicViewer } from '@edahelper/schematic/viewer';
+        import { buildStructuralNetlist } from './packages/schematic/dist/schematic/netlist/build.js';
+        import { printNetlist } from './packages/schematic/dist/schematic/netlist/print.js';
         import '@edahelper/schematic/styles/web.css';
         import './apps/web/style.css';
         const root = document.querySelector('#app');
         root.innerHTML = renderSchematicTab();
-        window.layersSmoke = { editor: initSchematicEditor(root) };
+        const editor = initSchematicEditor(root);
+        window.layersSmoke = {
+          editor, mountReadonlySchematicViewer,
+          objectIds(root) {
+            return [...root.querySelectorAll("[data-component-id], [data-net-label-id], [data-note-id], [data-wire-id]")]
+              .map(node => node.dataset.componentId ?? node.dataset.netLabelId ?? node.dataset.noteId ?? node.dataset.wireId);
+          },
+          netlists() {
+            const design = buildStructuralNetlist(editor.editor.hostDocument());
+            return {
+              spice: printNetlist(design, "spice"),
+              spectre: printNetlist(design, "spectre"),
+              diagnostics: design.diagnostics
+            };
+          }
+        };
       `
     },
     outfile: path.join(output, "main.js"),
@@ -313,13 +595,7 @@ try {
 
   await page.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 980, deviceScaleFactor: 1, mobile: false });
   const rcFixture = await fs.readFile(new URL("./fixtures/r3-1c-rc-layer-test.schematic.json", import.meta.url), "utf8");
-  await evaluate(page, json => {
-    const input = document.querySelector("[data-schematic-document-import-input]");
-    const files = new DataTransfer();
-    files.items.add(new File([json], "r3-1c-rc-layer-test.schematic.json", { type: "application/json" }));
-    input.files = files.files;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, rcFixture);
+  await importDocumentFile(rcFixture, "r3-1c-rc-layer-test.schematic.json");
   await waitFor(page, () => !!document.querySelector("[model-id='output-branch']")
     && window.layersSmoke.editor.getContent().notes.some(note => note.id === "output-note"), "RC fixture did not import");
 
@@ -626,7 +902,9 @@ try {
   await navigate(page, server.url);
   await waitFor(page, splitPersisted, "split layer state did not survive reload", splitArgs);
 
-  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, clipboardImport: true, copyAndSplit: true, ok: true }));
+  await checkLayersRoundTrip(rcFixture, { selectInLayers, moveSelection, emptyCanvasPoint });
+  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, clipboardImport: true,
+    copyAndSplit: true, imageExport: true, layerRoundTrip: true, netlistFormats: ["spice", "spectre"], ok: true }));
 } finally {
   page?.close();
   await browser?.close();

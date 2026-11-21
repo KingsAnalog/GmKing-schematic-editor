@@ -1,3 +1,4 @@
+import type { SchematicDocumentSvgOptions } from "./documentSvgRenderer";
 import type { SchematicContextMenuScope } from "./contextMenuModel";
 import type {
   SchematicAnalysisControllerOptions
@@ -89,6 +90,12 @@ export interface SchematicWorkspacePort {
 export interface SchematicDocumentFilePort {
   read(file: SchematicDocumentFileLike): Promise<ImportedSchematicDocumentFile>;
   download(document: SchematicDocument, title: string): void;
+  downloadImage(
+    document: SchematicDocument,
+    title: string,
+    format: "svg" | "png",
+    options: Pick<SchematicDocumentSvgOptions, "includeHidden" | "presentationMode">
+  ): Promise<void>;
 }
 
 export interface SchematicClipboardPort {
@@ -116,6 +123,7 @@ export interface SchematicDocumentHostBridge<EditorState> {
   finishActiveEdits(): void;
   isDisposableBlank(session: SchematicHostedDocumentSession<EditorState>): boolean;
   currentDocument(): SchematicDocument;
+  currentPresentationMode(): boolean;
   applyClipboardDocument(document: SchematicDocument): void;
   setStatus(message: string): void;
   fit(): void;

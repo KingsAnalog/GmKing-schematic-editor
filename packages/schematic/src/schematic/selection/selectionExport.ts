@@ -1,4 +1,4 @@
-import { renderSchematicSvgScene, schematicSvgSceneBounds } from "../svgRenderer";
+import { renderSchematicSvgScene, schematicSvgSceneBounds, type SchematicSvgScene } from "../svgRenderer";
 import { svgIdFragment } from "../svgId";
 import type { Rect } from "../view-geometry";
 import type { ComponentInstance, InductorCoupling, NetLabel, Point, SchematicConnections, SchematicNote, Wire } from "../types";
@@ -12,6 +12,7 @@ export interface SchematicSelectionExportInput extends SymbolTemplateContext {
   components: ComponentInstance[];
   inductorCouplings?: InductorCoupling[];
   wires: Wire[];
+  wireEndpoints?: SchematicSvgScene["wireEndpoints"];
   junctionPoints: Point[];
   junctionColors?: Readonly<Record<string, string>>;
   netLabels: NetLabel[];
