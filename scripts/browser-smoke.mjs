@@ -228,15 +228,7 @@ async function stopBrowserProcess(proc) {
 async function removeBrowserProfile(userDataDir) {
   const resolved = path.resolve(userDataDir);
   if (path.dirname(resolved) !== path.resolve(tmpdir()) || !path.basename(resolved).startsWith("schematic-browser-")) throw new Error("Unexpected browser profile path");
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await fs.rm(userDataDir, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      if (attempt === 2) throw error;
-      await delay(250);
-    }
-  }
+  await fs.rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 150 });
 }
 
 function findBrowserExecutable() {

@@ -66,6 +66,12 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration("labelVisible", booleanValues),
   enumeration("valueVisible", booleanValues),
   enumeration(MOS_THICK_GATE_VALUE_KEY, booleanValues, component => isMosComponentType(component.type)),
+  ...["mos:w", "mos:l", "mos:m", "mos:nf"].map(key => ({
+    key,
+    supports: (component: ComponentInstance) => isMosComponentType(component.type),
+    valid: (value: string) => value.length <= 256 && !/[\r\n]/.test(value),
+    expected: "a MOS parameter expression on one line"
+  })),
   enumeration("gainPolarity", ["default", "positive", "negative"]),
   enumeration(DIFFERENTIAL_OUTPUTS_SAME_VALUE_KEY, booleanValues),
   { ...enumeration(TRANSISTOR_CIRCLE_VALUE_KEY, booleanValues, component => isTransistorComponentType(component.type)), unsupportedExpected: "a setting for an NMOS, PMOS, NPN, or PNP transistor" },

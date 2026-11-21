@@ -13,6 +13,7 @@ import {
 import { normalizeWirePath } from "./wire/wireGeometry";
 import { isHexColor } from "../shared/color";
 import { defaultLayers } from "./layers";
+import { SCHEMATIC_TEXT_FONTS } from "./schematicFont";
 import type {
   ComponentAppearance,
   ComponentInstance,
@@ -44,6 +45,7 @@ const SCHEMATIC_JSON_ITEM_FIELD_INDENT = " ".repeat(SCHEMATIC_JSON_INDENT * 4);
 const ENVELOPE_KEYS = ["format", "schematic"] as const;
 const SCHEMATIC_KEYS = [
   "symbolTemplate",
+  "display",
   "components",
   "wires",
   "inductorCouplings",
@@ -89,6 +91,7 @@ export function createSchematicFile(document: SchematicDocumentFileSource): Sche
     format: SCHEMATIC_FILE_FORMAT,
     schematic: {
       symbolTemplate: resolveSymbolTemplate(document.symbolTemplate).id,
+      ...(document.display ? { display: { ...document.display } } : {}),
       components: document.components.map(snapshotComponent),
       wires: document.wires.map(snapshotWire),
       ...(inductorCouplings.length > 0
@@ -122,6 +125,7 @@ function formatSchematicFileJson(file: SchematicFile) {
     `  "format": ${JSON.stringify(file.format)},`,
     '  "schematic": {',
     `    "symbolTemplate": ${JSON.stringify(file.schematic.symbolTemplate)},`,
+    ...(file.schematic.display ? [`    "display": ${stringifyInline(file.schematic.display)},`] : []),
     ...formatSchematicComponents(file.schematic.components),
     ...formatSchematicWires(file.schematic.wires),
     ...(file.schematic.inductorCouplings
@@ -239,6 +243,7 @@ function formatSchematicNotes(notes: readonly SchematicNote[]) {
           ? [`"backgroundColor": ${JSON.stringify(note.backgroundColor)}`]
           : []),
         ...(note.textColor !== undefined ? [`"textColor": ${JSON.stringify(note.textColor)}`] : []),
+        ...(note.fontFamily === undefined ? [] : [`"fontFamily": ${JSON.stringify(note.fontFamily)}`]),
         ...(note.fontSizePx !== undefined
           ? [`"fontSizePx": ${JSON.stringify(note.fontSizePx)}`]
           : []),
@@ -314,7 +319,7 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     source,
     SCHEMATIC_KEYS,
     "$.schematic",
-    ["inductorCouplings", "symbolTemplate", "layers", "layerObjectStates"]
+    ["inductorCouplings", "symbolTemplate", "display", "layers", "layerObjectStates"]
   );
   let symbolTemplate;
   try {
@@ -357,6 +362,7 @@ function decodeSchematicFile(value: unknown): SchematicContent {
   assertValidLabelAttachments(netLabels, wires);
   return {
     symbolTemplate,
+    ...(hasOwn(source, "display") ? { display: decodeDisplaySettings(source.display) } : {}),
     components,
     wires,
     connections,
@@ -366,6 +372,16 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     notes,
     layers,
     ...(layerObjectStates ? { layerObjectStates } : {})
+  };
+}
+
+function decodeDisplaySettings(value: unknown): SchematicContent["display"] {
+  const path = "$.schematic.display";
+  const source = requireObject(value, path);
+  requireExactKeys(source, ["wireCrossings", "textFont"], path, ["wireCrossings", "textFont"]);
+  return {
+    ...(hasOwn(source, "wireCrossings") ? { wireCrossings: requireEnum(source.wireCrossings, ["plain", "hop"] as const, `${path}.wireCrossings`) } : {}),
+    ...(hasOwn(source, "textFont") ? { textFont: requireEnum(source.textFont, SCHEMATIC_TEXT_FONTS, `${path}.textFont`) } : {})
   };
 }
 
@@ -599,12 +615,13 @@ function decodeJunctionAppearance(value: unknown, path: string): JunctionAppeara
 
 function decodeNetLabel(value: unknown, path: string): NetLabel {
   const source = requireObject(value, path);
-  requireExactKeys(source, ["id", "name", "attachment", "layerId"], path, ["layerId"]);
+  requireExactKeys(source, ["id", "name", "attachment", "layerId", "fontFamily"], path, ["layerId", "fontFamily"]);
   const attachment = requireObject(source.attachment, `${path}.attachment`);
   requireExactKeys(attachment, ["wireId", "point"], `${path}.attachment`);
   return {
     id: requireNonEmptyString(source.id, `${path}.id`),
     name: requireNonEmptyString(source.name, `${path}.name`),
+    ...(hasOwn(source, "fontFamily") ? { fontFamily: requireEnum(source.fontFamily, SCHEMATIC_TEXT_FONTS, `${path}.fontFamily`) } : {}),
     ...(hasOwn(source, "layerId") ? { layerId: requireNonEmptyString(source.layerId, `${path}.layerId`) } : {}),
     attachment: {
       wireId: requireString(attachment.wireId, `${path}.attachment.wireId`),
@@ -617,9 +634,9 @@ function decodeNote(value: unknown, path: string): SchematicNote {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx", "layerId"],
+    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx", "layerId", "fontFamily"],
     path,
-    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx", "layerId"]
+    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx", "layerId", "fontFamily"]
   );
   const width = requireFiniteNumber(source.width, `${path}.width`);
   if (width <= 0) invalid(`${path}.width`, "a positive finite number");
@@ -632,6 +649,7 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     text: requireString(source.text, `${path}.text`)
   };
   if (hasOwn(source, "layerId")) note.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
+  if (hasOwn(source, "fontFamily")) note.fontFamily = requireEnum(source.fontFamily, SCHEMATIC_TEXT_FONTS, `${path}.fontFamily`);
   if (hasOwn(source, "height")) {
     const height = requireFiniteNumber(source.height, `${path}.height`);
     if (height <= 0) invalid(`${path}.height`, "a positive finite number");
@@ -834,6 +852,7 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
   return {
     id: label.id,
     name: label.name,
+    ...(label.fontFamily === undefined ? {} : { fontFamily: label.fontFamily }),
     ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
     attachment: {
       wireId: label.attachment.wireId,
@@ -904,6 +923,7 @@ function assertUniqueLayerIds(layers: readonly SchematicLayer[]) {
 function snapshotNote(note: SchematicNote): SchematicNote {
   return {
     id: note.id,
+    ...(note.fontFamily === undefined ? {} : { fontFamily: note.fontFamily }),
     ...(note.layerId === undefined ? {} : { layerId: note.layerId }),
     x: note.x,
     y: note.y,

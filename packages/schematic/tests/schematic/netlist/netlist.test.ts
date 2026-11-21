@@ -79,7 +79,7 @@ describe("structural netlist", () => {
     expect(printNetlist(design, "spectre")).toBe([
       "// analog-tools structural netlist",
       "simulator lang=spectre",
-      "subckt schematic GND",
+      "subckt schematic (GND)",
       "  V1 (net0 GND) vsource dc=1",
       "  R1 (net0 net1) resistor r=1k",
       "  R2 (net1 GND) resistor r=2k",
@@ -228,5 +228,62 @@ describe("structural netlist", () => {
   it("is deterministic", () => {
     const document = dividerDocument();
     expect(buildStructuralNetlist(document)).toEqual(buildStructuralNetlist(document));
+  });
+
+  it("reports empty and malformed custom model names while retaining the instance", () => {
+    for (const [name, code] of [["", "MISSING_MODEL"], ["name with spaces", "INVALID_MODEL"]]) {
+      const config = defaultDeviceConfig("custom");
+      config.devices.nmos = name;
+      const design = buildStructuralNetlist(mosDocument(), { config });
+      expect(design.diagnostics).toContainEqual(expect.objectContaining({ componentId: "M1", code, severity: "error" }));
+      expect(design.instances).toContainEqual(expect.objectContaining({ componentId: "M1", master: "NMOS" }));
+      expect(printNetlist(design, "spice")).toMatch(/XM1 .* NMOS w=/);
+    }
+  });
+
+  it("reports case-only instance and net collisions without joining distinct nets", () => {
+    const document = dividerDocument();
+    const wireA = document.wires.find(wire => wire.id === "w1")!;
+    const wireB = document.wires.find(wire => wire.id === "w2")!;
+    document.netLabels = [
+      { id: "label-input", name: "INPUT", attachment: { wireId: wireA.id, point: wireA.points[0] } },
+      { id: "label-input-lower", name: "input", attachment: { wireId: wireB.id, point: wireB.points[0] } }
+    ];
+    document.components.push({ ...fixtureComponent("resistor", "R3", 600, 260), ref: "r1" });
+    const design = buildStructuralNetlist(document);
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "NAME_COLLISION" }));
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "DUPLICATE_REF", componentId: "R3" }));
+    const resistor = design.instances.find(instance => instance.ref === "R1")!;
+    expect(new Set(resistor.nodes.map(node => node.toLowerCase())).size).toBe(2);
+  });
+
+  it("keeps exportable instances when the bulk is floating or source waveform is unknown", () => {
+    const original = mosDocument();
+    const document = fixtureDocument({
+      components: original.components,
+      wires: original.wires.filter(wire => wire.id !== "w4")
+    });
+    document.components.find(component => component.ref === "VG")!.variantId = "unknown-waveform";
+    const design = buildStructuralNetlist(document);
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "BULK_UNCONNECTED", componentId: "M1", pinId: "b" }));
+    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "UNSUPPORTED_SOURCE", componentId: "VG" }));
+    expect(design.instances.map(instance => instance.ref)).toEqual(["M1"]);
+    expect(printNetlist(design, "spectre")).toMatch(/M1 \([^)]*net\d+\)/);
+  });
+
+  it("rejects invalid MOS parameter bounds and prints native unit suffixes", () => {
+    const document = mosDocument();
+    const mos = document.components.find(component => component.ref === "M1")!;
+    Object.assign(mos.values, { "mos:w": "-1u", "mos:l": "0", "mos:m": "1.5", "mos:nf": "9007199254740993" });
+    const invalid = buildStructuralNetlist(document);
+    expect(invalid.diagnostics.filter(item => item.code === "INVALID_VALUE" && item.componentId === "M1")).toHaveLength(4);
+    expect(printNetlist(invalid, "spice")).toContain("w={M1_W} l={M1_L}");
+    const divider = dividerDocument();
+    divider.components.find(component => component.ref === "R1")!.values.main = "2 M";
+    divider.components.find(component => component.ref === "R2")!.values.main = "4 µ";
+    const design = buildStructuralNetlist(divider);
+    expect(printNetlist(design, "spice")).toMatch(/R1 \S+ \S+ 2meg/);
+    expect(printNetlist(design, "spice")).toMatch(/R2 \S+ \S+ 4u/);
+    expect(printNetlist(design, "spectre")).toContain("resistor r=2M");
   });
 });

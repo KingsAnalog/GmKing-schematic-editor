@@ -70,7 +70,7 @@ export class NetlistPanelController {
       if (!control || !kind) return;
       this.config = {
         ...this.config,
-        devices: { ...this.config.devices, [kind]: control.value.trim() || this.config.devices[kind] }
+        devices: { ...this.config.devices, [kind]: control.value.trim() }
       };
       this.rebuild();
     }, { signal });

@@ -84,6 +84,7 @@ export function contentFromDocument(document: SchematicDocument): SchematicConte
   const layerObjectStates = normalizeLayerObjectStates(snapshot.layerObjectStates);
   return {
     symbolTemplate: resolveSymbolTemplate(snapshot.symbolTemplate).id,
+    ...(snapshot.display ? { display: snapshot.display } : {}),
     components: snapshot.components,
     wires: snapshot.wires,
     connections: snapshot.connections,
@@ -137,6 +138,7 @@ export function restoreSchematicDocument(document: SchematicDocument): Schematic
 
 export function assignRestoredSchematicDocument(target: SchematicDocument, source: SchematicDocument) {
   target.symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
+  target.display = source.display && { ...source.display };
   target.components = source.components;
   target.wires = source.wires;
   target.connections = cloneConnections(source.connections);
@@ -159,6 +161,7 @@ function normalizeNetLabel(label: NetLabel): NetLabel {
   return {
     id: String(label.id),
     ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
+    ...(label.fontFamily === undefined ? {} : { fontFamily: label.fontFamily }),
     name: String(label.name),
     attachment: {
       wireId: String(label.attachment.wireId),

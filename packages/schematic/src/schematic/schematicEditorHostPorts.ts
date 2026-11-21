@@ -1,5 +1,6 @@
 import type { SchematicDocumentSvgOptions } from "./documentSvgRenderer";
 import type { SchematicContextMenuScope } from "./contextMenuModel";
+import type { LogEntry } from "./eventLog";
 import type {
   SchematicAnalysisControllerOptions
 } from "./analysis/analysisController";
@@ -125,7 +126,7 @@ export interface SchematicDocumentHostBridge<EditorState> {
   currentDocument(): SchematicDocument;
   currentPresentationMode(): boolean;
   applyClipboardDocument(document: SchematicDocument): void;
-  setStatus(message: string): void;
+  setStatus(message: string, log?: Pick<LogEntry, "level" | "source">): void;
   fit(): void;
   isDestroyed(): boolean;
   onSaveStateChange?(): void;

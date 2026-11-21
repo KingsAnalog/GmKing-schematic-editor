@@ -7,7 +7,9 @@ export const NET_LABEL_OFFSET_Y = -18;
 export const NET_LABEL_HEIGHT = 18;
 
 export function netLabelWidth(name: string) {
-  return Math.max(24, Math.ceil(name.length * 7.2 + 4));
+  const textWidth = Array.from(name, character => /[^\x00-\x7f]/u.test(character) ? NET_LABEL_FONT_SIZE : 7.2)
+    .reduce((width, characterWidth) => width + characterWidth, 0);
+  return Math.max(24, Math.ceil(textWidth + 4));
 }
 
 export function netLabelPosition(label: NetLabel) {

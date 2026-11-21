@@ -68,6 +68,8 @@ export function renderSchematicDocumentSvg(
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,
+      display: document.display,
+      crossingJunctions: document.junctions,
       components: document.components.filter(component => displayed(component.id)),
       inductorCouplings: (document.inductorCouplings ?? []).filter(coupling => displayed(coupling.id)),
       wires,

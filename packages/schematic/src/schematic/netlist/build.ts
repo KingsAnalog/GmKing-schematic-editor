@@ -77,6 +77,7 @@ export function buildStructuralNetlist(
   options: NetlistBuildOptions = {}
 ): NetlistDesign {
   const config: NetlistDeviceConfig = normalizeDeviceConfig(options.config);
+  const defaultDevices = defaultDeviceConfig(config.process).devices;
   const resolution = resolveSchematicNets(document);
   const extracted = extractNetlist(document, resolution);
   const diagnostics: NetlistDiagnostic[] = [];
@@ -96,10 +97,26 @@ export function buildStructuralNetlist(
     diagnostics.push({ code, severity, message, componentId, pinId, netName });
   };
 
+  const deviceModel = (kind: DeviceKind, instance: ComponentInstance) => {
+    const master = config.devices[kind];
+    if (IDENTIFIER.test(master)) return master;
+    const fallback = defaultDevices[kind];
+    report(
+      master ? "INVALID_MODEL" : "MISSING_MODEL", "error",
+      master ? `${instance.ref} has an invalid model name "${master}"; using ${fallback}.`
+        : `${instance.ref} has no model selected; using ${fallback}.`,
+      instance.id
+    );
+    return fallback;
+  };
+
   const portInfo = collectPorts(document, extracted, resolution);
   portInfo.invalid.forEach((name) => {
     report("INVALID_PORT_NAME", "error", `Port name "${name}" is not a valid SPICE identifier.`);
   });
+  for (const { label, status, message } of resolution.labelStates.values()) {
+    if (status === "conflict") report("NAME_COLLISION", "error", `Label "${label.name}": ${message}`, undefined, undefined, label.name);
+  }
   const { names: canonicalNames, nextName } = canonicalNetNames(
     extracted,
     resolution,
@@ -109,6 +126,19 @@ export function buildStructuralNetlist(
   );
   const canonical = (netName: string) => canonicalNames.get(netName) ?? netName;
   const syntheticNets = new Map<string, string>();
+  const caseOwners = new Map<string, string>();
+  for (const [internal, emitted] of canonicalNames) {
+    const key = emitted.toLowerCase();
+    const previous = caseOwners.get(key);
+    if (previous !== undefined && previous !== emitted) {
+      const fallback = nextName();
+      report("NAME_COLLISION", "error", `Nets "${previous}" and "${emitted}" differ only in case; using ${fallback} for "${emitted}".`,
+        resolution.nets.get(internal)?.pins[0]?.componentId, undefined, emitted);
+      canonicalNames.set(internal, fallback);
+    } else {
+      caseOwners.set(key, emitted);
+    }
+  }
   const netForPin = (entry: ExtractedNetlist["components"][number], pinId: string) => {
     const internal = entry.pins[pinId] ?? "";
     if (internal) return canonical(internal);
@@ -151,12 +181,15 @@ export function buildStructuralNetlist(
     fallbackValue: string,
     label: string,
     componentId: string,
-    options: { positive?: boolean; silentEmpty?: boolean } = {}
+    options: { positive?: boolean; nonnegative?: boolean; silentEmpty?: boolean } = {}
   ) => {
     const value = raw.trim();
     if (value) {
       const parsed = parseEngineeringValue(value);
-      if (parsed !== null && (!options.positive || parsed > 0)) return value;
+      if (parsed !== null && Number.isFinite(parsed)
+        && (!options.positive || parsed > 0) && (!options.nonnegative || parsed >= 0)) {
+        return value.replace(/\s+/g, "").replace(/[µμ]/g, "u");
+      }
       if (IDENTIFIER.test(value)) {
         return addParameter(value, fallbackValue, componentId);
       }
@@ -186,11 +219,12 @@ export function buildStructuralNetlist(
       report("INVALID_REF", "error", `${instance.ref || "Instance"} has an invalid reference designator.`, instance.id);
       continue;
     }
-    if (refs.has(instance.ref)) {
+    const refKey = instance.ref.toLowerCase();
+    if (refs.has(refKey)) {
       report("DUPLICATE_REF", "error", `Reference ${instance.ref} is used more than once.`, instance.id);
       continue;
     }
-    refs.add(instance.ref);
+    refs.add(refKey);
 
     if (!SUPPORTED_TYPES.has(instance.type)) {
       report(
@@ -242,7 +276,7 @@ export function buildStructuralNetlist(
     if (PASSIVE_TYPES.has(instance.type)) {
       const passive = instance.type as "resistor" | "capacitor" | "inductor";
       const configKey: DeviceKind = passive;
-      const selectedMaster = config.devices[configKey]?.trim() || PASSIVE_MASTER[passive];
+      const selectedMaster = deviceModel(configKey, instance);
       const value = expression(
         instance.values.main ?? "",
         `${instance.ref}_VALUE`,
@@ -290,8 +324,7 @@ export function buildStructuralNetlist(
 
     if (MOS_TYPES.has(instance.type)) {
       const mosType = instance.type === "pmos" ? "pmos" : "nmos";
-      const master = config.devices[mosType]?.trim()
-        || defaultDeviceConfig(config.process).devices[mosType];
+      const master = deviceModel(mosType, instance);
       const bulkPinExists = entry.def.pins.some(pin => pin.id === "b");
       let bulk: string;
       if (!bulkPinExists) {
@@ -306,7 +339,8 @@ export function buildStructuralNetlist(
         );
       } else {
         bulk = pinNet("b");
-        if (!entry.pins.b) {
+        const bulkNet = resolution.nets.get(entry.pins.b);
+        if (!bulkNet || (bulkNet.pins.length === 1 && bulkNet.wireIds.length === 0)) {
           report(
             "BULK_UNCONNECTED",
             "error",
@@ -358,8 +392,7 @@ export function buildStructuralNetlist(
 
     if (BJT_TYPES.has(instance.type)) {
       const bjtType = instance.type === "pnp" ? "pnp" : "npn";
-      const master = config.devices[bjtType]?.trim()
-        || defaultDeviceConfig(config.process).devices[bjtType];
+      const master = deviceModel(bjtType, instance);
       instances.push({
         componentId: instance.id,
         ref: instance.ref,
@@ -413,7 +446,7 @@ export function buildStructuralNetlist(
       );
       return;
     }
-    report("SINGLE_PIN_NET", "warning", `Net ${netName} has only one pin.`, undefined, undefined, netName);
+    report("SINGLE_PIN_NET", "warning", `Net ${netName} has only one pin.`, pin.componentId, pin.pinId, netName);
   });
 
   return {
@@ -434,11 +467,16 @@ function sourceParameters(
     fallbackValue: string,
     label: string,
     componentId: string,
-    options?: { positive?: boolean; silentEmpty?: boolean }
+    options?: { positive?: boolean; nonnegative?: boolean; silentEmpty?: boolean }
   ) => string
 ): { kind: VoltageSourceType; params: Record<string, string> } | null {
   const value = (key: string) => instance.values[key]?.trim() ?? "";
   const fallback = (suffix: string) => `${instance.ref}_${suffix}`;
+  const parameter = (field: string, defaultValue: string, timing = false) => {
+    const raw = value(`vsource:${kind}:${field}`);
+    return raw ? expression(raw, fallback(field.toUpperCase()), defaultValue, `${instance.ref} ${field}`, instance.id,
+      { nonnegative: timing }) : defaultValue;
+  };
   if (kind === "dc") {
     return {
       kind,
@@ -451,10 +489,10 @@ function sourceParameters(
     return {
       kind,
       params: {
-        vo: value("vsource:sine:dcLevel") || "0",
+        vo: parameter("dcLevel", "0"),
         va: expression(value("vsource:sine:amplitude"), fallback("VA"), "1", `${instance.ref} sine amplitude`, instance.id),
-        freq: expression(value("vsource:sine:frequency"), fallback("FREQ"), "1k", `${instance.ref} sine frequency`, instance.id),
-        td: value("vsource:sine:delay") || "0",
+        freq: expression(value("vsource:sine:frequency"), fallback("FREQ"), "1k", `${instance.ref} sine frequency`, instance.id, { positive: true }),
+        td: parameter("delay", "0", true),
         theta: "0"
       }
     };
@@ -463,13 +501,13 @@ function sourceParameters(
     return {
       kind,
       params: {
-        v1: value("vsource:pulse:zeroValue") || "0",
-        v2: value("vsource:pulse:oneValue") || "1",
-        td: value("vsource:pulse:delay") || "0",
-        tr: value("vsource:pulse:riseTime") || "0",
-        tf: value("vsource:pulse:fallTime") || "0",
-        pw: value("vsource:pulse:pulseWidth") || "0",
-        per: value("vsource:pulse:period") || "1u"
+        v1: parameter("zeroValue", "0"),
+        v2: parameter("oneValue", "1"),
+        td: parameter("delay", "0", true),
+        tr: parameter("riseTime", "0", true),
+        tf: parameter("fallTime", "0", true),
+        pw: parameter("pulseWidth", "0", true),
+        per: parameter("period", "1u", true)
       }
     };
   }
@@ -477,12 +515,12 @@ function sourceParameters(
     return {
       kind,
       params: {
-        v1: value("vsource:exp:zeroValue") || "0",
-        v2: value("vsource:exp:oneValue") || "1",
-        td1: value("vsource:exp:riseStart") || "0",
-        tau1: value("vsource:exp:riseConstant") || "1n",
-        td2: value("vsource:exp:fallStart") || "0",
-        tau2: value("vsource:exp:fallConstant") || "1n"
+        v1: parameter("zeroValue", "0"),
+        v2: parameter("oneValue", "1"),
+        td1: parameter("riseStart", "0", true),
+        tau1: parameter("riseConstant", "1n", true),
+        td2: parameter("fallStart", "0", true),
+        tau2: parameter("fallConstant", "1n", true)
       }
     };
   }
@@ -490,8 +528,8 @@ function sourceParameters(
     const pairs = voltageSourcePairCount(instance);
     const points: string[] = [];
     for (let index = 1; index <= pairs; index += 1) {
-      points.push(value(`vsource:pwl:time${index}`) || String(index - 1));
-      points.push(value(`vsource:pwl:voltage${index}`) || "0");
+      points.push(parameter(`time${index}`, String(index - 1), true));
+      points.push(parameter(`voltage${index}`, "0"));
     }
     return { kind, params: { pwl: points.join(" ") } };
   }
@@ -568,5 +606,5 @@ function canonicalNetNames(
 }
 
 function positiveInteger(value: string) {
-  return /^[1-9][0-9]*$/.test(value);
+  return /^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(Number(value));
 }

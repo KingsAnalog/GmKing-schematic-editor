@@ -118,7 +118,11 @@ export function applySchematicCellSelectionStyles({
     if (typeof netLabelId === "string" && netLabelId.length > 0) {
       netResolution = netResolution ?? resolveSchematicNets(document);
       const selected = selectedIds.has(netLabelId) || hoverIds.has(netLabelId);
-      cell.attr({ label: netLabelTextAttrs({ selected, status: netResolution.labelStates.get(netLabelId)?.status }) });
+      const label = document.netLabels.find(candidate => candidate.id === netLabelId);
+      cell.attr({ label: netLabelTextAttrs({
+        selected, status: netResolution.labelStates.get(netLabelId)?.status,
+        fontFamily: label?.fontFamily, documentFont: document.display?.textFont
+      }) });
       continue;
     }
     if (typeof componentId === "string" && componentId.length > 0) {

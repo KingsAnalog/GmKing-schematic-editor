@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,7 +6,7 @@ import { serveDist, launchBrowser, openPage, navigate, clickSelector, waitFor, e
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const dist = path.resolve(here, "../apps/web/dist");
-const outDir = path.resolve(here, "../../../.tmp-shots");
+const outDir = process.env.SCHEMATIC_SMOKE_ARTIFACTS ?? path.resolve(here, "../../../.tmp-shots");
 await fs.mkdir(outDir, { recursive: true });
 const { createSchematicDocument, contentFromDocument } = await import("../packages/schematic/dist/schematic/document/documentModel.js");
 const content = contentFromDocument(createSchematicDocument({
@@ -82,7 +83,33 @@ try {
 
   await clickSelector(page, "[data-netlist-diagnostic-component]");
   await waitFor(page, () => (document.querySelector("[data-schematic-status]")?.textContent ?? "").includes("Selected R1"), "diagnostic did not select the component");
-  console.log(JSON.stringify({ state, format, ok: true }));
+  await waitFor(page, () => {
+    const paper = document.querySelector("[data-schematic-paper]").getBoundingClientRect();
+    const frame = document.querySelector("[model-id='R1'] [joint-selector='body']") ?? document.querySelector("[model-id='R1']");
+    const bounds = frame.getBoundingClientRect();
+    return Math.abs(bounds.x + bounds.width / 2 - paper.x - paper.width / 2) < 24
+      && Math.abs(bounds.y + bounds.height / 2 - paper.y - paper.height / 2) < 24;
+  }, "diagnostic did not center the component while retaining zoom");
+  await page.send("Browser.setDownloadBehavior", { behavior: "deny" });
+  await evaluate(page, () => {
+    const createUrl = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = blob => {
+      if (blob.type.startsWith("text/plain")) void blob.text().then(value => { window.r2Downloaded = value; });
+      return createUrl(blob);
+    };
+    const exec = document.execCommand.bind(document);
+    document.execCommand = command => {
+      if (command !== "copy") return exec(command);
+      window.r2Copied = document.activeElement.value;
+      return true;
+    };
+  });
+  await clickSelector(page, "[data-netlist-copy]");
+  await clickSelector(page, "[data-netlist-download]");
+  await waitFor(page, () => window.r2Downloaded?.includes("my_res"), "download was blocked by diagnostics");
+  const exports = await evaluate(page, () => [window.r2Copied, window.r2Downloaded]);
+  assert(exports[0]?.startsWith("// analog-tools") && exports[0] === exports[1], "copy and download must contain the same Spectre text");
+  console.log(JSON.stringify({ state, format, diagnosticCentered: true, errorExport: true, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

@@ -161,6 +161,7 @@ function netProperties<T extends object>(el: UiBuilder<T>["el"]) {
       el("span", {}, "Label"),
       el("input", { type: "text", spellcheck: "false", autocomplete: "off", "data-property-net-label": true })
     ),
+    textFontProperty(el, "label"),
     el("label", { class: "property-row", "data-property-net-name-row": true },
       el("span", {}, "Net Name"),
       el("input", { type: "text", readonly: true, "data-property-net-name": true })
@@ -592,6 +593,7 @@ function couplingProperties<T extends object>(el: UiBuilder<T>["el"]) {
 
 function noteProperties<T extends object>(el: UiBuilder<T>["el"]) {
   return el("div", { class: "property-form", "data-property-note-form": true, hidden: true },
+    textFontProperty(el, "note"),
     el("div", { class: "property-row", "data-property-note-format-row": true, hidden: true },
       el("span", {}, "Format"),
       el("div", { class: "property-choice-control" },
@@ -683,6 +685,24 @@ function noteProperties<T extends object>(el: UiBuilder<T>["el"]) {
         }),
         el("span", {}, "px")
       )
+    )
+  );
+}
+
+export function schematicTextFontOptions<T extends object>(el: UiBuilder<T>["el"]) {
+  return [
+    el("option", { value: "sans" }, message("textFont.sans", "Sans serif")),
+    el("option", { value: "serif" }, message("textFont.serif", "Serif")),
+    el("option", { value: "mono" }, message("textFont.mono", "Monospace"))
+  ];
+}
+
+function textFontProperty<T extends object>(el: UiBuilder<T>["el"], kind: "label" | "note") {
+  return el("label", { class: "property-row", "data-property-text-font-row": kind, hidden: true },
+    el("span", {}, message("textFont.label", "Font")),
+    el("select", { "data-property-text-font": kind },
+      el("option", { value: "" }, message("textFont.inherit", "Document default")),
+      ...schematicTextFontOptions(el)
     )
   );
 }

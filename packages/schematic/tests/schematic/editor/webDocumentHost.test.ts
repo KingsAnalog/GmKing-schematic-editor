@@ -184,7 +184,7 @@ describe("SchematicWebDocumentHost", () => {
 
     expect(fixture.host.activeDocumentId).toBe(originalId);
     expect(fixture.bridge.switchSession).not.toHaveBeenCalled();
-    expect(fixture.bridge.setStatus).toHaveBeenCalledWith("Clipboard import failed: Invalid JSON");
+    expect(fixture.bridge.setStatus).toHaveBeenCalledWith("Clipboard import failed: Invalid JSON", { level: "error", source: "import" });
   });
 
   it("ignores an earlier clipboard import when a file is opened first", async () => {

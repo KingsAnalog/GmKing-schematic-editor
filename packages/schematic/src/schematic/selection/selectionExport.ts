@@ -8,6 +8,8 @@ import type { SymbolTemplateContext } from "../symbolTemplateModel";
 const EXPORT_PADDING = 24;
 
 export interface SchematicSelectionExportInput extends SymbolTemplateContext {
+  display?: SchematicSvgScene["display"];
+  crossingJunctions?: SchematicSvgScene["crossingJunctions"];
   connections?: SchematicConnections;
   components: ComponentInstance[];
   inductorCouplings?: InductorCoupling[];

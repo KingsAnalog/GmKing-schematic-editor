@@ -190,7 +190,7 @@ export function normalizeDeviceConfig(
   const devices = { ...defaults.devices };
   DEVICE_KINDS.forEach((kind) => {
     const selected = config?.devices?.[kind]?.trim();
-    if (selected) devices[kind] = selected;
+    if (selected || (process === "custom" && selected === "")) devices[kind] = selected;
   });
   return { process, devices };
 }

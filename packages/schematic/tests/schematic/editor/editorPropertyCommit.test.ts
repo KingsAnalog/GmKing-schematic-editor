@@ -32,6 +32,7 @@ function runtime(document: SchematicDocument, selectedIds: string[]) {
     rebuildCounters: vi.fn(),
     renderNotes: vi.fn(),
     renderInductorCouplings: vi.fn(),
+    scheduleWireCrossings: vi.fn(),
     setStatus: vi.fn(),
     selectCell(id: string) {
       this.selectionSession.selectedIds = new Set([id]);

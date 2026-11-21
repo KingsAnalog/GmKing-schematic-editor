@@ -244,11 +244,22 @@ describe("renderSchematicTabShell", () => {
     const language = shell.match(/<select[^>]+data-schematic-language-select[^>]*>(.*?)<\/select>/)?.[1];
     const theme = shell.match(/<select[^>]+data-schematic-theme-select[^>]*>(.*?)<\/select>/)?.[1];
 
-    expect(language).toContain('<option value="en" selected>English</option>');
-    expect(language).toContain('<option value="zh" disabled>中文 (not ready)</option>');
+    expect(language).toMatch(/<option value="en" selected[^>]*>English<\/option>/);
+    expect(language).toMatch(/<option value="zh" disabled[^>]*>中文 \(not ready\)<\/option>/);
     expect(theme).toMatch(/<option value="light" selected[^>]*>Light<\/option>/);
     expect(theme).toMatch(/<option value="system" disabled[^>]*>Follow system \(not ready\)<\/option>/);
     expect(theme).toMatch(/<option value="dark" disabled[^>]*>Dark \(not ready\)<\/option>/);
+  });
+
+  it("assigns translation keys to display options and font overrides", () => {
+    const shell = renderSchematicTabShell();
+    for (const key of [
+      "options.wireCrossings", "options.crossingPlain", "options.crossingHop",
+      "options.defaultTextFont", "options.chinesePending",
+      "textFont.label", "textFont.inherit", "textFont.sans", "textFont.serif", "textFont.mono"
+    ]) {
+      expect(shell).toContain(`&quot;key&quot;:&quot;${key}&quot;`);
+    }
   });
 
   it("shows the reflection axis and keyboard shortcut for each mirror command", () => {

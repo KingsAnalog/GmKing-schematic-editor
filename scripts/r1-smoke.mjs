@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,7 +6,7 @@ import { serveDist, launchBrowser, openPage, navigate, clickSelector, waitFor, e
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const dist = path.resolve(here, "../apps/web/dist");
-const outDir = path.resolve(here, "../../../.tmp-shots");
+const outDir = process.env.SCHEMATIC_SMOKE_ARTIFACTS ?? path.resolve(here, "../../../.tmp-shots");
 await fs.mkdir(outDir, { recursive: true });
 const server = await serveDist(dist);
 const browser = await launchBrowser();
@@ -26,6 +27,21 @@ try {
     await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
     await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+  }
+  async function clickExposed(selector, width) {
+    const hitState = () => evaluate(page, selector => {
+      const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
+      const hit = document.elementFromPoint(x + width / 2, y + height / 2);
+      return { x, y, width, height, hit: hit?.outerHTML.slice(0, 180), shell: document.querySelector(".schematic-shell").className };
+    }, selector);
+    await waitFor(page, (selector) => {
+      const button = document.querySelector(selector);
+      const box = button.getBoundingClientRect();
+      return button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    }, `${selector} is covered at ${width}px`, { args: [selector] }).catch(async error => {
+      throw new Error(`${error.message} ${JSON.stringify(await hitState())}`);
+    });
+    await clickSelector(page, selector);
   }
   const countComponents = () => evaluate(page, () => document.querySelectorAll("[model-id]").length);
   const status = () => evaluate(page, () => document.querySelector("[data-schematic-status]")?.textContent ?? "");
@@ -124,7 +140,91 @@ try {
 
   const result = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
   await fs.writeFile(path.join(outDir, "r1-after-place.png"), Buffer.from(result.data, "base64"));
-  console.log(JSON.stringify({ defaults, afterPlace, logRows, ok: true }));
+  for (const width of [375, 768, 1080]) {
+    await evaluate(page, () => localStorage.removeItem("at-schematic-layout"));
+    await page.send("Emulation.setDeviceMetricsOverride", { width, height: 900, deviceScaleFactor: 1, mobile: width === 375 });
+    await navigate(page, new URL(`?viewport=${width}`, server.url).href);
+    await waitFor(page, (width) => window.innerWidth === width
+      && !!document.querySelector(".schematic-shell.is-layout-ready [data-schematic-paper] svg"),
+    "layout did not settle at requested width", { args: [width] });
+
+    const libraryOpen = await evaluate(page, () => !!document.querySelector(".schematic-shell.is-left-panel-visible"));
+    const libraryControl = libraryOpen ? "[data-sidebar-tab='library']" : "[data-command='library']";
+    await clickExposed(libraryControl, width);
+    await waitFor(page, () => document.querySelector(".is-left-panel-visible [data-library-item='capacitor']")?.getClientRects().length,
+      `Library did not open at ${width}px`);
+    if (width < 1080) {
+      await click(width - 24, 330);
+      await waitFor(page, () => !document.querySelector(".schematic-shell.is-left-panel-visible"), `Library drawer did not close at ${width}px`);
+    }
+
+    await evaluate(page, () => document.querySelector("[data-schematic-paper]")?.focus());
+    await key("i", "KeyI", 0, "i");
+    await waitFor(page, () => document.querySelector("[data-schematic-instance-browser]")?.hidden === false, "instance browser did not open");
+    assert(await evaluate(page, () => {
+      const box = document.querySelector(".schematic-instance-browser").getBoundingClientRect();
+      return box.width > 0 && box.left >= 0 && box.right <= window.innerWidth;
+    }), `instance browser overflows at ${width}px`);
+    await key("Escape", "Escape");
+    await waitFor(page, () => document.querySelector("[data-schematic-instance-browser]")?.hidden === true,
+      `instance browser did not close at ${width}px`);
+
+    await clickExposed("[data-command='netlist']", width);
+    await waitFor(page, () => document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false",
+      `Netlist dock did not open at ${width}px`);
+    const rail = await evaluate(page, () => {
+      const box = document.querySelector("[data-schematic-panel-resizer='right']").getBoundingClientRect();
+      const state = JSON.parse(localStorage.getItem("at-schematic-layout"));
+      return { x: box.x + box.width / 2, y: box.y + Math.min(25, box.height / 2), width: state.rightWidth };
+    });
+    const dragX = width === 375 ? 6 : -36;
+    await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: rail.x, y: rail.y, button: "left", clickCount: 1 });
+    await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rail.x + dragX, y: rail.y, buttons: 1, button: "left" });
+    await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rail.x + dragX, y: rail.y, button: "left", clickCount: 1 });
+    const resized = rail.width - dragX;
+    await waitFor(page, width => JSON.parse(localStorage.getItem("at-schematic-layout")).rightWidth === width,
+      `right dock width did not change after dragging at ${width}px`, { args: [resized] });
+    await navigate(page, new URL(`?viewport=${width}&reload=1`, server.url).href);
+    await waitFor(page, () => document.querySelector(".schematic-shell.is-layout-ready"), "layout did not restore");
+    assert.equal(await evaluate(page, () => document.querySelector(".schematic-shell").style.getPropertyValue("--schematic-right-panel-width")), `${resized}px`);
+    assert.equal(await evaluate(page, () => JSON.parse(localStorage.getItem("at-schematic-layout")).rightActiveView), "netlist");
+    if (width < 1080) await clickExposed("[data-command='netlist']", width);
+    await waitFor(page, () => document.querySelector("[data-right-panel='netlist']")?.hidden === false
+      && document.querySelector("[data-schematic-analysis-panel]")?.getAttribute("aria-hidden") === "false", "Netlist dock did not restore");
+  }
+
+  await evaluate(page, () => {
+    const input = document.querySelector("[data-schematic-document-import-input]");
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["{invalid-json"], "broken.sch.json", { type: "application/json" }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await waitFor(page, () => /^Import failed/.test(document.querySelector("[data-schematic-status]").textContent), "bad JSON did not report an import error");
+  await clickSelector(page, "[data-log-toggle]");
+  const importError = await evaluate(page, () => {
+    const filter = document.querySelector("[data-log-level]");
+    filter.value = "error";
+    filter.dispatchEvent(new Event("change", { bubbles: true }));
+    return [...document.querySelectorAll(".schematic-log-row")].find(row => row.textContent.includes("Import failed"))?.textContent;
+  });
+  assert.match(importError, /import.*Import failed/i);
+  await clickSelector(page, "[data-log-close]");
+  await page.send("Browser.setDownloadBehavior", { behavior: "deny" });
+  await evaluate(page, () => {
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = blob => {
+      if (blob.type === "application/json") void blob.text().then(content => { window.r1Export = content; });
+      return original(blob);
+    };
+  });
+  await clickSelector(page, "[data-schematic-document-export]");
+  await clickSelector(page, "[data-schematic-export-format='json']");
+  await waitFor(page, () => !!window.r1Export, "document JSON was not exported");
+  const exported = await evaluate(page, () => window.r1Export);
+  assert.equal(JSON.parse(exported).format, "adc-helper/schematic");
+  assert.doesNotMatch(exported, /Import failed|broken\.sch\.json|"(?:eventLog|logs?)"\s*:/);
+  console.log(JSON.stringify({ defaults, afterPlace, logRows, viewports: [375, 768, 1080], failedImportExport: true, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

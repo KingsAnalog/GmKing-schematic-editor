@@ -1,4 +1,5 @@
 import type { SymbolTemplateContext } from "./symbolTemplateModel";
+import type { SchematicTextFont } from "./schematicFont";
 
 /** Display and interaction snapping interval. */
 export const GRID_SIZE = 10;
@@ -206,6 +207,7 @@ export interface NetLabelAttachment {
 export interface NetLabel {
   id: string;
   layerId?: string;
+  fontFamily?: SchematicTextFont;
   name: string;
   attachment: NetLabelAttachment;
 }
@@ -240,6 +242,7 @@ export interface SchematicNote {
   backgroundColor?: string | null;
   textColor?: string;
   fontSizePx?: number;
+  fontFamily?: SchematicTextFont;
 }
 
 export interface JunctionAppearance {
@@ -274,6 +277,7 @@ export interface InductorCoupling {
 
 /** Durable schematic content. */
 export interface SchematicContent extends SymbolTemplateContext {
+  display?: SchematicDisplaySettings;
   components: ComponentInstance[];
   wires: Wire[];
   connections: SchematicConnections;
@@ -283,6 +287,11 @@ export interface SchematicContent extends SymbolTemplateContext {
   notes: SchematicNote[];
   layers?: SchematicLayer[];
   layerObjectStates?: SchematicLayerObjectStates;
+}
+
+export interface SchematicDisplaySettings {
+  wireCrossings?: "plain" | "hop";
+  textFont?: SchematicTextFont;
 }
 
 /** Runtime document shape. `junctions` is derived and omitted from durable content. */

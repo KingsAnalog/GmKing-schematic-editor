@@ -15,10 +15,11 @@ import {
 import type { NetLabelStatus } from "./netResolution";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { escapeAttribute, escapeHtml } from "./uiUtils";
-import { SCHEMATIC_FONT_STACK } from "./schematicFont";
+import { SCHEMATIC_FONT_STACK, schematicTextFontStack, type SchematicTextFont } from "./schematicFont";
 import {
   netLabelVisualBounds,
   noteVisualBounds,
+  svgPathBounds,
   unionRects,
   wireVisualBounds,
   type Rect
@@ -32,7 +33,8 @@ import {
 } from "./wire/wireDecoration";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 import { wireColor } from "./networkColorModel";
-import type { ComponentInstance, NetLabel, Point, SchematicConnections, SchematicNote, Wire } from "./types";
+import { wireHopPaths } from "./wire/wireCrossings";
+import type { ComponentInstance, NetLabel, Point, SchematicConnections, SchematicDisplaySettings, SchematicNote, Wire } from "./types";
 import type { InductorCoupling } from "./types";
 import { GRID_SIZE } from "./types";
 import {
@@ -51,6 +53,8 @@ export interface SchematicSvgTextStyle {
 }
 
 export interface SchematicSvgScene extends SymbolTemplateContext {
+  display?: SchematicDisplaySettings;
+  crossingJunctions?: readonly Point[];
   connections?: SchematicConnections;
   components: readonly ComponentInstance[];
   inductorCouplings?: readonly InductorCoupling[];
@@ -87,6 +91,10 @@ export interface SchematicSvgRender {
 }
 
 export function schematicSvgSceneBounds(scene: SchematicSvgScene, options: Pick<SchematicSvgRenderOptions, "presentationMode"> = {}) {
+  return sceneBounds(scene, options, crossingPaths(scene));
+}
+
+function sceneBounds(scene: SchematicSvgScene, options: Pick<SchematicSvgRenderOptions, "presentationMode">, hops: ReadonlyMap<string, string>) {
   const rects: Rect[] = [];
   scene.components.forEach((component) => rects.push(componentExportBounds(component, {
     symbolTemplate: scene.symbolTemplate,
@@ -98,6 +106,13 @@ export function schematicSvgSceneBounds(scene: SchematicSvgScene, options: Pick<
     if (geometry) rects.push(geometry.bounds);
   });
   scene.wires.forEach((wire) => rects.push(wireVisualBounds(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire))));
+  for (const wire of scene.wires) {
+    const path = hops.get(wire.id);
+    const bounds = path && svgPathBounds(path);
+    if (!bounds) continue;
+    const padding = wireStrokeWidth(wire) / 2;
+    rects.push({ x: bounds.x - padding, y: bounds.y - padding, width: bounds.width + padding * 2, height: bounds.height + padding * 2 });
+  }
   scene.junctionPoints.forEach((point) => rects.push({
     x: point.x - JUNCTION_RADIUS,
     y: point.y - JUNCTION_RADIUS,
@@ -113,7 +128,8 @@ export function renderSchematicSvgScene(
   scene: SchematicSvgScene,
   options: SchematicSvgRenderOptions
 ): SchematicSvgRender | null {
-  const bounds = schematicSvgSceneBounds(scene, options);
+  const hops = crossingPaths(scene);
+  const bounds = sceneBounds(scene, options, hops);
   if (!bounds) return null;
   const padding = options.padding ?? DEFAULT_PADDING;
   const viewBox = {
@@ -132,7 +148,7 @@ export function renderSchematicSvgScene(
     })),
     ...scene.wires.map((wire) => ({
       id: wire.id,
-      svg: renderWire(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire))
+      svg: renderWire(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire), hops.get(wire.id))
     })),
     ...scene.components.map((component) => ({
       id: component.id,
@@ -148,7 +164,7 @@ export function renderSchematicSvgScene(
     })),
     ...scene.netLabels.map((label) => ({
       id: label.id,
-      svg: renderNetLabel(label, scene.netLabelStatuses?.[label.id])
+      svg: renderNetLabel(label, scene.netLabelStatuses?.[label.id], scene.display?.textFont)
     })),
     ...scene.notes.map((note) => ({
       id: note.id,
@@ -169,6 +185,13 @@ export function renderSchematicSvgScene(
   return { svg, bounds, viewBox, width, height };
 }
 
+function crossingPaths(scene: SchematicSvgScene) {
+  if (scene.display?.wireCrossings !== "hop") return new Map<string, string>();
+  const order = new Map(scene.layerObjectOrder?.map((id, index) => [id, index]));
+  const wires = scene.wires.slice().sort((a, b) => (order.get(a.id) ?? -1) - (order.get(b.id) ?? -1));
+  return wireHopPaths(wires, scene.crossingJunctions ?? scene.junctionPoints);
+}
+
 function wrapSvg(
   body: string,
   width: number,
@@ -187,11 +210,12 @@ function wrapSvg(
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${number(viewBox.x)} ${number(viewBox.y)} ${number(viewBox.width)} ${number(viewBox.height)}">${background}${grid}<g font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}">${body}</g></svg>`;
 }
 
-function renderWire(wire: Wire, connections: { start: boolean; end: boolean }) {
+function renderWire(wire: Wire, connections: { start: boolean; end: boolean }, hopPath?: string) {
   if (wire.points.length < 2) return "";
   const attrs = wireAttrs(wire);
   const points = wire.points.map((point) => `${number(point.x)},${number(point.y)}`).join(" ");
-  const line = `<polyline points="${escapeAttribute(points)}" fill="none" stroke="${attrs.stroke}" stroke-width="${number(attrs.strokeWidth)}" stroke-linecap="round" stroke-linejoin="round"${attrs.dash ? ` stroke-dasharray="${attrs.dash}"` : ""}${opacityAttr(attrs.opacity)} />`;
+  const geometry = hopPath ? `path d="${hopPath}"` : `polyline points="${escapeAttribute(points)}"`;
+  const line = `<${geometry} fill="none" stroke="${attrs.stroke}" stroke-width="${number(attrs.strokeWidth)}" stroke-linecap="round" stroke-linejoin="round"${attrs.dash ? ` stroke-dasharray="${attrs.dash}"` : ""}${opacityAttr(attrs.opacity)} />`;
   const decorations = [
     renderWireEndpoint(wire, "start", attrs, connections.start),
     renderWireEndpoint(wire, "end", attrs, connections.end),
@@ -240,12 +264,12 @@ function renderJunction(point: Point, color?: string) {
   return `<circle data-junction="${escapeAttribute(`${point.x},${point.y}`)}" cx="${number(point.x)}" cy="${number(point.y)}" r="${number(JUNCTION_RADIUS)}" fill="${escapeAttribute(ink)}" stroke="${escapeAttribute(ink)}" stroke-width="1" />`;
 }
 
-function renderNetLabel(label: NetLabel, status?: NetLabelStatus) {
+function renderNetLabel(label: NetLabel, status?: NetLabelStatus, documentFont?: SchematicTextFont) {
   const position = netLabelPosition(label);
   const conflict = status === "conflict";
   const inactive = status === "inactive";
   const color = conflict ? "#b00020" : "#111111";
-  return `<text data-net-label-id="${escapeAttribute(label.id)}" x="${number(position.x)}" y="${number(position.y + NET_LABEL_HEIGHT / 2)}" fill="${color}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${NET_LABEL_FONT_SIZE}" dominant-baseline="middle"${conflict ? ' text-decoration="underline"' : ""}${opacityAttr(inactive ? 0.42 : 1)}>${escapeHtml(label.name)}</text>`;
+  return `<text data-net-label-id="${escapeAttribute(label.id)}" x="${number(position.x)}" y="${number(position.y + NET_LABEL_HEIGHT / 2)}" fill="${color}" font-family="${escapeAttribute(schematicTextFontStack(label.fontFamily, documentFont))}" font-size="${NET_LABEL_FONT_SIZE}" dominant-baseline="middle"${conflict ? ' text-decoration="underline"' : ""}${opacityAttr(inactive ? 0.42 : 1)}>${escapeHtml(label.name)}</text>`;
 }
 
 function renderNote(
@@ -256,6 +280,7 @@ function renderNote(
 ) {
   const box = { x: note.x, y: note.y, width: noteWidthPx(note), height: noteHeightPx(note) };
   const fontSize = noteFontSizePx(note);
+  const fontFamily = schematicTextFontStack(note.fontFamily, scene.display?.textFont);
   const fill = noteBackgroundColor(note) ?? "none";
   const fillOpacity = note.format === "markdown" && note.backgroundColor === undefined ? DEFAULT_NOTE_BACKGROUND_OPACITY : undefined;
   const text = scene.renderedNoteText?.[note.id] ?? note.text;
@@ -264,6 +289,7 @@ function renderNote(
     box,
     text,
     fontSize,
+    fontFamily,
     scene.renderedNoteTextStyles?.[note.id],
     namespace
   );
@@ -275,7 +301,7 @@ function renderNote(
   const border = markdown ? 1 : 0;
   const horizontalPadding = NOTE_HORIZONTAL_PADDING + (markdown ? 0 : 1);
   const foreignObject = !portable && html
-    ? `<foreignObject${markdown ? ' requiredExtensions="http://www.w3.org/1999/xhtml"' : ""} x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;border:${border}px solid transparent;padding:${number(NOTE_VERTICAL_PADDING)}px ${horizontalPadding}px;overflow:hidden;color:${escapeAttribute(noteTextColor(note))};font-family:${escapeAttribute(SCHEMATIC_FONT_STACK)};font-size:${number(fontSize)}px;line-height:${lineHeight};white-space:${whiteSpace};overflow-wrap:${overflowWrap}">${html}</div></foreignObject>`
+    ? `<foreignObject${markdown ? ' requiredExtensions="http://www.w3.org/1999/xhtml"' : ""} x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;border:${border}px solid transparent;padding:${number(NOTE_VERTICAL_PADDING)}px ${horizontalPadding}px;overflow:hidden;color:${escapeAttribute(noteTextColor(note))};font-family:${escapeAttribute(fontFamily)};font-size:${number(fontSize)}px;line-height:${lineHeight};white-space:${whiteSpace};overflow-wrap:${overflowWrap}">${html}</div></foreignObject>`
     : "";
   const content = foreignObject
     ? markdown ? `<switch>${foreignObject}${native}</switch>` : foreignObject
@@ -289,6 +315,7 @@ function renderNativeNoteText(
   box: Rect,
   text: string,
   fontSize: number,
+  fontFamily: string,
   style: SchematicSvgTextStyle | undefined,
   namespace: string
 ) {
@@ -300,7 +327,7 @@ function renderNativeNoteText(
   const y = box.y + NOTE_VERTICAL_PADDING + fontSize * (plain ? 0.85 : 1);
   const tspans = lines.map((line, index) => `<tspan x="${number(x)}"${index === 0 ? "" : ` dy="${number(lineHeight)}"`}>${escapeHtml(line || " ")}</tspan>`).join("");
   const clipId = `${namespace}-note-text-clip-${svgIdFragment(note.id)}`;
-  return `<g data-markdown-note-fallback="${escapeAttribute(note.id)}" clip-path="url(#${clipId})"><defs><clipPath id="${escapeAttribute(clipId)}"><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" /></clipPath></defs><text x="${number(x)}" y="${number(y)}" fill="${escapeAttribute(noteTextColor(note))}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${number(fontSize)}"${style?.fontWeight ? ` font-weight="${style.fontWeight}"` : ""}${style?.fontStyle ? ` font-style="${style.fontStyle}"` : ""} xml:space="preserve">${tspans}</text></g>`;
+  return `<g data-markdown-note-fallback="${escapeAttribute(note.id)}" clip-path="url(#${clipId})"><defs><clipPath id="${escapeAttribute(clipId)}"><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" /></clipPath></defs><text x="${number(x)}" y="${number(y)}" fill="${escapeAttribute(noteTextColor(note))}" font-family="${escapeAttribute(fontFamily)}" font-size="${number(fontSize)}"${style?.fontWeight ? ` font-weight="${style.fontWeight}"` : ""}${style?.fontStyle ? ` font-style="${style.fontStyle}"` : ""} xml:space="preserve">${tspans}</text></g>`;
 }
 
 function opacityAttr(opacity: number) {

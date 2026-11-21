@@ -7,7 +7,7 @@ export function printNetlist(design: NetlistDesign, format: NetlistFormat) {
 export function printSpice(design: NetlistDesign) {
   const lines = ["* analog-tools structural netlist"];
   if (design.parameters.length > 0) {
-    lines.push(`.param ${design.parameters.map(parameter => `${parameter.name}=${parameter.value}`).join(" ")}`);
+    lines.push(`.param ${design.parameters.map(parameter => `${parameter.name}=${spiceLiteral(parameter.value)}`).join(" ")}`);
   }
   lines.push(subcktHeader(design, ".subckt"));
   design.instances.forEach((instance) => lines.push(`  ${spiceInstance(instance, design)}`));
@@ -20,7 +20,7 @@ export function printSpectre(design: NetlistDesign) {
   if (design.parameters.length > 0) {
     lines.push(`parameters ${design.parameters.map(parameter => `${parameter.name}=${parameter.value}`).join(" ")}`);
   }
-  lines.push(subcktHeader(design, "subckt"));
+  lines.push(design.ports.length ? `subckt ${design.name} (${design.ports.join(" ")})` : `subckt ${design.name}`);
   design.instances.forEach((instance) => lines.push(`  ${spectreInstance(instance, design)}`));
   lines.push(`ends ${design.name}`);
   return `${lines.join("\n")}\n`;
@@ -70,7 +70,8 @@ function spiceSource(instance: NetlistInstance, design: NetlistDesign) {
     return `EXP(${value("v1")} ${value("v2")} ${value("td1")} ${value("tau1")} ${value("td2")} ${value("tau2")})`;
   }
   if (instance.sourceKind === "pwl") {
-    return `PWL(${value("pwl")})`;
+    const points = params.pwl.split(" ").map(point => formatValue(design, point, "spice"));
+    return `PWL(${points.join(" ")})`;
   }
   return "DC 0";
 }
@@ -145,5 +146,10 @@ function formatValue(design: NetlistDesign, value: string | undefined, format: "
   if (format === "spice" && design.parameters.some(parameter => parameter.name === value)) {
     return `{${value}}`;
   }
-  return value;
+  return format === "spice" ? spiceLiteral(value) : value;
+}
+
+function spiceLiteral(value: string) {
+  // The editor's uppercase M is mega, while SPICE treats both M and m as milli.
+  return value.replace(/([0-9.])M$/, "$1meg");
 }

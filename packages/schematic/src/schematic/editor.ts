@@ -11,7 +11,7 @@ import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
 import { InstanceBrowser } from "./instanceBrowser";
 import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
-import { SchematicEventLog } from "./eventLog";
+import { SchematicEventLog, type LogEntry } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
 import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
 import { createCircleGeometry } from "./circleComponentModel";
@@ -70,6 +70,8 @@ import {
   type NotePropertyBatchProjectionContext
 } from "./notes/notePropertyBatchSession";
 import { noteFontSizePx } from "./notes/noteSizing";
+import { isSchematicTextFont } from "./schematicFont";
+import { wireHopPaths } from "./wire/wireCrossings";
 import { createSchematicPaperSurface, type SchematicPaperSurface } from "./paperLifecycle";
 import { SchematicPreviewRenderer } from "./previewRenderer";
 import { SchematicPropertyInteractionController } from "./propertyInteractionController";
@@ -200,7 +202,7 @@ import {
   changedTransformWireIds,
   type TransformRenderSnapshot
 } from "./transformRenderModel";
-import { schematicDocumentVisualBounds } from "./view-geometry";
+import { componentVisualBounds, schematicDocumentVisualBounds } from "./view-geometry";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 import type { WireEndpointConnections } from "./wire/wireDecoration";
 import {
@@ -358,6 +360,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly lifecycleController: AbortController;
   private readonly stateListeners = new Set<SchematicEditorStateListener>();
   private readonly scheduledFrames = new Set<number>();
+  private wireCrossingFramePending = false;
   private destroyResult: Promise<void> | null = null;
   private initialized = false;
   private destroyed = false;
@@ -658,6 +661,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.host.cursors?.temporaryDelete ?? "crosshair"
     );
     this.noteLayer = new SchematicNoteLayer(this.options.paperEl, {
+      defaultTextFont: () => this.document.display?.textFont,
       runtimeAdapter: this.host.noteRuntimeAdapter,
       onMarkdownChange: (noteId, markdown) => this.updateMarkdownNoteText(noteId, markdown),
       onMarkdownResize: (noteId, height) => this.updateMarkdownNoteHeight(noteId, height)
@@ -708,7 +712,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       noteLayerElement: this.noteLayer.element,
       makeComponentCell: (component) => this.makeComponentCell(component),
       makeWireCell: (wire, options) => this.makeWireCell(wire, options),
-      makeNetLabelCell: (label, options) => makeNetLabelCell(label, options),
+      makeNetLabelCell: (label, options) => makeNetLabelCell(label, { ...options, documentFont: this.document.display?.textFont }),
+      defaultTextFont: () => this.document.display?.textFont,
       presentationMode: () => this.presentationMode,
       worldToScreenPoint: (point) => this.worldToScreenPoint(point),
       zoom: () => this.zoom,
@@ -1119,12 +1124,64 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private bindEvents() {
     this.bindControllerEvents();
+    this.bindDisplaySettings();
     this.bindLibraryShapeDrawEvents();
     this.bindGlobalDocumentWindowInteractions();
     this.bindNoteLayerInteractions();
     this.bindCellGeometrySelectionMovePaperHooks();
     this.bindPaperElementViewportCanvasDomInteractions();
     this.bindPaperPointerMoveDownClickJointJsInteractions();
+  }
+
+  private bindDisplaySettings() {
+    const { signal } = this.lifecycleController;
+    this.options.shellEl.addEventListener("change", event => {
+      const select = event.target;
+      if (!(select instanceof this.host.ownerWindow.HTMLSelectElement)) return;
+      const { value } = select;
+      if (select.hasAttribute("data-schematic-wire-crossings") && (value === "plain" || value === "hop")) {
+        if (value === (this.document.display?.wireCrossings ?? "plain")) return;
+        this.commitDisplayChange(() => {
+          this.document.display = { ...this.document.display, wireCrossings: value };
+        });
+      } else if (select.hasAttribute("data-schematic-text-font") && isSchematicTextFont(value)) {
+        if (value === (this.document.display?.textFont ?? "sans")) return;
+        this.commitDisplayChange(() => {
+          this.document.display = { ...this.document.display, textFont: value };
+          this.document.notes.filter(note => !note.fontFamily).forEach(note => {
+            this.noteLayer.resizeNoteToContent(note, noteFontSizePx(note));
+          });
+        });
+      } else if (select.hasAttribute("data-property-text-font") && (value === "" || isSchematicTextFont(value))) {
+        const target = this.selectedTextObject();
+        if (!target || select.dataset.propertyTextFont !== target.kind || value === (target.object.fontFamily ?? "")) return;
+        this.commitDisplayChange(() => {
+          if (value === "") delete target.object.fontFamily;
+          else target.object.fontFamily = value;
+          if (target.kind === "note") this.noteLayer.resizeNoteToContent(target.object, noteFontSizePx(target.object));
+        });
+      }
+    }, { signal });
+  }
+
+  private selectedTextObject() {
+    const { selectedIds, selectedNoteIds } = this.selectionSession;
+    if (this.transientToolSession.mode !== "select" || selectedIds.size + selectedNoteIds.size !== 1) return null;
+    const note = this.document.notes.find(candidate => selectedNoteIds.has(candidate.id));
+    if (note) return { kind: "note", object: note } as const;
+    const label = this.document.netLabels.find(candidate => selectedIds.has(candidate.id));
+    return label ? { kind: "label", object: label } as const : null;
+  }
+
+  private commitDisplayChange(change: () => void) {
+    this.hostFinishActiveEdits();
+    const previous = this.getContent();
+    change();
+    if (!this.commitCurrentContent("display-settings")) {
+      this.restoreDocumentState(documentFromContent(previous));
+    }
+    this.renderDocument();
+    this.syncToolUi();
   }
 
   private bindControllerEvents() {
@@ -2033,7 +2090,9 @@ export class SchematicEditor implements SchematicHostedEditor {
     const { surface } = runtime;
     const paper = surface.paper as any;
     surface.onGeometryChange((cell) => {
-      if (runtime === this.activeRenderRuntime) this.handleLiveCellGeometry(cell);
+      if (runtime !== this.activeRenderRuntime) return;
+      this.handleLiveCellGeometry(cell);
+      this.scheduleWireCrossings();
     });
 
     paper.on("cell:pointerup", (view: any) => {
@@ -2685,6 +2744,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.document.symbolTemplate
     );
     const layerObjectOrder = layerObjectStackIds({ ...this.document, junctions: input.junctionPoints }, projection);
+    const display = this.document.display && { ...this.document.display };
+    const crossingJunctions = this.document.junctions.map(point => ({ ...point }));
     const wireEndpoints = new Map(input.wires.map(wire => [wire.id, wireEndpointConnections(this.document, wire)]));
     const renderedNotes = await Promise.all(input.notes.map(async (note) => {
       const rendered = await this.noteLayer.waitForRenderedNoteExport(note, { inlineStyles: true });
@@ -2697,6 +2758,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     }));
     return {
       ...input,
+      display,
+      crossingJunctions,
       wireEndpoints,
       layerObjectOrder,
       renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
@@ -3405,6 +3468,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     if (outcome.targets.componentIds.length > 0) this.renderInductorCouplings();
     if (outcome.targets.noteIds.length > 0) this.renderNotes();
+    if (outcome.targets.wireIds.length > 0) this.scheduleWireCrossings();
   }
 
   private deleteSelected() {
@@ -3679,8 +3743,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.propertyInteractions.flush();
   }
 
-  hostSetStatus(message: string) {
-    this.setStatus(message);
+  hostSetStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
+    this.setStatus(message, undefined, log);
   }
 
   hostPrepareAnalysisNetPick() {
@@ -3795,6 +3859,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       .filter(label => displayed(label.id))
       .map(label => makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
+        documentFont: this.document.display?.textFont,
         status: resolution.labelStates.get(label.id)?.status
       }))
     );
@@ -3841,6 +3906,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     (this.document.netLabels ?? []).forEach((label) => {
       this.incrementalRenderer.replaceGraphCellPreservingZ(label.id, makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
+        documentFont: this.document.display?.textFont,
         status: resolution.labelStates.get(label.id)?.status
       }));
     });
@@ -3934,6 +4000,36 @@ export class SchematicEditor implements SchematicHostedEditor {
         }
         z += 1;
       });
+    });
+    this.scheduleWireCrossings();
+  }
+
+  private scheduleWireCrossings() {
+    if (this.document.display?.wireCrossings !== "hop" || this.wireCrossingFramePending) return;
+    this.wireCrossingFramePending = true;
+    this.requestOwnedFrame(() => {
+      this.wireCrossingFramePending = false;
+      if (this.document.display?.wireCrossings !== "hop") return;
+      const visible = this.document.wires.flatMap(wire => {
+        const cell = this.graphAdapter.getCell(wire.id);
+        return cell ? [{ wire, cell }] : [];
+      }).sort((a, b) => Number(a.cell.get("z")) - Number(b.cell.get("z")));
+      const paths = wireHopPaths(visible.map(({ wire }) => wire), this.document.junctions);
+      for (const { wire, cell } of visible) {
+        const path = paths.get(wire.id) ?? null;
+        if ((cell.get("wireHopPath") ?? null) === path) continue;
+        cell.set("wireHopPath", path);
+        if (path) {
+          // Keep the hit area and endpoint decorations on the electrical route.
+          cell.removeAttr("line/connection");
+          cell.removeAttr("selectionHalo/connection");
+          cell.attr({ line: { d: path }, selectionHalo: { d: path } });
+        } else {
+          cell.removeAttr("line/d");
+          cell.removeAttr("selectionHalo/d");
+          cell.attr({ line: { connection: true }, selectionHalo: { connection: true } });
+        }
+      }
     });
   }
 
@@ -4745,8 +4841,13 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncToolUi(resolution?: NetResolution) {
+    this.scheduleWireCrossings();
     const templateSelect = this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
     if (templateSelect) templateSelect.value = resolveSymbolTemplate(this.document.symbolTemplate).id;
+    const wireCrossings = this.options.shellEl.querySelector<HTMLSelectElement>("[data-schematic-wire-crossings]");
+    if (wireCrossings) wireCrossings.value = this.document.display?.wireCrossings ?? "plain";
+    const textFont = this.options.shellEl.querySelector<HTMLSelectElement>("[data-schematic-text-font]");
+    if (textFont) textFont.value = this.document.display?.textFont ?? "sans";
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
     this.options.paperEl.classList.toggle(
       "is-coupling-pick-mode",
@@ -4774,15 +4875,33 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private selectNetlistDiagnostic(componentId: string) {
-    if (!this.document.components.some(component => component.id === componentId)) return;
+    const component = this.document.components.find(candidate => candidate.id === componentId);
+    if (!component || !this.graphAdapter.getCell(componentId)) return;
     this.selectionSession.setMixed([componentId], []);
     this.finishSelectionChange();
+    const bounds = componentVisualBounds(component);
+    const zoom = this.zoom;
+    this.viewAdapter.resetScroll();
+    this.setView({
+      zoom,
+      translate: {
+        x: this.options.paperEl.clientWidth / 2 - (bounds.x + bounds.width / 2) * zoom,
+        y: this.options.paperEl.clientHeight / 2 - (bounds.y + bounds.height / 2) * zoom
+      }
+    });
     this.focusCanvas();
   }
 
   private renderSelectionSummary(resolution?: NetResolution) {
     const projection = this.currentSelectionUiProjection(resolution);
     this.propertyPanelController.sync(projection.propertyPanel);
+    const textObject = this.selectedTextObject();
+    for (const select of this.options.propertyEl.querySelectorAll<HTMLSelectElement>("[data-property-text-font]")) {
+      const row = select.closest<HTMLElement>("[data-property-text-font-row]");
+      if (!row) continue;
+      row.hidden = textObject === null || textObject.kind !== select.dataset.propertyTextFont;
+      select.value = !row.hidden ? textObject?.object.fontFamily ?? "" : "";
+    }
     this.syncMosParams();
     this.syncLayerAssignment();
     this.syncLayerObjectSelection();
@@ -4870,18 +4989,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     [...this.scheduledFrames].forEach((handle) => this.cancelOwnedFrame(handle));
   }
 
-  private setStatus(message: string, resolution?: NetResolution) {
+  private setStatus(message: string, resolution?: NetResolution, log?: Pick<LogEntry, "level" | "source">) {
     if (this.destroyed) return;
-    this.writeStatus(message);
+    this.writeStatus(message, log);
     this.syncToolUi(resolution);
     this.emitStateChange();
   }
 
-  private writeStatus(message: string) {
+  private writeStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
     this.statusMessage = message;
-    if (message && message !== this.lastLoggedStatus) {
+    if (message && (log || message !== this.lastLoggedStatus)) {
       this.lastLoggedStatus = message;
-      this.eventLog?.info("status", message);
+      this.eventLog?.log(log?.level ?? "info", log?.source ?? "status", message);
     }
     if (this.options.statusEl) this.options.statusEl.textContent = message;
     this.hostBridge.onStatusChange?.(message);

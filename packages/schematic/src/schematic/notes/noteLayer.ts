@@ -10,6 +10,7 @@ import {
   textForNoteMeasurement
 } from "./noteSizing";
 import type { Point, SchematicNote } from "../types";
+import { schematicTextFontStack, type SchematicTextFont } from "../schematicFont";
 
 const NOTE_EDITOR_SELECTOR = "[data-note-editor]";
 const NOTE_CONTENT_SELECTOR = "[data-note-content]";
@@ -19,6 +20,7 @@ export interface NoteEditorValue {
 }
 
 export interface SchematicNoteLayerOptions {
+  defaultTextFont?: () => SchematicTextFont | undefined;
   onMarkdownChange?: (noteId: string, markdown: string) => void;
   onMarkdownResize?: (noteId: string, height: number) => void;
   runtimeAdapter?: SchematicNoteRuntimeAdapter;
@@ -400,7 +402,7 @@ export class SchematicNoteLayer {
 
   resizeNoteToText(note: SchematicNote, text: string, fontSizePx: number) {
     if (note.format === "markdown") return;
-    const size = this.measureNoteText(text, fontSizePx);
+    const size = this.measureNoteText(text, fontSizePx, schematicTextFontStack(note.fontFamily, this.options.defaultTextFont?.()));
     note.width = size.width;
     note.height = size.height;
   }
@@ -524,6 +526,7 @@ export class SchematicNoteLayer {
     element.style.backgroundColor = noteBackgroundCss(note);
     element.style.color = noteTextColor(note);
     element.style.fontSize = `${state.noteFontSizePx(note)}px`;
+    element.style.fontFamily = schematicTextFontStack(note.fontFamily, this.options.defaultTextFont?.());
     const content = noteContent(element);
     if (!content) return;
 
@@ -734,8 +737,9 @@ export class SchematicNoteLayer {
     this.options.onMarkdownResize?.(noteId, markdownNoteHeightFromMeasuredContent(contentHeight));
   }
 
-  private measureNoteText(text: string, fontSizePx: number) {
+  private measureNoteText(text: string, fontSizePx: number, fontFamily: string) {
     this.measureElement.style.fontSize = `${fontSizePx}px`;
+    this.measureElement.style.fontFamily = fontFamily;
     this.measureElement.textContent = textForNoteMeasurement(text);
     const rect = this.measureElement.getBoundingClientRect();
     return noteSizeFromMeasuredContent({ width: rect.width, height: rect.height }, fontSizePx);

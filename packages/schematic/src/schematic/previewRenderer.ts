@@ -2,6 +2,7 @@ import { buildCopyPreviewNoteView } from "./notes/noteModel";
 import { componentCellAttrs, PREVIEW_WIRE_ID, type WireCellRenderOptions } from "./renderer";
 import type { ComponentInstance, NetLabel, Point, SchematicDocument, SchematicNote, Wire, WireAppearance, WireRouteMode } from "./types";
 import type { SymbolTemplateId } from "./symbolTemplateModel";
+import { schematicTextFontStack, type SchematicTextFont } from "./schematicFont";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 
 export interface RemovablePreviewHandle {
@@ -111,6 +112,7 @@ export interface SchematicPreviewGraphAdapter<Cell extends RemovablePreviewHandl
 
 export interface SchematicPreviewRendererOptions<Cell extends SchematicPreviewCell> {
   symbolTemplate?: () => SymbolTemplateId | undefined;
+  defaultTextFont?: () => SchematicTextFont | undefined;
   graphAdapter: SchematicPreviewGraphAdapter<Cell>;
   noteLayerElement: HTMLElement;
   makeComponentCell(instance: ComponentInstance): Cell;
@@ -257,6 +259,7 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     element.style.height = view.style.height;
     element.style.backgroundColor = view.style.backgroundColor;
     element.style.fontSize = view.style.fontSize;
+    element.style.fontFamily = schematicTextFontStack(note.fontFamily, this.options.defaultTextFont?.());
     element.style.left = view.style.left;
     element.style.top = view.style.top;
     element.style.transform = view.style.transform;

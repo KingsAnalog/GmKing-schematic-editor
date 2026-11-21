@@ -1,7 +1,7 @@
 import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
 import { message } from "./schematicI18n";
 import { buildSchematicToolbar } from "./schematicToolbarWeb";
-import { buildSchematicEditorSidebar, buildSymbolTemplateControl } from "./schematicEditorUiProjection";
+import { buildSchematicEditorSidebar, buildSymbolTemplateControl, schematicTextFontOptions } from "./schematicEditorUiProjection";
 export {
   SCHEMATIC_NETWORK_COLOR_PRESETS,
   SCHEMATIC_SYMBOL_COLOR_PRESETS
@@ -44,10 +44,21 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       el("div", { class: "schematic-options-fields" },
         buildSymbolTemplateControl(el),
         el("label", {},
+          el("span", {}, message("options.wireCrossings", "Wire crossings")),
+          el("select", { "data-schematic-wire-crossings": true },
+            el("option", { value: "plain" }, message("options.crossingPlain", "Plain")),
+            el("option", { value: "hop" }, message("options.crossingHop", "Hop"))
+          )
+        ),
+        el("label", {},
+          el("span", {}, message("options.defaultTextFont", "Default text font")),
+          el("select", { "data-schematic-text-font": true }, ...schematicTextFontOptions(el))
+        ),
+        el("label", {},
           el("span", {}, message("options.language", "Language")),
           el("select", { "data-schematic-language-select": true },
-            el("option", { value: "en", selected: true }, "English"),
-            el("option", { value: "zh", disabled: true }, "中文 (not ready)")
+            el("option", { value: "en", selected: true }, message("options.english", "English")),
+            el("option", { value: "zh", disabled: true }, message("options.chinesePending", "中文 (not ready)"))
           )
         ),
         el("label", {},

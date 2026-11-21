@@ -17,7 +17,7 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const tempRoot = path.resolve(root, "../../.tmp-build");
 await fs.mkdir(tempRoot, { recursive: true });
 const output = await fs.mkdtemp(path.join(tempRoot, "r3-layers-"));
-const outDir = path.resolve(root, "../../.tmp-shots");
+const outDir = process.env.SCHEMATIC_SMOKE_ARTIFACTS ?? path.resolve(root, "../../.tmp-shots");
 await fs.mkdir(outDir, { recursive: true });
 let server;
 let browser;
@@ -67,6 +67,10 @@ async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId
     document.body.append(host);
     const viewer = mountReadonlySchematicViewer(host, content);
     const viewerIds = objectIds(host);
+    const viewerDisplay = {
+      hop: host.querySelector("[data-wire-id='display-crossing'] path")?.getAttribute("d"),
+      font: host.querySelector("[data-note-id='output-note'] text")?.getAttribute("font-family")
+    };
     viewer.destroy();
     host.remove();
 
@@ -84,7 +88,7 @@ async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId
       if (this.download && blob) downloads.push({ filename: this.download, blob });
       else click.call(this);
     };
-    return { viewerIds, content: JSON.stringify(content) };
+    return { viewerIds, viewerDisplay, content: JSON.stringify(content) };
   });
   const trigger = "[data-schematic-document-export]";
   const dialog = "[data-schematic-document-export-dialog][open]";
@@ -137,11 +141,18 @@ async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId
     }));
     return {
       ids, pngSizes, files: downloads.map(item => [item.filename, item.blob.type]),
+      displays: svgNodes.map(svg => ({
+        hop: svg.querySelector("[data-wire-id='display-crossing'] path")?.getAttribute("d"),
+        font: svg.querySelector("[data-note-id='output-note'] text")?.getAttribute("font-family")
+      })),
       jsonText: await downloads[4].blob.text(),
       currentContent: JSON.stringify(editor.getContent())
     };
   });
   const [visible, all] = exported.ids;
+  assert(baseline.viewerDisplay.hop?.includes("C ") && baseline.viewerDisplay.font?.startsWith("Consolas")
+    && exported.displays.every(display => isDeepStrictEqual(display, baseline.viewerDisplay)),
+    "SVG and readonly viewer disagree about the RC crossing or note font", { viewer: baseline.viewerDisplay, svg: exported.displays });
   assert(isDeepStrictEqual(visible, baseline.viewerIds) && visible.includes(branchId)
     && visible.includes(shapeId) && visible.includes(copiedShapeId) && visible.includes("output-label")
     && visible.indexOf("back-note") < visible.indexOf("front-note"), "viewer and default SVG differ in visibility or order", exported.ids);
@@ -201,6 +212,10 @@ async function checkLayersRoundTrip(fixture, { selectInLayers, moveSelection, em
   const shapeId = "roundtrip-shape";
   await evaluate(page, id => window.layersSmoke.editor.transact(draft => {
     draft.components.push({ id, type: "rectangle", ref: "X1", x: 790, y: 110, rotation: 0, mirrored: false, values: {} });
+    draft.wires.push({ id: "display-crossing", layerId: "layer-1", routeMode: "orthogonal",
+      points: [{ x: 550, y: 80 }, { x: 550, y: 180 }] });
+    draft.layerObjectStates ??= {};
+    draft.layerObjectStates["display-crossing"] = { z: 100 };
   }, { origin: "editor", reason: "layer-roundtrip-fixture" }), shapeId);
 
   const readContent = () => evaluate(page, () => window.layersSmoke.editor.getContent());
@@ -222,11 +237,54 @@ async function checkLayersRoundTrip(fixture, { selectInLayers, moveSelection, em
   await selectInLayers(shapeId);
   await moveSelection("layer-2");
   const reassigned = await readContent();
-  const originalState = reassigned.layerObjectStates["output-branch"];
   assert(reassigned.wires.find(wire => wire.id === "output-branch")?.layerId === "layer-1"
     && reassigned.components.find(component => component.id === shapeId)?.values["layer:id"] === "layer-2",
     "round-trip layer reassignment failed", reassigned.layerObjectStates);
   await expectNetlists("layer reassignment");
+
+  await clickSelector(page, "[data-schematic-open-options]");
+  await evaluate(page, () => {
+    for (const [selector, value] of [["[data-schematic-wire-crossings]", "hop"], ["[data-schematic-text-font]", "serif"]]) {
+      const select = document.querySelector(selector);
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await clickSelector(page, "[data-schematic-options-close]");
+  const wirePath = id => evaluate(page, id => document.querySelector(`[model-id='${id}'] [joint-selector='line']`)?.getAttribute("d"), id);
+  const outputHop = () => evaluate(page, () => document.querySelector("[model-id='output-branch'] [joint-selector='line']")?.getAttribute("d"));
+  assert((await outputHop())?.includes("C "), "Hop should draw on the top RC wire", await wirePath("display-crossing"));
+  await expectNetlists("Hop and default text font");
+
+  await selectInLayers("output-note");
+  await clickSelector(page, "[data-sidebar-tab='properties']");
+  await evaluate(page, () => {
+    const select = document.querySelector("[data-property-text-font='note']");
+    if (!select.getClientRects().length) throw new Error("note font override is hidden");
+    select.value = "mono";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const fonts = await evaluate(page, () => ({
+    label: document.querySelector("[model-id='output-label'] [joint-selector='label']")?.getAttribute("font-family"),
+    note: document.querySelector("[data-note-id='output-note']")?.style.fontFamily
+  }));
+  assert(fonts.label?.startsWith("Georgia") && fonts.note?.startsWith("Consolas"), "RC label or note did not apply the requested font", fonts);
+  await expectNetlists("note font override");
+
+  await selectInLayers("display-crossing");
+  for (let attempt = 0; attempt < 12 && !(await wirePath("display-crossing"))?.includes("C "); attempt++) {
+    await evaluate(page, () => document.querySelector("[data-layer-object-up='display-crossing']").click());
+    await evaluate(page, () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  }
+  const crossingForExport = await wirePath("display-crossing");
+  assert(crossingForExport?.includes("C ") && !(await outputHop())?.includes("C "), "layer reorder did not move the Hop to the new top wire", crossingForExport);
+  await evaluate(page, () => document.querySelector("[data-layer-object-visible='display-crossing']").click());
+  await waitFor(page, () => !document.querySelector("[model-id='display-crossing']")
+    && document.querySelector("[model-id='output-branch'] [joint-selector='line']")?.getAttribute("d")?.split("M").length === 2,
+    "hiding the upper wire did not remove the crossing gap");
+  await expectNetlists("crossing visibility and order");
+  await evaluate(page, () => document.querySelector("[data-layer-object-visible='display-crossing']").click());
+  const originalState = (await readContent()).layerObjectStates["output-branch"];
 
   await clickSelector(page, "[data-sidebar-tab='layers']");
   await evaluate(page, () => document.querySelector("[data-layer-select='layer-2']").click());
@@ -298,6 +356,11 @@ async function checkLayersRoundTrip(fixture, { selectInLayers, moveSelection, em
     "exported JSON did not open in a new document", { args: [reloadedTab] });
   const imported = await readContent();
   assert(isDeepStrictEqual(imported, exportedContent), "file round-trip changed the circuit or Layers state", imported);
+  await waitFor(page, () => document.querySelector("[model-id='display-crossing'] [joint-selector='line']")
+    ?.getAttribute("d")?.includes("C "), "JSON re-import did not redraw the Hop");
+  assert(imported.display?.wireCrossings === "hop" && imported.display?.textFont === "serif"
+    && imported.notes.find(note => note.id === "output-note")?.fontFamily === "mono"
+    && (await wirePath("display-crossing"))?.includes("C "), "JSON re-import lost Hop or note font settings", imported.display);
   await expectNetlists("JSON re-import");
 }
 

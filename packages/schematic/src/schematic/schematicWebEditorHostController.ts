@@ -143,7 +143,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
       currentDocument: () => editor.hostDocument(),
       currentPresentationMode: () => editor.hostCaptureView().presentationMode,
       applyClipboardDocument: (document) => editor.hostBeginClipboardCopy(document),
-      setStatus: (message) => editor.hostSetStatus(message),
+      setStatus: (message, log) => editor.hostSetStatus(message, log),
       fit: () => editor.fit(),
       isDestroyed: () => this.destroyed,
       onSaveStateChange: () => editor.hostNotifySaveStateChange()

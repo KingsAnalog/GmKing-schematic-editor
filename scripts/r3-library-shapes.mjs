@@ -5,7 +5,7 @@ import { serveDist, launchBrowser, openPage, navigate, waitFor, evaluate, clickS
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const dist = path.resolve(here, "../apps/web/dist");
-const outDir = path.resolve(here, "../../../.tmp-shots");
+const outDir = process.env.SCHEMATIC_SMOKE_ARTIFACTS ?? path.resolve(here, "../../../.tmp-shots");
 await fs.mkdir(outDir, { recursive: true });
 const server = await serveDist(dist);
 const browser = await launchBrowser();

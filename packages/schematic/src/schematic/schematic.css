@@ -1072,6 +1072,7 @@
   bottom: 8px;
   display: grid;
   visibility: hidden;
+  pointer-events: none;
   transition: transform 140ms ease, visibility 140ms;
 }
 
@@ -1090,6 +1091,7 @@
 .schematic-shell.is-layout-narrow.is-left-panel-visible > .schematic-palette,
 .schematic-shell.is-layout-narrow.is-right-panel-visible > .analysis-panel {
   visibility: visible;
+  pointer-events: auto;
   transform: translateX(0);
 }
 

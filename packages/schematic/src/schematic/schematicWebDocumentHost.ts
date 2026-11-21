@@ -443,7 +443,10 @@ implements SchematicDocumentHostPort<EditorState> {
       imported = await read();
     } catch (error) {
       if (isCurrent()) {
-        this.options.bridge.setStatus(error instanceof Error ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`);
+        this.options.bridge.setStatus(
+          error instanceof Error ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`,
+          { level: "error", source: "import" }
+        );
       }
       return;
     }
