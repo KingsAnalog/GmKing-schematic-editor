@@ -27,4 +27,6 @@ Build with `npm run build`. Copy `main.js`, `styles.css`, and `manifest.json` fr
 
 Host `apps/web/dist` on a static server. Web documents stay in that browser; export JSON for backups or transfer. Web formula rendering loads MathJax from jsDelivr and needs a network connection. The Obsidian plugin uses Obsidian's rendering APIs. Clipboard features depend on host permissions; Web clipboard access generally needs HTTPS or localhost.
 
+The Web editor uses English and Light mode for this release. **Options** contains the symbol template setting, and **Help** opens the bundled manual in a new tab.
+
 MIT © 2026 RarityBrown. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

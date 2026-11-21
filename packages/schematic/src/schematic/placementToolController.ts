@@ -1,3 +1,4 @@
+import { mirrorComponentOrientation } from "./geometry";
 import type { InstancePaletteItem } from "./instanceSelector";
 import {
   buildPlacementCommit,
@@ -71,15 +72,7 @@ export class SchematicPlacementToolController {
 
   mirrorPreview(axis: "x" | "y"): PlacementPreviewTransformResult {
     if (this.activeItemIsTemplate()) return { kind: "template", pose: this.pose };
-    this.poseValue = axis === "x"
-      ? {
-          ...this.poseValue,
-          mirrored: !this.poseValue.mirrored
-        }
-      : {
-          rotation: (360 - this.poseValue.rotation) % 360,
-          mirrored: !this.poseValue.mirrored
-        };
+    mirrorComponentOrientation(this.poseValue, axis);
     return { kind: "updated", pose: this.pose };
   }
 

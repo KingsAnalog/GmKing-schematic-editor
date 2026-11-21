@@ -32,7 +32,7 @@ import {
   type SelectionMoveTransaction,
   type SelectionMoveTransactionResult
 } from "../selection/selectionMoveTransaction";
-import { transformSelectionDocumentGeometry, transformSingleComponentOrientation, type GroupTransformKind } from "../selection/selectionTransformModel";
+import { transformComponentOrientation, transformSelectionDocumentGeometry, type GroupTransformKind } from "../selection/selectionTransformModel";
 import type { ComponentInstance, NetLabel, Point, SchematicDocument, SchematicNote, SchematicNoteFormat, WireAppearance, WireRouteMode } from "../types";
 import { applyWireCommitToDocument } from "../wire/wireCreationModel";
 
@@ -218,7 +218,7 @@ export function transformSingleComponentOrientationDocumentOp(
   kind: GroupTransformKind
 ): SingleComponentTransformDocumentOpResult {
   instances.forEach((instance) => {
-    transformSingleComponentOrientation(instance, kind);
+    transformComponentOrientation(instance, kind);
   });
   const transformedCount = instances.length;
   const changed = transformedCount > 0;

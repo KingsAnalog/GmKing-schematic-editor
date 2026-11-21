@@ -65,13 +65,15 @@ describe("renderSchematicTabShell", () => {
     expect(importIndex).toBeGreaterThan(createIndex);
     expect(pasteIndex).toBeGreaterThan(importIndex);
     expect(exportIndex).toBeGreaterThan(pasteIndex);
-    expect(shell).toContain('data-schematic-document-import aria-label="Import schematic" title="Import schematic"');
-    expect(shell).toContain(
-      'data-schematic-document-paste aria-label="Paste schematic JSON from clipboard into a new tab" title="Paste schematic JSON from clipboard into a new tab"'
-    );
-    const dialogId = shell.match(/data-schematic-document-export aria-label="Export schematic" aria-haspopup="dialog" aria-controls="([^"]+)"/)?.[1];
+    const importButton = shell.match(/<button[^>]+data-schematic-document-import[^>]*>/)?.[0];
+    expect(importButton).toContain('aria-label="Import schematic"');
+    expect(importButton).toContain('title="Import schematic"');
+    const pasteButton = shell.match(/<button[^>]+data-schematic-document-paste[^>]*>/)?.[0];
+    expect(pasteButton).toContain('aria-label="Paste schematic JSON from clipboard into a new tab"');
+    expect(pasteButton).toContain('title="Paste schematic JSON from clipboard into a new tab"');
+    const dialogId = shell.match(/data-schematic-document-export[^>]*aria-label="Export schematic"[^>]*aria-haspopup="dialog" aria-controls="([^"]+)"/)?.[1];
     expect(dialogId).toBeTruthy();
-    expect(shell).toContain(`<dialog class="schematic-document-export-dialog" id="${dialogId}"`);
+    expect(shell).toContain(`<dialog class="schematic-dialog schematic-document-export-dialog" id="${dialogId}"`);
     expect(shell).toContain("data-schematic-export-hidden");
     expect(shell).toMatch(
       /<input id="schematic-shell-\d+-document-import-input" type="file" accept="\.json,application\/json" data-schematic-document-import-input hidden \/>/
@@ -195,6 +197,14 @@ describe("renderSchematicTabShell", () => {
 
   it("keeps key toolbar command hooks", () => {
     const shell = renderSchematicTabShell();
+    const commands = valuesFor(shell, "data-command");
+    const label = shell.match(/<button[^>]*data-command="label"[^>]*>([\s\S]*?)<\/button>/)?.[1];
+
+    expect(commands.slice(0, 4)).toEqual(["library", "instance", "wire", "label"]);
+    expect(commands).not.toContain("diagnostics");
+    expect(commands).not.toContain("log");
+    expect(label).toContain(">abc</text>");
+    expect(label).toContain('<line x1="3" y1="18" x2="21" y2="18"');
 
     [
       "instance",
@@ -213,6 +223,43 @@ describe("renderSchematicTabShell", () => {
     ].forEach((command) => {
       expect(shell).toContain(`data-command="${command}"`);
     });
+  });
+
+  it("places Options and Help at the toolbar edges and puts the template in Options", () => {
+    const shell = renderSchematicTabShell();
+    const toolbar = shell.match(/<div[^>]+class="schematic-toolbar"[^>]*>([\s\S]*?)<\/div>/)?.[1];
+    expect(toolbar?.trimStart()).toMatch(/^<button[^>]+data-schematic-open-options/);
+    expect(toolbar?.trimEnd()).toMatch(/<a[^>]+href="\.\/manual\.html"[^>]+target="_blank"[^>]+data-schematic-help[\s\S]*<\/a>$/);
+    const optionsId = toolbar?.match(/data-schematic-open-options[^>]+aria-controls="([^"]+)"/)?.[1];
+    const options = shell.match(/<dialog[^>]+data-schematic-options-dialog[^>]*>[\s\S]*?<\/dialog>/)?.[0];
+    expect(optionsId).toBeTruthy();
+    expect(options).toContain(`id="${optionsId}"`);
+    expect(options).toMatch(/<select[^>]+data-symbol-template[\s\S]*<select[^>]+data-schematic-language-select[\s\S]*<select[^>]+data-schematic-theme-select/);
+    expect(shell).toContain('class="schematic-sidebar-heading">Schematic Editor</h2>');
+    expect(shell.match(/<select[^>]+data-symbol-template/g)).toHaveLength(1);
+  });
+
+  it("defaults to English and Light and disables the pending options", () => {
+    const shell = renderSchematicTabShell();
+    const language = shell.match(/<select[^>]+data-schematic-language-select[^>]*>(.*?)<\/select>/)?.[1];
+    const theme = shell.match(/<select[^>]+data-schematic-theme-select[^>]*>(.*?)<\/select>/)?.[1];
+
+    expect(language).toContain('<option value="en" selected>English</option>');
+    expect(language).toContain('<option value="zh" disabled>中文 (not ready)</option>');
+    expect(theme).toMatch(/<option value="light" selected[^>]*>Light<\/option>/);
+    expect(theme).toMatch(/<option value="system" disabled[^>]*>Follow system \(not ready\)<\/option>/);
+    expect(theme).toMatch(/<option value="dark" disabled[^>]*>Dark \(not ready\)<\/option>/);
+  });
+
+  it("shows the reflection axis and keyboard shortcut for each mirror command", () => {
+    const shell = renderSchematicTabShell();
+    const mirrorX = shell.match(/<button[^>]*data-command="mirror-x"[^>]*>[\s\S]*?<\/button>/)?.[0];
+    const mirrorY = shell.match(/<button[^>]*data-command="mirror-y"[^>]*>[\s\S]*?<\/button>/)?.[0];
+
+    expect(mirrorX).toContain('aria-label="Mirror X (Ctrl+R)"');
+    expect(mirrorX).toContain('d="M34 100 L166 100"');
+    expect(mirrorY).toContain('aria-label="Mirror Y (Shift+R)"');
+    expect(mirrorY).toContain('d="M100 34 L100 166"');
   });
 
   it("namespaces ARIA targets independently for repeated shells", () => {

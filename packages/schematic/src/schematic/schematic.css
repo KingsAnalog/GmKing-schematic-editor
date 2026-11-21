@@ -172,7 +172,7 @@
   background: #e9eef5;
 }
 
-.schematic-document-export-dialog {
+.schematic-dialog {
   box-sizing: border-box;
   width: min(360px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
@@ -184,11 +184,11 @@
   font: 14px/1.4 var(--schematic-font-family);
 }
 
-.schematic-document-export-dialog::backdrop {
+.schematic-dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
 
-.schematic-document-export-dialog h2 {
+.schematic-dialog h2 {
   margin: 0 0 14px;
   font: 600 16px/1.4 var(--schematic-font-family);
   color: inherit;
@@ -212,7 +212,7 @@
   margin: 10px 0 14px;
 }
 
-.schematic-document-export-dialog button {
+.schematic-dialog button {
   min-height: 36px;
   padding: 4px 10px;
   border: 1px solid var(--schematic-ui-line);
@@ -223,9 +223,47 @@
   cursor: pointer;
 }
 
-.schematic-document-export-dialog button:is(:hover, :focus-visible) {
+.schematic-dialog button:is(:hover, :focus-visible) {
   outline: 2px solid var(--schematic-focus);
   outline-offset: 1px;
+}
+
+.schematic-options-fields {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.schematic-editor-root .schematic-options-dialog .symbol-template-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.schematic-editor-root .schematic-options-dialog label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.schematic-editor-root .schematic-options-dialog select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--schematic-ui-line);
+  border-radius: 4px;
+  background: var(--schematic-ui-panel);
+  color: inherit;
+  font: inherit;
+}
+
+.schematic-options-dialog > button:last-child {
+  display: block;
+  margin-inline-start: auto;
 }
 
 .schematic-document-tab-list {
@@ -524,7 +562,8 @@
   cursor: pointer;
 }
 
-.schematic-toolbar button {
+.schematic-toolbar :is(button, .schematic-toolbar-help) {
+  box-sizing: border-box;
   display: inline-grid;
   place-items: center;
   width: 36px;
@@ -534,23 +573,29 @@
   background: #ffffff;
   color: var(--ink);
   cursor: pointer;
+  text-decoration: none;
 }
 
-.schematic-toolbar button svg {
+.schematic-toolbar :is(button, .schematic-toolbar-help) svg {
   display: block;
   width: 28px;
   height: 28px;
 }
 
-.schematic-toolbar button:hover {
+.schematic-toolbar :is(button, .schematic-toolbar-help):hover {
   border-color: #6f7f8c;
   background: #f0f6fb;
   box-shadow: 0 1px 4px rgba(0, 48, 84, 0.16);
   transform: translateY(-1px);
 }
 
+.schematic-toolbar :is(button, .schematic-toolbar-help):focus-visible {
+  outline: 2px solid var(--schematic-focus);
+  outline-offset: 1px;
+}
+
 .schematic-toolbar button.is-active,
-.schematic-toolbar button:active {
+.schematic-toolbar :is(button, .schematic-toolbar-help):active {
   border-color: var(--viva-blue);
   background: #dceeff;
   box-shadow: inset 0 2px 4px rgba(0, 64, 110, 0.22);
@@ -1075,8 +1120,33 @@
   --schematic-ui-panel: #211f1b;
   --schematic-ui-hover: #2c2a25;
   --schematic-ui-active: #34322c;
+  --schematic-ui-line: #565149;
   --schematic-ui-ink: #e8e4dc;
   --schematic-ui-muted: #b7b1a7;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .schematic-toolbar {
+  border-color: var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+:root[data-effective-theme="dark"] .schematic-document-tabs {
+  border-color: var(--schematic-ui-line);
+  background: var(--schematic-ui-hover);
+}
+
+:root[data-effective-theme="dark"] .schematic-document-tab.is-active {
+  border-color: var(--schematic-ui-line);
+  background: var(--schematic-ui-panel);
+}
+
+:root[data-effective-theme="dark"] :is(.schematic-document-tab-label, .schematic-document-tab-rename, .schematic-document-tab-close, .schematic-document-tab-new, .schematic-document-tab-action) {
+  color: var(--schematic-ui-ink);
+  caret-color: currentColor;
+}
+
+:root[data-effective-theme="dark"] :is(.schematic-document-tab-close, .schematic-document-tab-new, .schematic-document-tab-action):hover {
+  background: var(--schematic-ui-active);
 }
 
 .schematic-shell > .schematic-palette,
@@ -1086,8 +1156,13 @@
   background: var(--schematic-ui-panel);
 }
 
-.schematic-shell > .schematic-palette > .symbol-template-panel {
+.schematic-sidebar-heading {
   flex: 0 0 auto;
+  margin: 0;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+  color: var(--schematic-ui-ink);
+  font: 600 16px/1.4 var(--schematic-font-family);
 }
 
 .schematic-sidebar-tabs {
@@ -2307,6 +2382,7 @@ button.netlist-diagnostic:hover {
   min-width: 0;
   padding: 7px 10px;
   border-top: 0;
+  color: var(--schematic-ui-muted);
 }
 
 .schematic-status-actions {

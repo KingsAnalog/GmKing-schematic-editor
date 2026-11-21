@@ -24,6 +24,7 @@ import type {
 } from "./schematicEditorHostPorts";
 import type { SchematicEditorHostBridge } from "./schematicHostedEditor";
 import type { SchematicEditorMountElements } from "./schematicTabShell";
+import { bindSchematicWebOptions } from "./schematicWebOptions";
 import type { SchematicContent } from "./types";
 import { defaultSchematicView } from "./viewAdapter";
 import type { SchematicDocumentState } from "../shared/workspaceState";
@@ -40,6 +41,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
   private readonly contextMenu: SchematicContextMenuControllerPort;
   private readonly documentHost: SchematicDocumentHostPort<HostedEditorState>;
   private readonly viewPersistence: SchematicViewPersistenceController;
+  private readonly unbindOptions: () => void;
   private initialized = false;
   private destroyed = false;
   private destroyResult: Promise<void> | null = null;
@@ -151,6 +153,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     this.analysis = analysis;
     this.contextMenu = contextMenu;
     this.documentHost = documentHost;
+    this.unbindOptions = bindSchematicWebOptions(mounts.shellEl);
   }
 
   init() {
@@ -167,6 +170,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     if (this.destroyed) return Promise.resolve();
     this.editor.flushTransientEdits("destroy");
     this.destroyed = true;
+    this.unbindOptions();
     this.services.ownerWindow.removeEventListener("beforeunload", this.beforeUnload);
     this.viewPersistence.destroy();
     this.documentHost.destroy();

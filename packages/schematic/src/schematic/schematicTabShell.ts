@@ -1,7 +1,7 @@
 import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
-import { t } from "./schematicI18n";
+import { message } from "./schematicI18n";
 import { buildSchematicToolbar } from "./schematicToolbarWeb";
-import { buildSchematicEditorSidebar } from "./schematicEditorUiProjection";
+import { buildSchematicEditorSidebar, buildSymbolTemplateControl } from "./schematicEditorUiProjection";
 export {
   SCHEMATIC_NETWORK_COLOR_PRESETS,
   SCHEMATIC_SYMBOL_COLOR_PRESETS
@@ -33,7 +33,34 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
     outputN: `${namespace}-analysis-output-n`
   };
   return el("main", { class: "schematic-shell schematic-editor-root", "data-schematic-shell": true },
-    buildSchematicEditorSidebar(el, namespace),
+    buildSchematicEditorSidebar(el, namespace, { templateInOptions: true }),
+    el("dialog", {
+      class: "schematic-dialog schematic-options-dialog",
+      id: `${namespace}-options`,
+      "aria-labelledby": `${namespace}-options-title`,
+      "data-schematic-options-dialog": true
+    },
+      el("h2", { id: `${namespace}-options-title` }, message("options.title", "Options")),
+      el("div", { class: "schematic-options-fields" },
+        buildSymbolTemplateControl(el),
+        el("label", {},
+          el("span", {}, message("options.language", "Language")),
+          el("select", { "data-schematic-language-select": true },
+            el("option", { value: "en", selected: true }, "English"),
+            el("option", { value: "zh", disabled: true }, "中文 (not ready)")
+          )
+        ),
+        el("label", {},
+          el("span", {}, message("options.colorMode", "Color mode")),
+          el("select", { "data-schematic-theme-select": true },
+            el("option", { value: "light", selected: true }, message("options.light", "Light")),
+            el("option", { value: "system", disabled: true }, message("options.systemPending", "Follow system (not ready)")),
+            el("option", { value: "dark", disabled: true }, message("options.darkPending", "Dark (not ready)"))
+          )
+        )
+      ),
+      el("button", { type: "button", "data-schematic-options-close": true }, message("options.close", "Close"))
+    ),
     el("div", {
       class: "schematic-panel-resizer",
       role: "separator",
@@ -56,15 +83,15 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           type: "button",
           class: "schematic-document-tab-new",
           "data-schematic-document-new": true,
-          "aria-label": "New schematic",
-          title: "New schematic"
+          "aria-label": message("document.new", "New schematic"),
+          title: message("document.new", "New schematic")
         }, "+"),
         el("button", {
           type: "button",
           class: "schematic-document-tab-action",
           "data-schematic-document-import": true,
-          "aria-label": "Import schematic",
-          title: "Import schematic",
+          "aria-label": message("document.import", "Import schematic"),
+          title: message("document.import", "Import schematic"),
           "aria-controls": importInputId
         },
           el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
@@ -77,8 +104,8 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           type: "button",
           class: "schematic-document-tab-action",
           "data-schematic-document-paste": true,
-          "aria-label": "Paste schematic JSON from clipboard into a new tab",
-          title: "Paste schematic JSON from clipboard into a new tab"
+          "aria-label": message("document.paste", "Paste schematic JSON from clipboard into a new tab"),
+          title: message("document.paste", "Paste schematic JSON from clipboard into a new tab")
         },
           el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
             el("path", { d: "M9 5h6" }),
@@ -92,10 +119,10 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           type: "button",
           class: "schematic-document-tab-action",
           "data-schematic-document-export": true,
-          "aria-label": t("export.title", "Export schematic"),
+          "aria-label": message("export.title", "Export schematic"),
           "aria-haspopup": "dialog",
           "aria-controls": exportDialogId,
-          title: t("export.title", "Export schematic")
+          title: message("export.title", "Export schematic")
         },
           el("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
             el("path", { d: "M12 21V9" }),
@@ -104,22 +131,22 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           )
         ),
         el("dialog", {
-          class: "schematic-document-export-dialog",
+          class: "schematic-dialog schematic-document-export-dialog",
           id: exportDialogId,
           "aria-labelledby": exportTitleId,
           "data-schematic-document-export-dialog": true
         },
-          el("h2", { id: exportTitleId }, t("export.title", "Export schematic")),
+          el("h2", { id: exportTitleId }, message("export.title", "Export schematic")),
           el("label", {},
             el("input", { type: "checkbox", "data-schematic-export-hidden": true }),
-            t("export.includeHidden", "Include hidden objects in images")
+            message("export.includeHidden", "Include hidden objects in images")
           ),
           el("div", { class: "schematic-document-export-formats" },
-            el("button", { type: "button", "data-schematic-export-format": "json" }, t("export.json", "Schematic JSON")),
+            el("button", { type: "button", "data-schematic-export-format": "json" }, message("export.json", "Schematic JSON")),
             el("button", { type: "button", "data-schematic-export-format": "svg" }, "SVG"),
             el("button", { type: "button", "data-schematic-export-format": "png" }, "PNG")
           ),
-          el("button", { type: "button", "data-schematic-export-cancel": true }, t("export.cancel", "Cancel"))
+          el("button", { type: "button", "data-schematic-export-cancel": true }, message("export.cancel", "Cancel"))
         ),
         el("input", {
           id: importInputId,
@@ -162,7 +189,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       el("div", {
         class: "schematic-log-drawer",
         "data-schematic-log": true,
-        "aria-label": t("log.title", "Log"),
+        "aria-label": message("log.title", "Log"),
         hidden: true
       },
         el("div", {
@@ -177,21 +204,21 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           "data-log-resizer": true
         }),
         el("div", { class: "schematic-log-header" },
-          el("strong", {}, t("log.title", "Log")),
-          el("select", { "data-log-level": true, "aria-label": t("log.filter", "Filter") },
-            el("option", { value: "all" }, t("log.all", "All")),
-            el("option", { value: "info" }, t("log.info", "Info")),
-            el("option", { value: "warn" }, t("log.warn", "Warn")),
-            el("option", { value: "error" }, t("log.error", "Error"))
+          el("strong", {}, message("log.title", "Log")),
+          el("select", { "data-log-level": true, "aria-label": message("log.filter", "Filter") },
+            el("option", { value: "all" }, message("log.all", "All")),
+            el("option", { value: "info" }, message("log.info", "Info")),
+            el("option", { value: "warn" }, message("log.warn", "Warn")),
+            el("option", { value: "error" }, message("log.error", "Error"))
           ),
           el("input", {
             type: "search",
             "data-log-search": true,
-            placeholder: t("log.search", "Search log"),
-            "aria-label": t("log.search", "Search log")
+            placeholder: message("log.search", "Search log"),
+            "aria-label": message("log.search", "Search log")
           }),
-          el("button", { type: "button", "data-log-copy": true }, t("log.copy", "Copy")),
-          el("button", { type: "button", "data-log-clear": true }, t("log.clear", "Clear")),
+          el("button", { type: "button", "data-log-copy": true }, message("log.copy", "Copy")),
+          el("button", { type: "button", "data-log-clear": true }, message("log.clear", "Clear")),
           el("button", {
             type: "button",
             class: "schematic-log-close",
@@ -219,8 +246,8 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
             class: "schematic-status-log",
             "data-log-toggle": true,
             "aria-expanded": "false",
-            title: t("log.title", "Log")
-          }, t("status.log", "Log"))
+            title: message("log.title", "Log")
+          }, message("status.log", "Log"))
         )
       )
     ),
@@ -247,7 +274,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           role: "tab",
           "data-right-view": "analysis",
           "aria-selected": "true"
-        }, t("right.analysis", "Analysis")),
+        }, message("right.analysis", "Analysis")),
         el("button", {
           type: "button",
           class: "schematic-sidebar-tab",
@@ -255,7 +282,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           "data-right-view": "netlist",
           "aria-selected": "false",
           tabindex: "-1"
-        }, t("right.netlist", "Netlist"))
+        }, message("right.netlist", "Netlist"))
       ),
       el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
         el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),

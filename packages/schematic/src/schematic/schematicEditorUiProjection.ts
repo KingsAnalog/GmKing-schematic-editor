@@ -1,5 +1,5 @@
 import { markupUi, type UiBuilder } from "./schematicUiElements";
-import { t } from "./schematicI18n";
+import { message, t } from "./schematicI18n";
 import { DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
 import { FUNCTION_BLOCK_TIME_DOMAIN_OPTIONS } from "./functionBlockModel";
 import { DEFAULT_COMPONENT_COLOR } from "./componentPropertyModel";
@@ -29,27 +29,35 @@ export function renderSchematicEditorSidebarProjection() {
   return buildSchematicEditorSidebar(markupUi.el).html;
 }
 
+export function buildSymbolTemplateControl<T extends object>(el: UiBuilder<T>["el"]) {
+  const label = message("options.symbolTemplate", "Symbol template");
+  return el("div", { class: "symbol-template-panel" },
+    el("label", { class: "symbol-template-control" },
+      el("span", {}, label),
+      el("select", { "data-symbol-template": true, "aria-label": label },
+        ...SYMBOL_TEMPLATES.map(template =>
+          el("option", { value: template.id, disabled: !template.available }, template.available
+            ? template.label
+            : message("options.templatePending", "{name} (not ready)", { name: template.label }))
+        )
+      )
+    ),
+    el("div", { class: "property-error", "data-symbol-template-error": true, role: "status", hidden: true })
+  );
+}
+
 export function buildSchematicEditorSidebar<T extends object>(
   el: UiBuilder<T>["el"],
-  namespace = "schematic-sidebar"
+  namespace = "schematic-sidebar",
+  { templateInOptions = false } = {}
 ) {
   const libraryPanelId = `${namespace}-library`;
   const propertiesPanelId = `${namespace}-properties`;
   const layersPanelId = `${namespace}-layers`;
   return el("aside", { class: "schematic-palette", "aria-label": "Schematic controls", "data-schematic-palette": true },
-    el("section", { class: "symbol-template-panel", "aria-label": "Schematic symbol template" },
-      el("label", { class: "symbol-template-control" },
-        el("span", {}, "Symbol template"),
-        el("select", { "data-symbol-template": true, "aria-label": "Symbol template", title: "Symbol template for this schematic" },
-          ...SYMBOL_TEMPLATES.map(template =>
-            el("option", { value: template.id, disabled: !template.available },
-              `${template.label}${template.available ? "" : " (not ready)"}`
-            )
-          )
-        )
-      ),
-      el("div", { class: "property-error", "data-symbol-template-error": true, role: "status", hidden: true })
-    ),
+    templateInOptions
+      ? el("h2", { class: "schematic-sidebar-heading" }, "Schematic Editor")
+      : buildSymbolTemplateControl(el),
     el("div", { class: "schematic-sidebar-tabs", role: "tablist", "aria-label": "Schematic sidebar" },
       el("button", {
         type: "button",
@@ -58,7 +66,7 @@ export function buildSchematicEditorSidebar<T extends object>(
         "data-sidebar-tab": "library",
         "aria-selected": "true",
         "aria-controls": libraryPanelId
-      }, t("sidebar.library", "Library")),
+      }, message("sidebar.library", "Library")),
       el("button", {
         type: "button",
         class: "schematic-sidebar-tab",
@@ -67,7 +75,7 @@ export function buildSchematicEditorSidebar<T extends object>(
         "aria-selected": "false",
         "aria-controls": propertiesPanelId,
         tabindex: "-1"
-      }, t("sidebar.properties", "Properties")),
+      }, message("sidebar.properties", "Properties")),
       el("button", {
         type: "button",
         class: "schematic-sidebar-tab",
@@ -76,27 +84,27 @@ export function buildSchematicEditorSidebar<T extends object>(
         "aria-selected": "false",
         "aria-controls": layersPanelId,
         tabindex: "-1"
-      }, t("sidebar.layers", "Layers"))
+      }, message("sidebar.layers", "Layers"))
     ),
     el("section", {
       id: libraryPanelId,
       class: "schematic-sidebar-panel",
       "data-sidebar-panel": "library",
       role: "tabpanel",
-      "aria-label": t("sidebar.library", "Library")
+      "aria-label": message("sidebar.library", "Library")
     },
       el("div", { class: "palette-title" },
         el("div", { class: "palette-title-copy" },
-          el("strong", {}, t("sidebar.cells", "Cells")),
-          el("span", {}, "i opens the browser; Esc cancels")
+          el("strong", {}, message("sidebar.cells", "Cells")),
+          el("span", {}, message("sidebar.shortcut", "i opens the browser; Esc cancels"))
         )
       ),
       el("label", { class: "library-picker" },
-        el("span", {}, t("sidebar.libraryLabel", "Library")),
+        el("span", {}, message("sidebar.libraryLabel", "Library")),
         el("select", {
           class: "library-select",
           "data-library-select": true,
-          "aria-label": t("sidebar.libraryLabel", "Library")
+          "aria-label": message("sidebar.libraryLabel", "Library")
         })
       ),
       el("div", { class: "library-cell-list", "data-library-cells": true }),
@@ -107,14 +115,14 @@ export function buildSchematicEditorSidebar<T extends object>(
       class: "schematic-sidebar-panel",
       "data-sidebar-panel": "properties",
       role: "tabpanel",
-      "aria-label": t("sidebar.properties", "Properties"),
+      "aria-label": message("sidebar.properties", "Properties"),
       hidden: true
     },
-      el("section", { class: "property-editor", "aria-label": "Property Editor", "data-schematic-property-editor": true },
-        el("h2", {}, "Property Editor"),
-        el("div", { class: "property-empty", "data-property-empty": true }, "No object selected."),
+      el("section", { class: "property-editor", "aria-label": message("properties.title", "Property Editor"), "data-schematic-property-editor": true },
+        el("h2", {}, message("properties.title", "Property Editor")),
+        el("div", { class: "property-empty", "data-property-empty": true }, message("properties.empty", "No object selected.")),
         el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
-          el("span", {}, t("layer.field", "Layer")),
+          el("span", {}, message("layer.field", "Layer")),
           el("select", { "data-property-layer": true })
         ),
         netProperties(el),
@@ -129,18 +137,18 @@ export function buildSchematicEditorSidebar<T extends object>(
       class: "schematic-sidebar-panel",
       "data-sidebar-panel": "layers",
       role: "tabpanel",
-      "aria-label": t("sidebar.layers", "Layers"),
+      "aria-label": message("sidebar.layers", "Layers"),
       hidden: true
     },
       el("div", { class: "palette-title" },
         el("div", { class: "palette-title-copy" },
-          el("strong", {}, t("sidebar.layers", "Layers")),
-          el("span", {}, "Higher layers draw above lower layers.")
+          el("strong", {}, message("sidebar.layers", "Layers")),
+          el("span", {}, message("layer.stackHint", "Higher layers draw above lower layers."))
         )
       ),
       el("div", { class: "layer-toolbar" },
-        el("button", { type: "button", "data-layer-add": true }, "+ Layer"),
-        el("button", { type: "button", "data-layer-delete": true }, "Delete")
+        el("button", { type: "button", "data-layer-add": true }, message("layer.add", "+ Layer")),
+        el("button", { type: "button", "data-layer-delete": true }, message("toolbar.delete", "Delete"))
       ),
       el("div", { class: "layer-stack", "data-layer-list": true })
     )

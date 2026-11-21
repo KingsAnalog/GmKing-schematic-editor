@@ -1,11 +1,43 @@
-type SchematicLanguage = "zh" | "en";
+export type SchematicLanguage = "zh" | "en";
 
 const ZH: Record<string, string> = {
+  "options.title": "选项",
+  "options.close": "关闭",
+  "options.symbolTemplate": "符号模板",
+  "options.templatePending": "{name}（未就绪）",
+  "options.language": "语言",
+  "options.colorMode": "颜色模式",
+  "options.systemPending": "跟随系统（未就绪）",
+  "options.light": "亮色",
+  "options.darkPending": "暗色（未就绪）",
+  "toolbar.help": "帮助（在新标签页打开）",
+  "toolbar.instance": "元件",
+  "toolbar.wire": "导线",
+  "toolbar.label": "网络标签",
+  "toolbar.note": "注释",
+  "toolbar.rotate": "旋转",
+  "toolbar.mirror-x": "沿 X 轴镜像",
+  "toolbar.mirror-y": "沿 Y 轴镜像",
+  "toolbar.delete": "删除",
+  "toolbar.temp-delete": "暂时删除",
+  "toolbar.presentation": "演示模式",
+  "toolbar.fit": "适应画布",
+  "toolbar.reset": "重置",
+  "toolbar.undo": "撤销",
+  "toolbar.redo": "重做",
+  "sidebar.shortcut": "按 i 打开元件浏览器，按 Esc 取消",
+  "properties.title": "属性编辑器",
+  "properties.empty": "尚未选择对象。",
+  "document.new": "新建原理图",
+  "document.import": "导入原理图",
+  "document.paste": "从剪贴板粘贴电路 JSON 到新标签页",
   "export.title": "导出电路图",
   "export.includeHidden": "在图像中包含隐藏对象",
   "export.json": "电路 JSON",
   "export.cancel": "取消",
   "layer.field": "图层",
+  "layer.stackHint": "上方图层绘制在下方图层之上。",
+  "layer.add": "+ 图层",
   "layer.mixed": "多个图层",
   "layer.hiddenSuffix": "（隐藏）",
   "layer.lockedSuffix": "（锁定）",
@@ -15,6 +47,7 @@ const ZH: Record<string, string> = {
   "layer.noteCreatedHidden": "注释已创建在隐藏图层。显示该图层后可编辑注释。",
   "sidebar.library": "器件库",
   "sidebar.properties": "属性",
+  "sidebar.layers": "图层",
   "sidebar.libraryLabel": "库",
   "sidebar.cells": "器件",
   "sidebar.all": "全部",
@@ -51,8 +84,6 @@ const ZH: Record<string, string> = {
   "toolbar.library": "器件库",
   "toolbar.analysis": "分析",
   "toolbar.netlist": "网表",
-  "toolbar.check": "检查",
-  "toolbar.log": "日志",
   "library.all": "全部",
   "library.sources": "源",
   "library.passives": "无源",
@@ -115,6 +146,8 @@ const ZH: Record<string, string> = {
 
 /** Hosts that expose a language switch (for example the site) publish AT_LANG. */
 export function schematicLanguage(): SchematicLanguage {
+  const preference = globalThis.document?.documentElement.dataset.schematicLanguage;
+  if (preference === "en" || preference === "zh") return preference;
   const current = (globalThis as { AT_LANG?: { current?: () => unknown } }).AT_LANG?.current?.();
   return current === "zh" ? "zh" : "en";
 }
@@ -122,4 +155,32 @@ export function schematicLanguage(): SchematicLanguage {
 export function t(key: string, fallback: string): string {
   if (schematicLanguage() !== "zh") return fallback;
   return ZH[key] ?? fallback;
+}
+
+export interface SchematicMessage {
+  readonly type: "schematic-message";
+  readonly key: string;
+  readonly fallback: string;
+  readonly values?: Readonly<Record<string, string>>;
+  readonly suffix?: string;
+}
+
+export function message(key: string, fallback: string, values?: SchematicMessage["values"]): SchematicMessage {
+  return { type: "schematic-message", key, fallback, values };
+}
+
+export function messageText(value: SchematicMessage) {
+  return t(value.key, value.fallback).replace(/\{(\w+)\}/g, (token, key) => value.values?.[key] ?? token) + (value.suffix ?? "");
+}
+
+export function refreshSchematicMessages(root: HTMLElement) {
+  for (const element of root.querySelectorAll<HTMLElement>("[data-schematic-message]")) {
+    element.textContent = messageText(JSON.parse(element.dataset.schematicMessage!));
+  }
+  for (const attr of ["aria-label", "title", "placeholder"]) {
+    const metadata = `data-schematic-message-${attr}`;
+    for (const element of root.querySelectorAll(`[${metadata}]`)) {
+      element.setAttribute(attr, messageText(JSON.parse(element.getAttribute(metadata)!)));
+    }
+  }
 }

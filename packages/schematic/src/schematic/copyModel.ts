@@ -3,7 +3,7 @@ import { junctionId, junctionPointFromId } from "./junctionIdentity";
 import { layerObjectZ, resolveLayerObjects } from "./layerObjectStateModel";
 import { layerObjectStackIds } from "./layerObjectTreeModel";
 import { defaultSchematicLayer, normalizeLayers } from "./layers";
-import { pointKey, rotatePoint, snapPoint } from "./geometry";
+import { mirrorComponentOrientation, pointKey, rotatePoint, snapPoint } from "./geometry";
 import { transformNote } from "./notes/noteGeometry";
 import { cloneConnections, connectGeometry, connectionIdFactory, emptyConnections } from "./connectionGraph";
 import { resolveComponentDef } from "./catalog";
@@ -343,12 +343,7 @@ export function mirrorCopySourceAroundAnchor(copyState: CopyState | null, axis: 
     const next = transformPoint(component);
     component.x = next.x;
     component.y = next.y;
-    if (axis === "x") {
-      component.rotation = (360 - component.rotation) % 360;
-    } else {
-      component.rotation = (540 - component.rotation) % 360;
-    }
-    component.mirrored = !component.mirrored;
+    mirrorComponentOrientation(component, axis);
   });
 
   copyState.source.wires.forEach((wire) => {

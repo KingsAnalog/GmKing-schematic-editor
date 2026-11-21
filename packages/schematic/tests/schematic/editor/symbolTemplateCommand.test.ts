@@ -7,7 +7,7 @@ import { contentFromDocument } from "../../../src/schematic/document/documentMod
 import { SchematicSelectionSessionCoordinator } from "../../../src/schematic/selection/selectionSessionCoordinator";
 import { SchematicTransientToolSessionCoordinator } from "../../../src/schematic/transientToolSessionCoordinator";
 import { makeComponentCell } from "../../../src/schematic/componentRenderer";
-import { renderSchematicEditorSidebarProjection } from "../../../src/schematic/schematicEditorUiProjection";
+import { mountSchematicTab, querySchematicEditorMountElements } from "../../../src/schematic/schematicTabShell";
 import { copySourceFromDocument, instantiateCopyAt, applyCopyPlacementToDocument } from "../../../src/schematic/copyModel";
 import type { ComponentInstance, SchematicContent, SchematicDocument } from "../../../src/schematic/types";
 import type { SchematicEditorCommand } from "../../../src/schematic/editorHandle";
@@ -22,8 +22,9 @@ function runtime() {
   const history = createSchematicContentHistoryAdapter(contentFromDocument(schematic));
   const selection = new SchematicSelectionSessionCoordinator(schematic);
   selection.setMixed(["R1", "wire"], []);
-  const paletteEl = document.createElement("div");
-  paletteEl.innerHTML = renderSchematicEditorSidebarProjection();
+  const root = document.createElement("div");
+  mountSchematicTab(root);
+  const mounts = querySchematicEditorMountElements(root)!;
   const cells = new Map(schematic.components.map(component => [component.id, makeComponentCell(component)]));
   const transientHooks = {
     clearWireSegmentMove: vi.fn(), resetWireTool: vi.fn(), clearActiveNetPick: vi.fn(), clearDeleteHover: vi.fn(),
@@ -33,7 +34,7 @@ function runtime() {
     updateWirePreview: vi.fn(), updateCopyPreview: vi.fn(), updateLabelPreview: vi.fn()
   };
   const editor = Object.assign(Object.create(SchematicEditor.prototype), {
-    document: schematic, options: { paletteEl }, destroyed: false,
+    document: schematic, options: mounts, destroyed: false,
     selectionSession: selection, presentationMode: false,
     hostFinishActiveEdits: vi.fn(), setStatus: vi.fn(), rebuildCounters: vi.fn(), emitStateChange: vi.fn(), recordExternalChange: vi.fn(),
     syncSelectionStyles: vi.fn(), renderPalette: vi.fn(), syncToolUi: vi.fn(),
@@ -58,7 +59,7 @@ function runtime() {
     commitCurrentContent: ReturnType<typeof vi.fn>;
   };
   Object.defineProperties(editor, { zoom: { value: 1.5 }, viewTranslate: { value: { x: 30, y: 40 } } });
-  return { editor, history, schematic, selection, cells, paletteEl, transientHooks };
+  return { editor, history, schematic, selection, cells, shellEl: mounts.shellEl, transientHooks };
 }
 
 describe("symbol template commands", () => {
@@ -93,17 +94,18 @@ describe("symbol template commands", () => {
     expect(contentFromDocument(schematic)).toEqual({ ...before, symbolTemplate: "abidi" });
   });
 
-  it("routes the shared select through the command and rejects unknown/no-op choices without history", () => {
-    const { editor, history, paletteEl } = runtime();
+  it("routes the Options template select through the command and rejects unknown/no-op choices without history", () => {
+    const { editor, history, shellEl } = runtime();
     editor.bindControllerEvents();
-    const select = paletteEl.querySelector<HTMLSelectElement>("[data-symbol-template]")!;
+    const options = shellEl.querySelector("[data-schematic-options-dialog]")!;
+    const select = options.querySelector<HTMLSelectElement>("[data-symbol-template]")!;
     select.value = "abidi";
     select.dispatchEvent(new Event("change", { bubbles: true }));
     expect(editor.document.symbolTemplate).toBe("abidi");
     editor.commitCurrentContent.mockClear();
     expect(editor.execute({ kind: "symbol-template", templateId: "abidi" })).toBe(false);
     expect(editor.execute({ kind: "symbol-template", templateId: "unknown" as "razavi" })).toBe(false);
-    expect(paletteEl.querySelector("[data-symbol-template-error]")?.textContent).toContain("Unknown symbol template");
+    expect(options.querySelector("[data-symbol-template-error]")?.textContent).toContain("Unknown symbol template");
     expect(editor.commitCurrentContent).not.toHaveBeenCalled();
     expect(history.undo()?.symbolTemplate).toBe("razavi");
     expect(history.undo()).toBeNull();

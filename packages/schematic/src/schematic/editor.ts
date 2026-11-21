@@ -1088,7 +1088,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private changeSymbolTemplate(templateId: SymbolTemplateId) {
-    const errorEl = this.options.paletteEl.querySelector<HTMLElement>("[data-symbol-template-error]");
+    const errorEl = this.options.shellEl.querySelector<HTMLElement>("[data-symbol-template-error]");
     if (errorEl) { errorEl.hidden = true; errorEl.textContent = ""; }
     try {
       const template = resolveSymbolTemplate(templateId);
@@ -1128,7 +1128,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private bindControllerEvents() {
-    this.options.paletteEl.querySelector<HTMLSelectElement>("[data-symbol-template]")?.addEventListener("change", event => {
+    this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]")?.addEventListener("change", event => {
       this.execute({ kind: "symbol-template", templateId: (event.currentTarget as HTMLSelectElement).value as SymbolTemplateId });
     }, { signal: this.lifecycleController.signal });
     this.instanceSelector.bind();
@@ -2353,6 +2353,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
+    if (target.closest("[data-schematic-options-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
     if (key === "enter" && !editable && isPathDraft(this.libraryShapeDraw?.kind)) {
@@ -4744,7 +4745,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncToolUi(resolution?: NetResolution) {
-    const templateSelect = this.options.paletteEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
+    const templateSelect = this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
     if (templateSelect) templateSelect.value = resolveSymbolTemplate(this.document.symbolTemplate).id;
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
     this.options.paperEl.classList.toggle(

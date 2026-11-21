@@ -230,9 +230,24 @@ const keyboardShortcutCases: Array<{
     expected: { kind: "rotate", preventDefault: true, stopPropagation: false }
   },
   {
+    label: "projects Ctrl+R to mirror up-down and stop browser refresh",
+    snapshot: { key: "r", ctrlKey: true },
+    expected: { kind: "mirror", axis: "y", preventDefault: true, stopPropagation: true }
+  },
+  {
     label: "projects Shift+r to mirror selection or preview left-right",
     snapshot: { key: "R", shiftKey: true },
     expected: { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false }
+  },
+  {
+    label: "leaves Ctrl+Shift+R available for the browser",
+    snapshot: { key: "R", ctrlKey: true, shiftKey: true },
+    expected: noKeyboardShortcutIntent
+  },
+  {
+    label: "leaves Meta+R available for the host",
+    snapshot: { key: "r", metaKey: true },
+    expected: noKeyboardShortcutIntent
   },
   {
     label: "projects f to fit the canvas",
@@ -264,8 +279,8 @@ const toolbarCommandIntentCases: Array<{
   { command: "wire", expected: { kind: "toggle-wire-tool", variant: "signal" } },
   { command: "note", expected: { kind: "create-note" } },
   { command: "rotate", expected: { kind: "rotate" } },
-  { command: "mirror-x", expected: { kind: "mirror", axis: "x" } },
-  { command: "mirror-y", expected: { kind: "mirror", axis: "y" } },
+  { command: "mirror-x", expected: { kind: "mirror", axis: "y" } },
+  { command: "mirror-y", expected: { kind: "mirror", axis: "x" } },
   { command: "delete", expected: { kind: "delete-selected-or-begin-tool" } },
   { command: "temp-delete", expected: { kind: "temporary-delete-selected-or-begin-tool" } },
   { command: "presentation", expected: { kind: "toggle-presentation-mode" } },

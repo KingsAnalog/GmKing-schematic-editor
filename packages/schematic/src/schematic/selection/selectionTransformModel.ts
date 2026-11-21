@@ -1,4 +1,4 @@
-import { pointKey, rotatePoint, snapPoint } from "../geometry";
+import { mirrorComponentOrientation, pointKey, rotatePoint, snapPoint } from "../geometry";
 import { rotateNote, transformNote } from "../notes/noteGeometry";
 import { reconcileDocumentConnectionEdit } from "../document/documentWires";
 import { junctionId } from "../junctionIdentity";
@@ -94,26 +94,7 @@ export function transformComponentOrientation(instance: ComponentInstance, kind:
     instance.rotation = (instance.rotation + 90) % 360;
     return;
   }
-  if (kind === "mirror-x") {
-    instance.rotation = (360 - instance.rotation) % 360;
-    instance.mirrored = !instance.mirrored;
-    return;
-  }
-  instance.rotation = (540 - instance.rotation) % 360;
-  instance.mirrored = !instance.mirrored;
-}
-
-export function transformSingleComponentOrientation(instance: ComponentInstance, kind: GroupTransformKind) {
-  if (kind === "rotate") {
-    instance.rotation = (instance.rotation + 90) % 360;
-    return;
-  }
-  if (kind === "mirror-x") {
-    instance.mirrored = !instance.mirrored;
-    return;
-  }
-  instance.rotation = (360 - instance.rotation) % 360;
-  instance.mirrored = !instance.mirrored;
+  mirrorComponentOrientation(instance, kind === "mirror-x" ? "x" : "y");
 }
 
 function rectCenter(rect: Rect): Point {

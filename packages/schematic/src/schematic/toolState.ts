@@ -44,7 +44,7 @@ export type SchematicKeyboardShortcutIntent =
       behavior: "stretch" | "moveOnly";
     })
   | (SchematicKeyboardShortcutIntentBase & { kind: "rotate"; preventDefault: true; stopPropagation: false })
-  | (SchematicKeyboardShortcutIntentBase & { kind: "mirror"; preventDefault: true; stopPropagation: false; axis: "x" | "y" })
+  | (SchematicKeyboardShortcutIntentBase & { kind: "mirror"; preventDefault: true; axis: "x" | "y" })
   | (SchematicKeyboardShortcutIntentBase & { kind: "fit"; preventDefault: true; stopPropagation: false })
   | (SchematicKeyboardShortcutIntentBase & { kind: "toggle-log"; preventDefault: true; stopPropagation: true });
 
@@ -279,12 +279,15 @@ export function projectSchematicKeyboardShortcut(
     };
   }
 
-  if (snapshot.shiftKey && !snapshot.ctrlKey && !snapshot.metaKey && !snapshot.altKey && key === "r") {
-    return { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false };
-  }
-
-  if (key === "r") {
-    return { kind: "rotate", preventDefault: true, stopPropagation: false };
+  if (key === "r" && !snapshot.metaKey && !snapshot.altKey) {
+    if (snapshot.ctrlKey && !snapshot.shiftKey) {
+      return { kind: "mirror", axis: "y", preventDefault: true, stopPropagation: true };
+    }
+    if (!snapshot.ctrlKey) {
+      return snapshot.shiftKey
+        ? { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false }
+        : { kind: "rotate", preventDefault: true, stopPropagation: false };
+    }
   }
 
   if (key === "f") {
@@ -340,10 +343,11 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
       return { kind: "create-note" };
     case "rotate":
       return { kind: "rotate" };
+    // The toolbar names the reflection axis. The editor takes the coordinate to flip.
     case "mirror-x":
-      return { kind: "mirror", axis: "x" };
-    case "mirror-y":
       return { kind: "mirror", axis: "y" };
+    case "mirror-y":
+      return { kind: "mirror", axis: "x" };
     case "delete":
       return { kind: "delete-selected-or-begin-tool" };
     case "temp-delete":

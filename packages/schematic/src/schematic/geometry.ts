@@ -30,6 +30,16 @@ export function transformPin(instance: ComponentInstance, pin: PinDef): Point {
   return snapPoint({ x: instance.x + rotated.x, y: instance.y + rotated.y });
 }
 
+/** Reflects the given canvas coordinate. Component mirroring is applied before rotation. */
+export function mirrorComponentOrientation(
+  orientation: Pick<ComponentInstance, "rotation" | "mirrored">,
+  coordinate: "x" | "y"
+) {
+  const rotation = (coordinate === "x" ? 0 : 180) - orientation.rotation;
+  orientation.rotation = ((rotation % 360) + 360) % 360;
+  orientation.mirrored = !orientation.mirrored;
+}
+
 export function isHorizontal(a: Point, b: Point) {
   return Math.round(a.y) === Math.round(b.y);
 }
