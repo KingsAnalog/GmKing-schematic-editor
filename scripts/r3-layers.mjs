@@ -468,6 +468,68 @@ try {
     "locked active layer accepted a new note", lockedPlacement);
 
   await selectInLayers("output-branch");
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await clickSelector(page, "[data-layer-select='layer-1']");
+  const sourceTab = await evaluate(page, () =>
+    document.querySelector("[data-schematic-document-tab][aria-selected='true']").dataset.schematicDocumentTab);
+  const sameDocumentWireIds = await evaluate(page, () => window.layersSmoke.editor.getContent().wires.map(wire => wire.id));
+  await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
+  await pressKey("c");
+  await clickPoint({ x: blank.x, y: blank.y - 200 });
+  await clickPoint({ x: blank.x + 80, y: blank.y - 200 });
+  await waitFor(page, ids => window.layersSmoke.editor.getContent().wires.some(wire => !ids.includes(wire.id) && wire.layerId === "layer-2"),
+    "copy within the tab did not retain the source layer", { args: [sameDocumentWireIds] });
+  await pressKey("Escape");
+  await clickSelector(page, "[data-command='undo']");
+  await waitFor(page, ids => window.layersSmoke.editor.getContent().wires.every(wire => ids.includes(wire.id)),
+    "copy Undo failed", { args: [sameDocumentWireIds] });
+  await clickSelector(page, "[data-command='redo']");
+  await waitFor(page, ids => window.layersSmoke.editor.getContent().wires.some(wire => !ids.includes(wire.id) && wire.layerId === "layer-2"),
+    "copy Redo failed", { args: [sameDocumentWireIds] });
+
+  const emptyCanvasPoint = () => evaluate(page, () => {
+    const paper = document.querySelector("[data-schematic-paper]");
+    const rect = paper.getBoundingClientRect();
+    for (let y = rect.bottom - 100; y > rect.top + 50; y -= 50) {
+      for (let x = rect.right - 180; x > rect.left + 50; x -= 50) {
+        const target = document.elementFromPoint(x, y);
+        if (target && paper.contains(target) && !target.closest("[model-id], [data-note-id]")) return { x, y };
+      }
+    }
+    throw new Error("No empty canvas point in the active document");
+  });
+  const activateTab = async id => {
+    await evaluate(page, id => document.querySelector(`[data-schematic-document-tab='${id}']`).click(), id);
+    await waitFor(page, id => document.querySelector("[data-schematic-document-tab][aria-selected='true']")?.dataset.schematicDocumentTab === id,
+      "the requested document tab did not activate", { args: [id] });
+  };
+  await activateTab(fileImport.activeTab);
+  await evaluate(page, () => {
+    document.querySelector("[data-sidebar-tab='layers']").click();
+    document.querySelector("[data-layer-select='layer-3']").click();
+  });
+  await waitFor(page, () => document.querySelector("[data-layer-id='layer-3'] > .layer-stack-row.is-active"),
+    "locked layer did not become active before switching tabs");
+  await activateTab(sourceTab);
+  await selectInLayers("output-branch");
+  await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
+  await pressKey("c");
+  await clickPoint(await emptyCanvasPoint());
+  await waitFor(page, () => document.querySelector("[data-schematic-status]")?.textContent.includes("attached to cursor"),
+    "cross-tab copy did not capture a reference point");
+  await activateTab(fileImport.activeTab);
+  await clickPoint(await emptyCanvasPoint());
+  await waitFor(page, count => window.layersSmoke.editor.getContent().wires.length === count
+    && /locked/.test(document.querySelector("[data-schematic-status]").textContent),
+    "copy into a locked destination layer was not rejected", { args: [fileImport.content.wires.length] });
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await evaluate(page, () => document.querySelector("[data-layer-select='layer-1']").click());
+  await clickPoint(await emptyCanvasPoint());
+  await waitFor(page, ids => window.layersSmoke.editor.getContent().wires.some(wire => !ids.includes(wire.id) && wire.layerId === "layer-1"),
+    "cross-tab copy did not use the destination layer", { args: [fileImport.content.wires.map(wire => wire.id)] });
+  await pressKey("Escape");
+
+  await selectInLayers("output-branch");
   await page.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
   await waitFor(page, () => document.querySelector("[data-schematic-shell]").classList.contains("is-layout-narrow"), "narrow layout unavailable after import");
   await evaluate(page, () => {
@@ -495,7 +557,76 @@ try {
     && !window.layersSmoke.editor.getContent().netLabels.some(label => label.name === "TEST"),
     "clipboard import did not open a layered document on mobile", { args: [mobileTabCount] });
 
-  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, clipboardImport: true, ok: true }));
+  await page.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 980, deviceScaleFactor: 1, mobile: false });
+  await evaluate(page, () => delete document.documentElement.dataset.effectiveTheme);
+  await clickSelector(page, "[data-schematic-document-new]");
+  await waitFor(page, () => window.layersSmoke.editor.getContent().wires.length === 0, "blank test document did not open");
+  await evaluate(page, () => {
+    window.layersSmoke.editor.transact(draft => {
+      draft.layers.push({ id: "layer-2", name: "Destination", visible: true, locked: false });
+    });
+    const source = {
+      format: "adc-helper/schematic",
+      schematic: {
+        components: [], notes: [], junctionAppearances: [],
+        wires: [{ id: "hidden-source", routeMode: "orthogonal", points: [{ x: 0, y: 0 }, { x: 200, y: 0 }], layerId: "layer-1" }],
+        connections: { wires: { "hidden-source": ["left", "right"] }, pins: {} },
+        netLabels: [{ id: "probe", name: "PROBE", attachment: { wireId: "hidden-source", point: { x: 170, y: 0 } } }],
+        layerObjectStates: { "hidden-source": { visible: false, z: 2 } }
+      }
+    };
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { readText: async () => JSON.stringify(source) } });
+  });
+  await clickSelector(page, "[data-sidebar-tab='layers']");
+  await clickSelector(page, "[data-layer-select='layer-2']");
+  const pastePoint = await emptyCanvasPoint();
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...pastePoint, button: "right", buttons: 2, clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...pastePoint, button: "right", buttons: 0, clickCount: 1 });
+  await clickSelector(page, "[data-paste-schematic]");
+  await waitFor(page, () => document.querySelector("[data-schematic-status]")?.textContent.includes("attached to cursor"),
+    "canvas paste did not start placement");
+  await clickPoint(pastePoint);
+  await pressKey("Escape");
+  const pasted = await evaluate(page, () => {
+    const content = window.layersSmoke.editor.getContent();
+    const wire = content.wires[0];
+    return { id: wire?.id, start: wire?.points[0], layerId: wire?.layerId,
+      state: content.layerObjectStates?.[wire?.id], drawn: !!document.querySelector(`[model-id='${wire?.id}']`) };
+  });
+  assert(pasted.layerId === "layer-2" && pasted.state.visible === false && !pasted.drawn,
+    "canvas paste did not apply the active layer or keep the wire hidden", pasted);
+
+  await evaluate(page, start => window.layersSmoke.editor.transact(draft => {
+    draft.wires.push({
+      id: "split-branch", layerId: "layer-2", routeMode: "orthogonal",
+      points: [{ x: start.x + 100, y: start.y }, { x: start.x + 100, y: start.y + 80 }]
+    });
+  }, { origin: "editor", reason: "split-copied-wire" }), pasted.start);
+  const splitPersisted = (hiddenId, z) => {
+    const content = window.layersSmoke.editor.getContent();
+    const pieces = content.wires.filter(wire => wire.id !== "split-branch");
+    if (pieces.length !== 2) return false;
+    const branchNode = content.connections.wires["split-branch"][0];
+    return pieces.every(wire => wire.layerId === "layer-2" && content.layerObjectStates?.[wire.id]?.visible === false
+      && content.layerObjectStates[wire.id].z === z && content.connections.wires[wire.id].includes(branchNode)
+      && !document.querySelector(`[model-id='${wire.id}']`))
+      && content.netLabels[0].attachment.wireId !== hiddenId
+      && pieces.some(wire => wire.id === content.netLabels[0].attachment.wireId);
+  };
+  const splitArgs = { args: [pasted.id, pasted.state.z] };
+  await waitFor(page, splitPersisted, "split pieces lost layer state, connection or label", splitArgs);
+  await clickSelector(page, "[data-command='undo']");
+  await waitFor(page, id => {
+    const content = window.layersSmoke.editor.getContent();
+    return content.wires.length === 1 && content.netLabels[0].attachment.wireId === id
+      && content.layerObjectStates?.[id]?.visible === false;
+  }, "split Undo did not restore the original wire", { args: [pasted.id] });
+  await clickSelector(page, "[data-command='redo']");
+  await waitFor(page, splitPersisted, "split Redo did not restore the wires", splitArgs);
+  await navigate(page, server.url);
+  await waitFor(page, splitPersisted, "split layer state did not survive reload", splitArgs);
+
+  console.log(JSON.stringify({ initial, pinSelection, hidden, dark, mobile, importedRc: true, clipboardImport: true, copyAndSplit: true, ok: true }));
 } finally {
   page?.close();
   await browser?.close();

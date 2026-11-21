@@ -53,17 +53,22 @@ export function bindStandaloneNetLabelsAtPoint(
 export function remapNetLabelsAfterWireNormalization(
   document: SchematicDocument,
   previousWires: readonly Wire[],
-  normalizedWires: readonly Wire[]
+  normalizedWires: readonly Wire[],
+  sourceIds: ReadonlyMap<string, string>,
+  piecesBySource: ReadonlyMap<string, Wire[]>
 ) {
   const previousById = new Map(previousWires.map((wire) => [wire.id, wire]));
   document.netLabels.forEach((label) => {
     if (!label.attachment.wireId) return;
     const previous = previousById.get(label.attachment.wireId);
     const point = snapPoint(label.attachment.point);
-    const candidates = normalizedWires.filter((wire) => sameWireKind(previous, wire) && pointOnWire(point, wire));
-    const next = candidates.find((wire) => wire.id === label.attachment.wireId)
-      ?? candidates.find((wire) => baseWireId(wire.id) === baseWireId(label.attachment.wireId))
-      ?? normalizedWires.find((wire) => pointOnWire(point, wire));
+    const sourceId = label.attachment.wireId;
+    const candidates = (piecesBySource.get(sourceId) ?? []).filter(wire => pointOnWire(point, wire));
+    const next = candidates.find(wire => wire.id === sourceId && sourceIds.get(wire.id) === sourceId)
+      ?? candidates.find(wire => sourceIds.get(wire.id) === sourceId)
+      ?? candidates[0]
+      ?? normalizedWires.find(wire => sameWireKind(previous, wire) && pointOnWire(point, wire))
+      ?? normalizedWires.find(wire => pointOnWire(point, wire));
     if (next) label.attachment = { wireId: next.id, point };
   });
 }
@@ -236,12 +241,6 @@ function sameWireKind(first: Wire | undefined, second: Wire) {
     && Boolean(first.temporarilyDeleted) === Boolean(second.temporarilyDeleted)
     && (first.appearance?.variant ?? "signal") === (second.appearance?.variant ?? "signal")
     && (first.appearance?.color ?? "") === (second.appearance?.color ?? "");
-}
-
-function baseWireId(id: string) {
-  let base = id;
-  while (/-segment-\d+$/.test(base)) base = base.replace(/-segment-\d+$/, "");
-  return base;
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -1,7 +1,7 @@
 import { applyComponentCellGeometry, applyWireCellGeometry } from "./cellGeometryModel";
 import { componentPinPoints } from "./document/documentGeometryModel";
 import { cloneSchematicDocument } from "./document/documentModel";
-import { reconcileConnectionEdit } from "./connectionGraph";
+import { reconcileDocumentConnectionEdit } from "./document/documentWires";
 import {
   applySelectionMoveDocumentOp,
   commitSelectionMoveDocumentOp,
@@ -246,7 +246,7 @@ export class SchematicCellGeometryInteractionCoordinator<
       affectedNoteIds: this.affectedNoteIds
     });
     if (commit.changed && this.interactionDocumentSnapshot) {
-      reconcileConnectionEdit(this.options.document, this.interactionDocumentSnapshot);
+      reconcileDocumentConnectionEdit(this.options.document, this.interactionDocumentSnapshot);
     }
     this.clearInteractionState();
     return { commit, selectionMove: result.selectionMove, changedLabelIds: result.changedLabelIds };
@@ -287,7 +287,7 @@ export class SchematicCellGeometryInteractionCoordinator<
       affectedNoteIds: this.affectedNoteIds
     });
     if (commit.changed && this.interactionDocumentSnapshot) {
-      reconcileConnectionEdit(this.options.document, this.interactionDocumentSnapshot);
+      reconcileDocumentConnectionEdit(this.options.document, this.interactionDocumentSnapshot);
     }
     this.clearInteractionState();
     return { commit, selectionMove: result.selectionMove, changedLabelIds: result.changedLabelIds };

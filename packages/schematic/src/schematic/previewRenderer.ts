@@ -146,13 +146,14 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     this.options.graphAdapter.addCells(cells);
   }
 
-  renderCopy(preview: PreviewDocument | null) {
+  renderCopy(preview: PreviewDocument | null, displayed = (_id: string) => true) {
     if (!preview) {
       this.clearCopy();
       return;
     }
-    const cells = this.previewCellsFromDocument(preview);
-    const noteElements = (preview.notes ?? []).map((note) => this.makeCopyPreviewNoteElement(note));
+    const cells = this.previewCellsFromDocument(preview, displayed);
+    const noteElements = (preview.notes ?? []).filter(note => displayed(note.id))
+      .map(note => this.makeCopyPreviewNoteElement(note));
     this.lifecycle.replaceCopy(cells, noteElements);
     this.options.graphAdapter.addCells(cells);
   }
@@ -207,11 +208,11 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     this.lifecycle.clearCopyPreview();
   }
 
-  private previewCellsFromDocument(preview: PreviewWireContext & Partial<Pick<SchematicDocument, "netLabels">>) {
+  private previewCellsFromDocument(preview: PreviewWireContext & Partial<Pick<SchematicDocument, "netLabels">>, displayed = (_id: string) => true) {
     return [
-      ...preview.components.map((component) => this.makePreviewComponentCell(component)),
-      ...preview.wires.map((wire) => this.makePreviewWireCell(wire, preview)),
-      ...(preview.netLabels ?? []).flatMap((label) => this.options.makeNetLabelCell ? [this.options.makeNetLabelCell(label, { preview: true })] : [])
+      ...preview.components.filter(component => displayed(component.id)).map((component) => this.makePreviewComponentCell(component)),
+      ...preview.wires.filter(wire => displayed(wire.id)).map((wire) => this.makePreviewWireCell(wire, preview)),
+      ...(preview.netLabels ?? []).filter(label => displayed(label.id)).flatMap((label) => this.options.makeNetLabelCell ? [this.options.makeNetLabelCell(label, { preview: true })] : [])
     ];
   }
 

@@ -1,5 +1,9 @@
 import { snapPoint } from "./geometry";
-import { copySourceCount, instantiateCopyAt, mirrorCopySourceAroundAnchor, rotateCopySourceAroundAnchor, type CopySource, type CopyState } from "./copyModel";
+import {
+  captureCopyLayers, copySourceCount, instantiateCopyAt, mirrorCopySourceAroundAnchor,
+  planCopyLayers, rotateCopySourceAroundAnchor, type CopyLayerTarget, type CopySource, type CopyState
+} from "./copyModel";
+import { t } from "./schematicI18n";
 import {
   buildSelectionCopySource,
   buildTargetCopySource,
@@ -122,6 +126,8 @@ export class SchematicCopyController {
     inductorCouplings?: InductorCoupling[];
     connections: SchematicDocument["connections"];
     lastPointerPoint: Point | null;
+    document?: SchematicDocument;
+    documentId?: string;
   }): CopySelectionEntryResult {
     const bounds = input.selection.transformBounds;
     if (!bounds) return { kind: "no-source", intent: this.prepareNoSourceEntry() };
@@ -130,9 +136,12 @@ export class SchematicCopyController {
       input.selection,
       input.junctionAppearances ?? [],
       input.inductorCouplings ?? [],
-      input.connections
+      input.connections,
+      input.document?.symbolTemplate
     );
-    const entry = this.prepareReferenceEntry(source);
+    const entry = this.prepareReferenceEntry(
+      input.document ? captureCopyLayers(source, input.document, input.documentId) : source
+    );
     if (!entry.ok) return { kind: "empty-source", status: entry.status };
     return { kind: "source", entry };
   }
@@ -142,10 +151,12 @@ export class SchematicCopyController {
     ids: string[],
     noteIds: string[],
     anchor: Point,
-    previewPoint: Point = anchor
+    previewPoint: Point = anchor,
+    documentId?: string
   ): CopyTargetEntryResult {
     const projection = buildTargetCopySource(document, ids, noteIds);
-    const entry = this.prepareSourceEntry(projection.source, anchor, previewPoint, {
+    const source = captureCopyLayers(projection.source, document, documentId);
+    const entry = this.prepareSourceEntry(source, anchor, previewPoint, {
       emptyStatus: COPY_EMPTY_TARGET_STATUS
     });
     if (!entry.ok) return { kind: "empty-target", status: entry.status };
@@ -246,20 +257,22 @@ export class SchematicCopyController {
     this.clear();
   }
 
-  preparePreview(point: Point, factories: CopyInstantiationFactories): CopyPreviewResult {
+  preparePreview(point: Point, factories: CopyInstantiationFactories, document?: SchematicDocument, target?: CopyLayerTarget): CopyPreviewResult {
     if (!this.copyState) {
       return { ok: false, status: this.awaitingReference ? "Copy mode: click a reference point before placing." : COPY_NO_SOURCE_STATUS };
     }
+    const layerPlan = document && target ? planCopyLayers(this.copyState.source, document, target) : undefined;
     return {
       ok: true,
       preview: instantiateCopyAt(this.copyState, point, {
         ...factories,
+        layerPlan,
         preview: true
       })
     };
   }
 
-  preparePlacement(point: Point, factories: CopyInstantiationFactories): CopyPlacementPreparation {
+  preparePlacement(point: Point, factories: CopyInstantiationFactories, document?: SchematicDocument, target?: CopyLayerTarget): CopyPlacementPreparation {
     if (!this.copyState) {
       return {
         ok: false,
@@ -267,8 +280,17 @@ export class SchematicCopyController {
         keepSourceArmed: this.awaitingReference
       };
     }
+    const layerPlan = document && target ? planCopyLayers(this.copyState.source, document, target) : undefined;
+    if (layerPlan?.locked) {
+      return {
+        ok: false,
+        status: t("layer.copyLocked", "A destination layer is locked. Unlock it before placing the copy."),
+        keepSourceArmed: true
+      };
+    }
     const copied = instantiateCopyAt(this.copyState, point, {
       ...factories,
+      layerPlan,
       preview: false
     });
     if (copySourceCount(copied) === 0) {

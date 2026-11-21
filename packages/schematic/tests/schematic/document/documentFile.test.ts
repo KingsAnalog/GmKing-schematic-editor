@@ -239,7 +239,8 @@ describe("single schematic document file codec", () => {
     const restored = parseSchematicDocumentFile(serialized);
     expect(restored.layerObjectStates).toEqual({
       "component-1": { visible: false, z: 3 },
-      horizontal: { z: 2 }
+      horizontal: { z: 2 },
+      "horizontal-segment-1": { z: 2 }
     });
     expect(serialized).toContain('"layerObjectStates": {"component-1":');
     expect(serializeSchematicDocumentFile({ ...document, layerObjectStates: {} }))

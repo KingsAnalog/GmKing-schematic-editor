@@ -1,3 +1,4 @@
+import type { CopyLayerTarget } from "./copyModel";
 import { SchematicCopyController } from "./copyController";
 import {
   applyCopyPlacementDocumentOp,
@@ -60,8 +61,8 @@ export class SchematicPlacementCommitCoordinator {
     );
   }
 
-  commitCopy(point: Point): SchematicPlacementCommitOutcome {
-    const placement = this.copyTool.preparePlacement(point, this.factories);
+  commitCopy(point: Point, target?: CopyLayerTarget): SchematicPlacementCommitOutcome {
+    const placement = this.copyTool.preparePlacement(point, this.factories, this.document, target);
     if (!placement.ok) {
       return {
         kind: "status",

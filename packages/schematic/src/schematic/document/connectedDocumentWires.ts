@@ -10,11 +10,16 @@ interface ConnectedSegment {
   line: string;
 }
 
+export interface NormalizedWirePiece {
+  wire: Wire;
+  sourceId: string;
+}
+
 /** Normalize only conductors that actually share endpoints on the same straight line. */
 export function normalizeConnectedWires(
   document: SchematicDocument,
-  normalizeGroup: (wires: Wire[], splitPoints: Point[]) => Wire[]
-): { wires: Wire[]; connections: SchematicConnections } {
+  normalizeGroup: (wires: Wire[], splitPoints: Point[]) => NormalizedWirePiece[]
+) {
   const graph = document.connections;
   const { layerOf } = resolveLayerObjects(document);
   const segments: ConnectedSegment[] = [];
@@ -67,14 +72,19 @@ export function normalizeConnectedWires(
     if (node.pins.length || arms.size > 2 || kinds.size > 1) retainedNodes.add(node.id);
   });
   const wires: Wire[] = [];
+  const sourceIds = new Map<string, string>();
+  const piecesBySource = new Map<string, Wire[]>();
   const bindings: SchematicConnections["wires"] = Object.create(null);
   const usedIds = new Set<string>();
-  const append = (wire: Wire, nodes: string[]) => {
+  const append = ({ wire, sourceId }: NormalizedWirePiece, nodes: string[]) => {
     let id = wire.id, suffix = 1;
     while (usedIds.has(id)) id = `${wire.id}-segment-${suffix++}`;
     usedIds.add(id);
-    wires.push(id === wire.id ? wire : { ...wire, id });
+    const result = id === wire.id ? wire : { ...wire, id };
+    wires.push(result);
+    sourceIds.set(id, sourceId);
     bindings[id] = nodes;
+    return result;
   };
   groups.forEach(group => {
     const nodesAtPoint = new Map<string, string>();
@@ -83,17 +93,22 @@ export function normalizeConnectedWires(
     }));
     const splitPoints = [...nodesAtPoint].filter(([, id]) => retainedNodes.has(id));
     const normalized = normalizeGroup(group.map(segment => segment.wire), splitPoints.map(([key]) => parsePoint(key)));
-    normalized.forEach(wire => {
-      const nodes = wire.points.map(point => {
+    const pieces = normalized.map(piece => {
+      const nodes = piece.wire.points.map(point => {
         const node = nodesAtPoint.get(pointKey(point));
         if (!node) throw new Error("Wire normalization lost a connection endpoint.");
         return node;
       });
-      append(wire, nodes);
+      return append(piece, nodes);
     });
+    for (const id of new Set(group.map(segment => segment.wire.id))) {
+      piecesBySource.set(id, [...(piecesBySource.get(id) ?? []), ...pieces]);
+    }
   });
   return {
     wires,
+    sourceIds,
+    piecesBySource,
     connections: {
       wires: bindings,
       pins: Object.fromEntries(Object.entries(graph.pins).map(([id, pins]) => [id, { ...pins }]))

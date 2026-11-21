@@ -47,10 +47,9 @@ export function resolveLayerObjects(
   const order = new Map(layers.map((layer, index) => [layer.id, index]));
   const assignments = new Map<string, string | undefined>();
   document.components.forEach(component => assignments.set(component.id, component.values["layer:id"]));
-  for (const objects of [document.wires, document.netLabels, document.notes]) {
+  for (const objects of [document.wires, document.netLabels, document.notes, document.inductorCouplings ?? []]) {
     objects.forEach(object => assignments.set(object.id, object.layerId));
   }
-  document.inductorCouplings?.forEach(coupling => assignments.set(coupling.id, undefined));
 
   const assignedLayer = (id: string) => byId.get(assignments.get(id) ?? "") ?? fallback;
   const assignedVisible = (id: string) => layerObjectVisible(document, id) && assignedLayer(id).visible;

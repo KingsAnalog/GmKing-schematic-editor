@@ -145,6 +145,7 @@ import {
 } from "./selection/selectionCopyExportModel";
 import { SchematicCopyController } from "./copyController";
 import {
+  captureCopyLayers,
   copySourceCenterAnchor,
   copySourceCount,
   copySourceFromDocument
@@ -193,7 +194,7 @@ import {
   documentFromContent,
   normalizeSchematicContent
 } from "./document/documentModel";
-import { applyNormalizedDocumentWires } from "./document/documentWires";
+import { applyNormalizedDocumentWires, reconcileDocumentConnectionEdit } from "./document/documentWires";
 import {
   captureTransformRenderSnapshot,
   changedTransformWireIds,
@@ -201,7 +202,6 @@ import {
 } from "./transformRenderModel";
 import { schematicDocumentVisualBounds } from "./view-geometry";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
-import { reconcileConnectionEdit } from "./connectionGraph";
 import type { WireEndpointConnections } from "./wire/wireDecoration";
 import {
   beginWireSegmentMove,
@@ -350,6 +350,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly netLabelCommitCoordinator: SchematicNetLabelCommitCoordinator;
   private netResolutionCache: NetResolution | undefined;
   private activeHostedDocumentId = "";
+  private readonly hostedActiveLayerIds = new Map<string, string>();
   private readonly copyMarkdownPreviewContent = new Map<string, HTMLElement>();
   private copyMarkdownPreviewGeneration = 0;
   private copyPreviewNeedsPointer = false;
@@ -958,7 +959,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const before = this.getContent();
     const draft = structuredClone(before);
     mutate(draft);
-    reconcileConnectionEdit(draft, before);
+    reconcileDocumentConnectionEdit(draft, before);
     this.replaceContent(draft, {
       ...options,
       commit: options.commit ?? options.history !== "none",
@@ -2714,7 +2715,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.document.connections,
       this.document.symbolTemplate
     );
-    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile(source) : null;
+    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile(captureCopyLayers(source, this.document)) : null;
   }
 
   private contextTargetFromEvent(event: MouseEvent): SchematicContextTarget | null {
@@ -2894,7 +2895,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       junctionAppearances: this.document.junctionAppearances,
       inductorCouplings: this.document.inductorCouplings,
       connections: this.document.connections,
-      lastPointerPoint: this.lastPointerPoint
+      lastPointerPoint: this.lastPointerPoint,
+      document: this.document,
+      documentId: this.activeHostedDocumentId
     });
     if (result.kind === "no-source") {
       this.applyCopyToolEntryIntent(result.intent);
@@ -2908,7 +2911,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyFromTargets(ids: string[], noteIds: string[], anchor: Point) {
-    const result = this.copyController.prepareTargetEntry(this.document, ids, noteIds, anchor, this.lastPointerPoint ?? anchor);
+    const result = this.copyController.prepareTargetEntry(
+      this.document, ids, noteIds, anchor, this.lastPointerPoint ?? anchor, this.activeHostedDocumentId
+    );
     if (result.kind === "empty-target") {
       this.setStatus(result.status);
       return;
@@ -2934,7 +2939,11 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private placeCopyAt(point: Point) {
     this.copyPreviewNeedsPointer = false;
-    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitCopy(point));
+    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitCopy(point, this.copyLayerTarget()));
+  }
+
+  private copyLayerTarget() {
+    return { documentId: this.activeHostedDocumentId, activeLayerId: this.activeLayerId };
   }
 
   private setCopyReference(point: Point) {
@@ -3289,7 +3298,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     const before = this.getContent();
     const result = transformSingleComponentOrientationDocumentOp([instance], "rotate");
-    reconcileConnectionEdit(this.document, before);
+    reconcileDocumentConnectionEdit(this.document, before);
     this.commitChangedTransformedDocument(result, renderSnapshot);
   }
 
@@ -3334,7 +3343,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       [instance],
       axis === "x" ? "mirror-x" : "mirror-y"
     );
-    reconcileConnectionEdit(this.document, before);
+    reconcileDocumentConnectionEdit(this.document, before);
     this.commitChangedTransformedDocument(result, renderSnapshot);
   }
 
@@ -3593,6 +3602,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.analysisController.cancelPendingCompute();
 
     if (this.activeHostedDocumentId) {
+      this.hostedActiveLayerIds.set(this.activeHostedDocumentId, this.activeLayerId);
       const selectedIds = new Set(this.selectionSession.selectedIds);
       this.selectionSession.setMixed([], []);
       this.syncSelectionStyles({ cellIds: selectedIds, resolution: this.netResolutionCache });
@@ -3606,6 +3616,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.copyPreviewNeedsPointer = preserveCopy;
     this.activeHostedDocumentId = input.id;
     this.noteLayer.activateDocument(input.id);
+    this.activeLayerId = this.hostedActiveLayerIds.get(input.id) ?? defaultSchematicLayer(normalizeLayers(input.document.layers)).id;
     this.restoreDocumentState(input.document);
     this.presentationMode = input.view.presentationMode;
     setSchematicPresentationState({
@@ -4050,14 +4061,14 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.previewRenderer.clearCopy();
       return;
     }
-    const previewInput = this.copyController.preparePreview(point, this.copyInstantiationFactories());
+    const previewInput = this.copyController.preparePreview(point, this.copyInstantiationFactories(), this.document, this.copyLayerTarget());
     if (!previewInput.ok) {
       this.previewRenderer.renderCopy(null);
       return;
     }
     const previewLabels = previewInput.preview.netLabels ?? [];
     bindStandaloneNetLabelsAtPoint(this.document, previewLabels, point);
-    this.previewRenderer.renderCopy(previewInput.preview);
+    this.previewRenderer.renderCopy(previewInput.preview, resolveLayerObjects(previewInput.preview).displayed);
   }
 
   private updateWirePreview(point: Point | null) {

@@ -33,10 +33,10 @@ import {
   type DffSettings
 } from "./dffModel";
 import { buildVisibleJunctions } from "./connectivity";
-import { pinTouchesConnectedWire, reconcileConnectionEdit } from "./connectionGraph";
+import { pinTouchesConnectedWire } from "./connectionGraph";
 import { componentPinPoints } from "./document/documentGeometryModel";
 import { cloneSchematicDocument } from "./document/documentModel";
-import { applyNormalizedDocumentWires } from "./document/documentWires";
+import { applyNormalizedDocumentWires, reconcileDocumentConnectionEdit } from "./document/documentWires";
 import { pointKey, samePoint, snapPoint } from "./geometry";
 import { junctionId } from "./junctionIdentity";
 import {
@@ -1161,7 +1161,7 @@ function finishComponentGeometryChange(
     runtime.applyWireMoveTopology(document, topology, previousPinPoints, nextPinPoints);
     remapNetLabelsAfterWirePathChange(document, previousWires);
   }
-  reconcileConnectionEdit(document, before.connectionSnapshot);
+  reconcileDocumentConnectionEdit(document, before.connectionSnapshot);
   runtime.applyNormalizedDocumentWires(document);
   document.junctions = buildVisibleJunctions(document);
   pruneJunctionAppearances(document);

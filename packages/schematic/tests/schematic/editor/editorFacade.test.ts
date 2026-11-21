@@ -152,7 +152,7 @@ describe("schematic editor public facade", () => {
     expect(editorSource).not.toContain('from "./schematicStore"');
     expect(editorSource).not.toContain("currentRuntimeState");
     expect(editorSource).toContain("this.placementCommitCoordinator.commitPlacement(point, layer.id)");
-    expect(editorSource).toContain("this.placementCommitCoordinator.commitCopy(point)");
+    expect(editorSource).toContain("this.placementCommitCoordinator.commitCopy(point, this.copyLayerTarget())");
     expect(placementCommitSource).toContain("applyPlacementCommitDocumentOp(this.document, commit)");
     expect(placementCommitSource).toContain("applyCopyPlacementDocumentOp(this.document, placement.copied)");
     expect(placementCommitSource).not.toContain("restoreSchematicDocumentOp");

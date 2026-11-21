@@ -561,8 +561,9 @@ function decodeInductorCoupling(value: unknown, path: string): InductorCoupling 
     "showArc",
     "showCore",
     "arcFlipped",
-    "appearance"
-  ], path, ["appearance"]);
+    "appearance",
+    "layerId"
+  ], path, ["appearance", "layerId"]);
   const labelMode = requireEnum(
     source.labelMode,
     ["coefficient", "ratio"] as const,
@@ -578,7 +579,8 @@ function decodeInductorCoupling(value: unknown, path: string): InductorCoupling 
     showLabel: requireBoolean(source.showLabel, `${path}.showLabel`),
     showArc: requireBoolean(source.showArc, `${path}.showArc`),
     showCore: requireBoolean(source.showCore, `${path}.showCore`),
-    arcFlipped: requireBoolean(source.arcFlipped, `${path}.arcFlipped`)
+    arcFlipped: requireBoolean(source.arcFlipped, `${path}.arcFlipped`),
+    ...(hasOwn(source, "layerId") ? { layerId: requireNonEmptyString(source.layerId, `${path}.layerId`) } : {})
   };
   if (hasOwn(source, "appearance")) {
     coupling.appearance = decodeComponentAppearance(source.appearance, `${path}.appearance`);
@@ -801,6 +803,7 @@ function snapshotInductorCoupling(coupling: InductorCoupling): InductorCoupling 
     showArc: coupling.showArc,
     showCore: coupling.showCore,
     arcFlipped: coupling.arcFlipped,
+    ...(coupling.layerId === undefined ? {} : { layerId: coupling.layerId }),
     ...(coupling.appearance !== undefined
       ? { appearance: snapshotComponentAppearance(coupling.appearance) }
       : {})

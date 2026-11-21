@@ -259,6 +259,7 @@ export type InductorCouplingLabelMode = "coefficient" | "ratio";
 
 export interface InductorCoupling {
   id: string;
+  layerId?: string;
   inductorAId: string;
   inductorBId: string;
   coefficient: string;

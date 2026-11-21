@@ -2,11 +2,11 @@ import { fixtureDocument } from "../support/fixtureDocument";
 import { describe, expect, it } from "vitest";
 import { instantiateCopyAt, type CopySource } from "../../../src/schematic/copyModel";
 import { createSchematicDocumentHistoryAdapter } from "../support/documentHistory";
+import { applyNormalizedDocumentWires } from "../../../src/schematic/document/documentWires";
 import { restoreSchematicDocument } from "../../../src/schematic/document/documentModel";
 import {
   bindStandaloneNetLabelsAtPoint,
   netLabelPosition,
-  remapNetLabelsAfterWireNormalization,
   remapNetLabelsAfterWirePathChange,
   snapshotNetLabelWires,
   wireAttachmentAtPoint
@@ -52,14 +52,12 @@ describe("schematic net label attachment lifecycle", () => {
   });
 
   it("rebinds labels to descendant wires after normalization splits a path", () => {
-    const previous = [wire("main", [{ x: 0, y: 0 }, { x: 80, y: 0 }])];
-    const normalized = [
-      wire("main", [{ x: 0, y: 0 }, { x: 40, y: 0 }]),
-      wire("main-segment-1", [{ x: 40, y: 0 }, { x: 80, y: 0 }])
-    ];
-    const doc = document(normalized, [label("out", "OUT", "main", { x: 60, y: 0 })]);
+    const doc = document([
+      wire("main", [{ x: 0, y: 0 }, { x: 80, y: 0 }]),
+      wire("branch", [{ x: 40, y: 0 }, { x: 40, y: 40 }])
+    ], [label("out", "OUT", "main", { x: 60, y: 0 })]);
 
-    remapNetLabelsAfterWireNormalization(doc, previous, normalized);
+    applyNormalizedDocumentWires(doc);
 
     expect(doc.netLabels?.[0].attachment).toEqual({ wireId: "main-segment-1", point: { x: 60, y: 0 } });
   });

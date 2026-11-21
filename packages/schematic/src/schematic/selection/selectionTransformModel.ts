@@ -1,6 +1,6 @@
 import { pointKey, rotatePoint, snapPoint } from "../geometry";
 import { rotateNote, transformNote } from "../notes/noteGeometry";
-import { reconcileConnectionEdit } from "../connectionGraph";
+import { reconcileDocumentConnectionEdit } from "../document/documentWires";
 import { junctionId } from "../junctionIdentity";
 import type { SchematicSelectionProjection } from "./selectionProjection";
 import { componentVisualBounds, type Rect } from "../view-geometry";
@@ -73,7 +73,7 @@ export function transformSelectionDocumentGeometry(input: {
     else transformNote(note, transformPoint, kind === "rotate");
   });
 
-  reconcileConnectionEdit(document, before);
+  reconcileDocumentConnectionEdit(document, before);
   return { changed: true, transformedJunctionIds };
 }
 

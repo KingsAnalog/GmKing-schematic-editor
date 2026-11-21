@@ -59,6 +59,7 @@ export interface ConnectivityResult {
   junctions: Point[];
   presentationJunctions: Point[];
   diagnostics: string[];
+  junctionNodes: ReadonlyMap<string, Point>;
   junctionMembers: ReadonlyMap<string, ReadonlySet<string>>;
   rootOf(nodeKey: string): string;
   rootOfWire(wireId: string): string | null;
@@ -112,6 +113,7 @@ function buildEndpointConnectivity(document: SchematicContent): ConnectivityResu
     });
   }));
   const junctions: Point[] = [], presentationPoints: Point[] = [];
+  const junctionNodes = new Map<string, Point>();
   const junctionMembers = new Map<string, Set<string>>();
   connectionNodes(document).forEach(node => {
     const members = [
@@ -136,6 +138,7 @@ function buildEndpointConnectivity(document: SchematicContent): ConnectivityResu
     if (!aligned) return;
     if (wireArms.size >= 3) junctions.push(node.point);
     if (allArms.size >= 3) {
+      junctionNodes.set(node.id, node.point);
       presentationPoints.push(node.point);
       const id = junctionId(node.point);
       const members = junctionMembers.get(id) ?? new Set<string>();
@@ -150,7 +153,7 @@ function buildEndpointConnectivity(document: SchematicContent): ConnectivityResu
     pins, groups: collectGroups(nodePoints, uf),
     junctions: uniquePoints(junctions).sort((a, b) => a.x - b.x || a.y - b.y),
     presentationJunctions: uniquePoints([...junctions, ...presentationPoints]).sort((a, b) => a.x - b.x || a.y - b.y),
-    diagnostics: [], junctionMembers, rootOf: key => uf.find(key), rootOfWire,
+    diagnostics: [], junctionNodes, junctionMembers, rootOf: key => uf.find(key), rootOfWire,
     rootsAtPoint: point => [...new Set([
       ...[...wires.values()].filter(wire => wireSegments(wire).some(segment => pointOnSegment(point, segment.start, segment.end))).map(wire => rootOfWire(wire.id)!),
       ...pins.filter(pin => samePoint(pin.point, point)).map(pin => uf.find(pin.nodeKey))
