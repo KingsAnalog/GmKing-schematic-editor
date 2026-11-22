@@ -38,6 +38,11 @@
           <p>Workspace tabs are saved in this browser. Use the tab strip to import or paste schematic JSON into a new tab. Export JSON to keep an editable backup or export SVG or PNG to share an image.</p>
         </section>
         <section>
+          <h2>Work with an AI Agent</h2>
+          <p>Run <code>npm run agent:connector</code> from the Schematic Editor source folder. In the editor, choose <strong>AI → Hand off to AI → Copy text</strong> and paste the prompt into your local Agent. Allow local network access if the browser asks. Pairing uses a two-minute, single-use code.</p>
+          <p>When paired, the green bar shows <strong>AI connected</strong>. You can edit normally. AI transactions use the latest project revision and enter the same Undo history. <strong>Suspend</strong> pauses AI access. <strong>Disconnect</strong> and <strong>Reclaim editing</strong> both revoke the session. The connector only listens on this computer.</p>
+        </section>
+        <section>
           <h2>Editor options</h2>
           <p>Use <strong>Language</strong> to switch between English and Simplified Chinese. <strong>Color mode</strong> can follow your system or stay in Light or Dark mode. Both settings are saved in this browser and also apply to this manual.</p>
           <p>The gear opens <strong>Options</strong>, which also contains the current schematic's symbol template. Choose <strong>Wire crossings → Plain</strong> for straight crossings or <strong>Hop</strong> to show a bridge where wires cross without joining. Dots mark actual connections in either mode.</p>
@@ -72,6 +77,11 @@
         <section>
           <h2>保存与重新打开图纸</h2>
           <p>工作区标签页保存在当前浏览器中。通过标签栏导入或粘贴电路 JSON，可在新标签页打开图纸。导出 JSON 可保留可编辑的备份，导出 SVG 或 PNG 可分享图像。</p>
+        </section>
+        <section>
+          <h2>与 AI Agent 协作</h2>
+          <p>在 Schematic Editor 源码目录运行 <code>npm run agent:connector</code>。在编辑器选择 <strong>AI → 交给 AI 修改 → 复制文本</strong>，将提示词粘贴给本机 Agent。若浏览器询问，请允许本地网络访问。配对码两分钟内可以使用一次。</p>
+          <p>配对后，顶部绿条显示<strong>AI 已连接</strong>，仍可正常手工编辑。AI 事务按最新项目修订号提交，与手工操作使用同一个撤销历史。<strong>暂停连接</strong>会暂停 AI 访问。<strong>取消连接</strong>和<strong>收回编辑权</strong>都会撤销会话。连接器只监听本机。</p>
         </section>
         <section>
           <h2>编辑器选项</h2>

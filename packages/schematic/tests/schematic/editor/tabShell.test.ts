@@ -223,11 +223,14 @@ describe("renderSchematicTabShell", () => {
     });
   });
 
-  it("places Options and Help at the toolbar edges and puts the template in Options", () => {
+  it("starts the toolbar with Options, ends with AI after Help, and puts the template in Options", () => {
     const shell = renderSchematicTabShell();
     const toolbar = shell.match(/<div[^>]+class="schematic-toolbar"[^>]*>([\s\S]*?)<\/div>/)?.[1];
     expect(toolbar?.trimStart()).toMatch(/^<button[^>]+data-schematic-open-options/);
-    expect(toolbar?.trimEnd()).toMatch(/<a[^>]+href="\.\/manual\.html"[^>]+target="_blank"[^>]+data-schematic-help[\s\S]*<\/a>$/);
+    expect(toolbar?.trimEnd()).toMatch(/<a[^>]+href="\.\/manual\.html"[^>]+target="_blank"[^>]+data-schematic-help[\s\S]*?<\/a><button[^>]+data-schematic-open-agent[\s\S]*<\/button>$/);
+    const agentId = toolbar?.match(/data-schematic-open-agent[^>]+aria-controls="([^"]+)"/)?.[1];
+    expect(agentId).toBeTruthy();
+    expect(shell).toContain(`id="${agentId}" class="schematic-dialog schematic-agent-dialog"`);
     const optionsId = toolbar?.match(/data-schematic-open-options[^>]+aria-controls="([^"]+)"/)?.[1];
     const options = shell.match(/<dialog[^>]+data-schematic-options-dialog[^>]*>[\s\S]*?<\/dialog>/)?.[0];
     expect(optionsId).toBeTruthy();

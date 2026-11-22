@@ -2,6 +2,7 @@ import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
 import { message } from "./schematicI18n";
 import { PROCESS_IDS, processProfile } from "./netlist/profiles";
 import { buildSchematicToolbar } from "./schematicToolbarWeb";
+import { buildAgentBanner, buildAgentDialog } from "./agent/agentDialog";
 import { buildSchematicEditorSidebar, buildSymbolTemplateControl, schematicTextFontOptions } from "./schematicEditorUiProjection";
 export {
   SCHEMATIC_NETWORK_COLOR_PRESETS,
@@ -88,6 +89,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       ),
       el("button", { type: "button", "data-schematic-options-close": true }, message("options.close", "Close"))
     ),
+    buildAgentDialog(ui, namespace),
     el("div", {
       class: "schematic-panel-resizer",
       role: "separator",
@@ -212,7 +214,10 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           })
         )
       ),
-      el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
+      el("div", {},
+        el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
+        buildAgentBanner(ui)
+      ),
       el("div", { class: "schematic-paper", tabindex: "0", "aria-label": message("ui.schematicCanvas", "Schematic canvas"), "data-schematic-paper": true }),
       el("div", {
         class: "schematic-log-drawer",

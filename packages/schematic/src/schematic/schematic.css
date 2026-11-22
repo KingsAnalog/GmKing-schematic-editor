@@ -228,6 +228,82 @@
   outline-offset: 1px;
 }
 
+.schematic-agent-dialog {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.schematic-agent-banner:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #fff0cc;
+  color: #633d07;
+  border-bottom: 1px solid currentColor;
+  font-size: 13px;
+}
+
+.schematic-agent-banner[data-agent-status="connected"] {
+  background: #dff4e7;
+  color: #185732;
+}
+
+.schematic-agent-banner button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+:root[data-effective-theme="dark"] .schematic-agent-banner {
+  background: #44321b;
+  color: #ffda91;
+}
+
+:root[data-effective-theme="dark"] .schematic-agent-banner[data-agent-status="connected"] {
+  background: #203d2c;
+  color: #b5efcb;
+}
+
+.schematic-agent-actions,
+.schematic-agent-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.schematic-agent-dialog button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.schematic-editor-root .schematic-agent-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100px;
+  height: min(280px, 40dvh);
+  padding: 8px;
+  border: 1px solid var(--schematic-ui-line);
+  border-radius: 4px;
+  background: var(--schematic-ui-input, var(--schematic-ui-panel));
+  color: var(--schematic-ui-ink);
+  font: 13px/1.5 ui-monospace, monospace;
+  resize: vertical;
+}
+
+.schematic-agent-footer {
+  margin-top: 12px;
+}
+
+.schematic-agent-footer button {
+  margin-inline-start: auto;
+}
+
 .schematic-options-fields {
   display: grid;
   gap: 10px;

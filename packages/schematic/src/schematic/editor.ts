@@ -2624,7 +2624,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
-    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open]")) return;
+    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open], [data-schematic-agent-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
     if (key === "escape" && this.transientToolSession.mode === "label") {
@@ -3986,6 +3986,13 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.finishNoteFontSizePropertyEdit();
     this.finishNoteWidthPropertyEdit();
     this.propertyInteractions.flush();
+  }
+
+  hostHasActiveEdit() {
+    const focus = this.host.ownerDocument.activeElement;
+    return this.transientToolSession.mode !== "select" || !!this.libraryShapeDraw || !!this.hierarchyPlacement ||
+      this.noteInteractionController.hasActiveEdit() || this.shapeResizeSession.isActive || !!this.wireSegmentMove ||
+      (isEditableTarget(focus, this.options.shellEl) && !focus?.closest("[data-schematic-agent-dialog]"));
   }
 
   hostSetStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {

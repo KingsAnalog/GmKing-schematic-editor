@@ -2,6 +2,7 @@ import { parameterLabel, schematicLanguage } from "./schematicI18n";
 
 // Input to this table is editor feedback only. User text and netlist source bypass it.
 const STATUS_ZH: Readonly<Record<string, string>> = {
+  "AI transaction applied. Undo reverses the whole transaction.": "AI 已应用修改，可通过一次撤销恢复整个事务。",
   "Select a tool or press i to add an instance.": "选择工具，或按 i 添加元件。",
   "Tool canceled.": "已取消当前工具。",
   "Note updated.": "注释已更新。",

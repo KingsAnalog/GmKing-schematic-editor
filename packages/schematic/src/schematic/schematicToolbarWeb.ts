@@ -19,6 +19,7 @@ import undoIcon from "./icons/undo.svg?raw";
 import wireIcon from "./icons/wire.svg?raw";
 import optionsIcon from "./icons/options.svg?raw";
 import helpIcon from "./icons/help.svg?raw";
+import aiIcon from "./icons/ai.svg?raw";
 
 type ToolbarCommandKind = "tool" | "toggle" | "action";
 
@@ -69,7 +70,12 @@ export function buildSchematicToolbar<T extends object>(ui: UiBuilder<T>, namesp
       class: "schematic-toolbar-help", href: "./manual.html", target: "_blank", rel: "noopener",
       "data-schematic-help": true, title: message("toolbar.help", "Help (opens in a new tab)"),
       "aria-label": message("toolbar.help", "Help (opens in a new tab)")
-    }, ui.toolbarIcon(helpIcon))
+    }, ui.toolbarIcon(helpIcon)),
+    ui.el("button", {
+      type: "button", "data-schematic-open-agent": true, "aria-haspopup": "dialog",
+      "aria-controls": `${namespace}-agent`,
+      title: message("agent.title", "AI Agent"), "aria-label": message("agent.title", "AI Agent")
+    }, ui.toolbarIcon(aiIcon))
   ];
 }
 

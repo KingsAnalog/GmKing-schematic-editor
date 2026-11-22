@@ -126,6 +126,21 @@ try {
   await navigate(page, new URL("?reload", server.url).href);
   await waitFor(page, () => Boolean(document.querySelector("[model-id='V1']")), "mobile editor did not restore schematic");
   assert.deepEqual(await preferences(), { language: "zh-CN", mode: "dark", effective: "dark" });
+  await clickSelector(page, "[data-schematic-open-agent]");
+  assert.deepEqual(await agentActions(), ["交给 AI 修改"]);
+  await clickSelector(page, "[data-agent-connect]");
+  assert.deepEqual(await agentActions(), ["复制文本", "暂停连接", "取消连接"]);
+  assert.match(await agentText(), /"sheetId": "top"/);
+  assert(!(await agentText()).includes("Note α 原文"));
+  await contrast("[data-agent-prompt]");
+  assert(await evaluate(page, () => {
+    const dialog = document.querySelector("[data-schematic-agent-dialog]");
+    const bounds = dialog.getBoundingClientRect();
+    return innerWidth === 375 && bounds.left >= 0 && bounds.right <= innerWidth && dialog.scrollWidth <= dialog.clientWidth;
+  }), "mobile AI dialog overflows");
+  await capture("mobile-agent-dark-zh");
+  await clickSelector(page, "[data-agent-disconnect]");
+  await clickSelector(page, "[data-agent-close]");
   await options();
   assert(await evaluate(page, () => {
     const dialog = document.querySelector("[data-schematic-options-dialog]");
@@ -138,8 +153,15 @@ try {
   await choose("[data-schematic-language-select]", "en");
   await waitFor(manual, () => document.documentElement?.lang === "en", "manual did not follow the editor's language change");
   assert.equal(await savedContent(), documentBefore);
-  console.log("Web preferences passed — live English/Chinese, dark/light/system, 375px, persisted settings, Help, and unchanged schematic and netlist.");
+  console.log("Web preferences passed — live English/Chinese, dark/light/system, 375px, persisted settings, Help, AI pairing prompt, and unchanged schematic and netlist.");
 
+  function agentActions() {
+    return evaluate(page, () => [...document.querySelectorAll(".schematic-agent-actions button:not([hidden])")]
+      .map(button => button.textContent));
+  }
+  function agentText() {
+    return evaluate(page, () => document.querySelector("[data-agent-prompt]").value);
+  }
   function size(width) {
     return page.send("Emulation.setDeviceMetricsOverride", { width, height: 980, deviceScaleFactor: 1, mobile: width < 600 });
   }
@@ -170,9 +192,9 @@ try {
   function netlistText() {
     return evaluate(page, () => Array.from(document.querySelectorAll(".netlist-line-text"), line => line.textContent).join("\n"));
   }
-  async function key(key, code) {
-    await page.send("Input.dispatchKeyEvent", { type: "keyDown", key, code });
-    await page.send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
+  async function key(key, code, windowsVirtualKeyCode) {
+    await page.send("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode });
+    await page.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode });
   }
   async function contrast(selector) {
     const colors = await evaluate(page, selector => {

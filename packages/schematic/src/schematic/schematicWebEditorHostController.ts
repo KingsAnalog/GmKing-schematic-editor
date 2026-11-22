@@ -34,6 +34,8 @@ import { createSnapshotHistory } from "../shared/history";
 import { buildProjectNetlist } from "./netlist/project";
 import { blockTarget, projectSheetOrder, refreshProjectSymbols, singleSheetProject, type SchematicProject } from "./schematicProject";
 import { SchematicHierarchyPanel, type HierarchyStep } from "./schematicHierarchyPanel";
+import { bindAgentDialog } from "./agent/agentDialog";
+import { agentProjectSnapshot, AgentOperationError, planAgentTransaction, type AgentTransaction } from "./agent/agentTransaction";
 
 interface HostedEditorState {
   history: SchematicContentHistoryAdapter | null;
@@ -51,7 +53,9 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
   private readonly documentHost: SchematicDocumentHostPort<HostedEditorState>;
   private readonly viewPersistence: SchematicViewPersistenceController;
   private readonly unbindOptions: () => void;
+  private readonly unbindAgent: () => void;
   private readonly hierarchy: SchematicHierarchyPanel;
+  private agentRevision = 0;
   private initialized = false;
   private destroyed = false;
   private destroyResult: Promise<void> | null = null;
@@ -120,6 +124,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
           session.editorState.history ??= createSchematicContentHistoryAdapter(content);
           session.editorState.history.push(content);
         }
+        this.agentRevision++;
         void documentHost?.persistActive();
         return true;
       },
@@ -127,13 +132,19 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
       undo: () => {
         if (documentHost?.activeSession()?.editorState.project) return this.restoreProjectHistory("undo");
         const content = documentHost?.activeSession()?.editorState.history?.undo() ?? null;
-        if (content) services.ownerWindow.queueMicrotask(() => documentHost?.persistActive());
+        if (content) {
+          this.agentRevision++;
+          services.ownerWindow.queueMicrotask(() => documentHost?.persistActive());
+        }
         return content;
       },
       redo: () => {
         if (documentHost?.activeSession()?.editorState.project) return this.restoreProjectHistory("redo");
         const content = documentHost?.activeSession()?.editorState.history?.redo() ?? null;
-        if (content) services.ownerWindow.queueMicrotask(() => documentHost?.persistActive());
+        if (content) {
+          this.agentRevision++;
+          services.ownerWindow.queueMicrotask(() => documentHost?.persistActive());
+        }
         return content;
       },
       canUndo: () => {
@@ -215,6 +226,20 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
       editor.hostRefreshLanguage();
       this.hierarchy.refresh();
     }, angle => editor.hostSetWireAngle(angle));
+    this.unbindAgent = bindAgentDialog(mounts.shellEl, {
+      context: () => {
+        const session = this.documentHost.activeSession();
+        if (!session) return undefined;
+        return { documentId: session.id, projectId: session.editorState.project?.id ?? session.id,
+          sheetId: this.currentSheetId(session), revision: this.agentRevision };
+      },
+      busy: () => editor.hostHasActiveEdit(),
+      snapshot: () => {
+        const session = this.documentHost.activeSession()!;
+        return agentProjectSnapshot(this.agentProject(session), this.currentSheetId(session), this.agentRevision);
+      },
+      transact: transaction => this.applyAgentTransaction(transaction)
+    });
   }
 
   init() {
@@ -233,6 +258,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     this.editor.flushTransientEdits("destroy");
     this.destroyed = true;
     this.unbindOptions();
+    this.unbindAgent();
     this.hierarchy.destroy();
     this.services.ownerWindow.removeEventListener("beforeunload", this.beforeUnload);
     this.viewPersistence.destroy();
@@ -252,11 +278,15 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
   }
 
   replaceContent(content: SchematicContent, originOrOptions?: string | SchematicEditorMutationOptions) {
+    const revision = this.agentRevision;
     this.editor.replaceContent(content, originOrOptions);
+    if (this.agentRevision === revision) this.agentRevision++;
   }
 
   transact(mutate: (draft: SchematicContent) => void, options?: SchematicEditorMutationOptions) {
+    const revision = this.agentRevision;
     this.editor.transact(mutate, options);
+    if (this.agentRevision === revision) this.agentRevision++;
   }
 
   run(command: string) {
@@ -353,6 +383,35 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     return session.editorState.path?.at(-1)?.sheetId ?? session.editorState.project?.topSheetId ?? "top";
   }
 
+  private agentProject(session: SchematicHostedDocumentSession<HostedEditorState>) {
+    const activeSheetId = this.currentSheetId(session);
+    const project = session.editorState.project ?? singleSheetProject(session.id, session.title);
+    const content = this.editor.getContent();
+    return {
+      ...project,
+      name: session.title,
+      sheets: project.sheets.map(sheet => sheet.id === activeSheetId ? { ...sheet, content } : sheet)
+    };
+  }
+
+  private applyAgentTransaction(transaction: AgentTransaction) {
+    const session = this.documentHost.activeSession()!;
+    const { requestId, dryRun } = transaction;
+    try {
+      const { draft, changes } = planAgentTransaction(this.agentProject(session), transaction, () => this.services.idFactory());
+      const diagnostics = buildProjectNetlist(draft).diagnostics;
+      const applied = !dryRun && changes.length > 0 && this.installProject(session, draft, "agent");
+      if (applied) this.editor.hostSetStatus("AI transaction applied. Undo reverses the whole transaction.", { source: "agent", level: "info" });
+      return { ok: true, requestId, dryRun, applied, revision: this.agentRevision, changes, diagnostics, origin: "agent" };
+    } catch (cause) {
+      return {
+        ok: false, requestId, revision: this.agentRevision, code: "INVALID_OPERATION",
+        ...(cause instanceof AgentOperationError ? { opIndex: cause.opIndex, op: cause.op } : {}),
+        message: cause instanceof Error ? cause.message : "Transaction could not be planned."
+      };
+    }
+  }
+
   private ensureProject(session: SchematicHostedDocumentSession<HostedEditorState> | null) {
     if (!session || session.editorState.project) return;
     const project = singleSheetProject(session.id, session.title, this.editor.hostDocument());
@@ -374,17 +433,26 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     mutate(next, activeId);
     projectSheetOrder(next);
     refreshProjectSymbols(next);
-    if (!state.hierarchyHistory!.push(next)) return;
+    this.installProject(session, next, "host");
+  }
+
+  private installProject(session: SchematicHostedDocumentSession<HostedEditorState>, next: SchematicProject, origin: "agent" | "host") {
+    this.ensureProject(session);
+    const state = session.editorState;
+    const activeId = this.currentSheetId(session);
+    if (!state.hierarchyHistory!.push(next)) return false;
     state.project = next;
+    this.agentRevision++;
     this.validatePath(session);
     const sheet = next.sheets.find(item => item.id === this.currentSheetId(session))!;
     if (sheet.id === activeId) {
       const selected = this.editor.hostSelectedHierarchyComponent()?.id;
-      this.editor.replaceContent(sheet.content, { commit: false, origin: "host", reason: "hierarchy" });
+      this.editor.replaceContent(sheet.content, { commit: false, origin, reason: origin === "agent" ? "agent-transaction" : "hierarchy" });
       if (selected && sheet.content.components.some(component => component.id === selected)) this.editor.hostSelectHierarchyComponent(selected);
     } else this.restoreSession(this.editor, session);
     this.hierarchy.refresh();
     void this.documentHost.persistActive();
+    return true;
   }
 
   private navigateProject(path: HierarchyStep[], selection?: string) {
@@ -429,6 +497,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     if (!session) return null;
     const project = session.editorState.hierarchyHistory?.[direction]();
     if (!project) return null;
+    this.agentRevision++;
     const before = this.currentSheetId(session);
     session.editorState.project = project;
     this.validatePath(session);
