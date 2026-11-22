@@ -1,4 +1,8 @@
-export type ProcessId = "sky130" | "gf180mcu" | "ihp-sg13g2" | "custom";
+export const PROCESS_IDS = ["sky130", "gf180mcu", "ihp-sg13g2", "custom"] as const;
+export type ProcessId = (typeof PROCESS_IDS)[number];
+export const DEFAULT_NETLIST_PROCESS: ProcessId = "sky130";
+export const NETLIST_MODEL_VALUE_KEY = "netlist:model";
+export const MAX_NETLIST_MODEL_LENGTH = 256;
 export type DeviceKind = "nmos" | "pmos" | "npn" | "pnp" | "resistor" | "capacitor" | "inductor";
 
 export interface NetlistDeviceConfig {
@@ -168,7 +172,19 @@ export const PROCESS_PROFILES: Record<ProcessId, ProcessProfile> = {
 };
 
 export function processProfile(process: ProcessId): ProcessProfile {
-  return PROCESS_PROFILES[process] ?? PROCESS_PROFILES.sky130;
+  return PROCESS_PROFILES[process] ?? PROCESS_PROFILES[DEFAULT_NETLIST_PROCESS];
+}
+
+export function isProcessId(value: string): value is ProcessId {
+  return (PROCESS_IDS as readonly string[]).includes(value);
+}
+
+export function isDeviceKind(type: string): type is DeviceKind {
+  return (DEVICE_KINDS as readonly string[]).includes(type);
+}
+
+export function isNetlistModelText(value: string) {
+  return value.length <= MAX_NETLIST_MODEL_LENGTH && !/[\r\n]/.test(value);
 }
 
 export function defaultDeviceConfig(process: ProcessId): NetlistDeviceConfig {
@@ -185,7 +201,7 @@ export function defaultDeviceConfig(process: ProcessId): NetlistDeviceConfig {
 export function normalizeDeviceConfig(
   config: Partial<NetlistDeviceConfig> | null | undefined
 ): NetlistDeviceConfig {
-  const process = config?.process && config.process in PROCESS_PROFILES ? config.process : "sky130";
+  const process = config?.process && isProcessId(config.process) ? config.process : DEFAULT_NETLIST_PROCESS;
   const defaults = defaultDeviceConfig(process);
   const devices = { ...defaults.devices };
   DEVICE_KINDS.forEach((kind) => {

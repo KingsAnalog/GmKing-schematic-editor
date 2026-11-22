@@ -9,7 +9,7 @@ import {
   getDeviceLibrary,
   type DeviceLibraryId
 } from "./deviceLibrary";
-import { t } from "./schematicI18n";
+import { applySchematicMessage, message, t, type SchematicMessage } from "./schematicI18n";
 import type { SymbolTemplateId } from "./symbolTemplateModel";
 
 interface InstanceBrowserEvents {
@@ -22,11 +22,12 @@ function element<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
   tag: K,
   className?: string,
-  text?: string
+  text?: string | SchematicMessage
 ): HTMLElementTagNameMap[K] {
   const node = doc.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
+  if (typeof text === "string") node.textContent = text;
+  else if (text) applySchematicMessage(node, text);
   return node;
 }
 
@@ -65,7 +66,7 @@ export class InstanceBrowser {
     layer.dataset.schematicInstanceBrowser = "";
     const backdrop = element(doc, "button", "schematic-instance-browser-backdrop");
     backdrop.type = "button";
-    backdrop.setAttribute("aria-label", "Close instance browser");
+    applySchematicMessage(backdrop, message("browser.close", "Close instance browser"), "aria-label");
     backdrop.dataset.instanceBrowserClose = "";
     const dialog = element(doc, "div", "schematic-instance-browser-dialog");
     dialog.setAttribute("role", "dialog");
@@ -73,43 +74,43 @@ export class InstanceBrowser {
     dialog.setAttribute("aria-labelledby", "schematic-instance-browser-title");
 
     const header = element(doc, "div", "schematic-instance-browser-header");
-    const title = element(doc, "h2", undefined, t("browser.title", "Add Instance"));
+    const title = element(doc, "h2", undefined, message("browser.title", "Add Instance"));
     title.id = "schematic-instance-browser-title";
     const close = element(doc, "button", "schematic-instance-browser-close", "×");
     close.type = "button";
-    close.setAttribute("aria-label", "Close instance browser");
+    applySchematicMessage(close, message("browser.close", "Close instance browser"), "aria-label");
     close.dataset.instanceBrowserClose = "";
     header.append(title, close);
 
     const columns = element(doc, "div", "schematic-instance-browser-columns");
     const libraryColumn = element(doc, "section", "instance-browser-column browser-library");
-    libraryColumn.append(element(doc, "h3", undefined, t("browser.library", "Library")));
+    libraryColumn.append(element(doc, "h3", undefined, message("browser.library", "Library")));
     const libraryInput = element(doc, "input", "browser-search");
     libraryInput.type = "search";
-    libraryInput.placeholder = t("browser.searchLibrary", "Search libraries");
-    libraryInput.setAttribute("aria-label", t("browser.searchLibrary", "Search libraries"));
+    applySchematicMessage(libraryInput, message("browser.searchLibrary", "Search libraries"), "placeholder");
+    applySchematicMessage(libraryInput, message("browser.searchLibrary", "Search libraries"), "aria-label");
     libraryInput.dataset.browserLibrarySearch = "";
     const libraryList = element(doc, "div", "browser-list");
     libraryList.setAttribute("role", "listbox");
-    libraryList.setAttribute("aria-label", t("browser.library", "Library"));
+    applySchematicMessage(libraryList, message("browser.library", "Library"), "aria-label");
     libraryList.dataset.browserLibraries = "";
     libraryColumn.append(libraryInput, libraryList);
 
     const cellColumn = element(doc, "section", "instance-browser-column browser-cell");
-    cellColumn.append(element(doc, "h3", undefined, t("browser.cell", "Cell")));
+    cellColumn.append(element(doc, "h3", undefined, message("browser.cell", "Cell")));
     const cellInput = element(doc, "input", "browser-search");
     cellInput.type = "search";
-    cellInput.placeholder = t("browser.searchCell", "Search cells");
-    cellInput.setAttribute("aria-label", t("browser.searchCell", "Search cells"));
+    applySchematicMessage(cellInput, message("browser.searchCell", "Search cells"), "placeholder");
+    applySchematicMessage(cellInput, message("browser.searchCell", "Search cells"), "aria-label");
     cellInput.dataset.browserCellSearch = "";
     const cellList = element(doc, "div", "browser-list");
     cellList.setAttribute("role", "listbox");
-    cellList.setAttribute("aria-label", t("browser.cell", "Cell"));
+    applySchematicMessage(cellList, message("browser.cell", "Cell"), "aria-label");
     cellList.dataset.browserCells = "";
     cellColumn.append(cellInput, cellList);
 
     const symbolColumn = element(doc, "section", "instance-browser-column browser-symbol");
-    symbolColumn.append(element(doc, "h3", undefined, t("browser.symbol", "Symbol")));
+    symbolColumn.append(element(doc, "h3", undefined, message("browser.symbol", "Symbol")));
     const symbolPreview = element(doc, "div", "browser-symbol-preview");
     symbolPreview.dataset.browserSymbol = "";
     const symbolName = element(doc, "div", "browser-symbol-name");
@@ -119,9 +120,9 @@ export class InstanceBrowser {
     columns.append(libraryColumn, cellColumn, symbolColumn);
 
     const footer = element(doc, "div", "schematic-instance-browser-footer");
-    const hint = element(doc, "span", "browser-hint", t("browser.hint", "Enter to place · Esc to close"));
+    const hint = element(doc, "span", "browser-hint", message("browser.hint", "Enter to place · Esc to close"));
     const count = element(doc, "span", "browser-count");
-    const place = element(doc, "button", "browser-place", t("browser.place", "Place"));
+    const place = element(doc, "button", "browser-place", message("browser.place", "Place"));
     place.type = "button";
     footer.append(hint, count, place);
 
@@ -182,6 +183,12 @@ export class InstanceBrowser {
 
   isOpen() {
     return this.openState;
+  }
+
+  refresh() {
+    if (!this.openState) return;
+    this.renderLibraries();
+    this.renderCells();
   }
 
   open() {

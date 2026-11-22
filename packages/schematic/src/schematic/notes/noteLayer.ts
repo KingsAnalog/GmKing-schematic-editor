@@ -1,4 +1,5 @@
 import { noteBackgroundCss, noteTextColor } from "./noteAppearance";
+import { applySchematicMessage, message } from "../schematicI18n";
 import { noteCssTransform, noteRotation } from "./noteGeometry";
 import type { SchematicNoteRuntime, SchematicNoteRuntimeAdapter } from "./noteRuntimeAdapter";
 import { rawTextNoteRuntimeAdapter } from "./rawTextNoteRuntimeAdapter";
@@ -79,7 +80,7 @@ export class SchematicNoteLayer {
     this.runtimeAdapter = options.runtimeAdapter ?? rawTextNoteRuntimeAdapter;
     this.layerElement = this.ownerDocument.createElement("div");
     this.layerElement.className = "schematic-note-layer";
-    this.layerElement.setAttribute("aria-label", "Schematic notes");
+    applySchematicMessage(this.layerElement, message("note.region", "Schematic notes"), "aria-label");
     paperElement.appendChild(this.layerElement);
 
     this.measureElement = this.ownerDocument.createElement("div");
@@ -303,7 +304,7 @@ export class SchematicNoteLayer {
     textarea.value = note.text;
     textarea.wrap = "off";
     textarea.spellcheck = false;
-    textarea.setAttribute("aria-label", "Edit schematic note");
+    applySchematicMessage(textarea, message("note.edit", "Edit schematic note"), "aria-label");
     content.appendChild(textarea);
     this.flushPendingPlainInput(note.id, textarea);
     return true;
@@ -502,7 +503,7 @@ export class SchematicNoteLayer {
     element.className = "schematic-note";
     element.dataset.noteId = note.id;
     element.setAttribute("role", "group");
-    element.setAttribute("aria-label", "Schematic note");
+    applySchematicMessage(element, message("note.item", "Schematic note"), "aria-label");
     element.tabIndex = 0;
 
     const content = this.ownerDocument.createElement("div");
@@ -512,7 +513,7 @@ export class SchematicNoteLayer {
     widthHandle.className = "schematic-note-width-handle";
     widthHandle.dataset.noteWidthHandle = "";
     widthHandle.setAttribute("role", "separator");
-    widthHandle.setAttribute("aria-label", "Resize note width");
+    applySchematicMessage(widthHandle, message("note.resize", "Resize note width"), "aria-label");
     element.append(content, widthHandle);
     this.activeDocumentLayer.element.appendChild(element);
     return element;

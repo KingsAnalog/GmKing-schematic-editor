@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { fixtureComponent, fixtureWire } from "../support/fixtures";
 import { fixtureDocument } from "../support/fixtureDocument";
 import { componentPinPoint } from "../../../src/schematic/connectivity";
+import { parseSchematicDocumentFile, serializeSchematicDocumentFile } from "../../../src/schematic/schematicDocumentCodec";
+import { NETLIST_MODEL_VALUE_KEY } from "../../../src/schematic/netlist/profiles";
 import {
   buildStructuralNetlist,
   defaultDeviceConfig,
@@ -182,6 +184,36 @@ describe("structural netlist", () => {
     const design = buildStructuralNetlist(dividerDocument(), { config });
     expect(printNetlist(design, "spice")).toContain("XR1 net0 net1 sky130_fd_pr__res_generic_po r=1k");
     expect(printNetlist(design, "spectre")).toContain("R1 (net0 net1) sky130_fd_pr__res_generic_po r=1k");
+  });
+
+  it("restores the document process and preserves independent device models in both formats", () => {
+    const r1 = fixtureComponent("resistor", "R1", 300, 200);
+    const m1 = fixtureComponent("nmos", "M1", 700, 400);
+    r1.values = { main: "1k", [NETLIST_MODEL_VALUE_KEY]: "custom_r1" };
+    m1.values[NETLIST_MODEL_VALUE_KEY] = "custom_m1";
+    const original = fixtureDocument({
+      components: [r1, fixtureComponent("resistor", "R2", 500, 200), m1, fixtureComponent("nmos", "M2", 900, 400)],
+      wires: []
+    });
+    original.netlistProcess = "custom";
+    const restored = parseSchematicDocumentFile(serializeSchematicDocumentFile(original));
+    expect(restored.netlistProcess).toBe("custom");
+    const design = buildStructuralNetlist(restored);
+    expect(design.instances.map(({ ref, master }) => [ref, master])).toEqual(expect.arrayContaining([
+      ["R1", "custom_r1"], ["R2", "R"], ["M1", "custom_m1"], ["M2", "NMOS"]
+    ]));
+    expect(printNetlist(design, "spice")).toMatch(/XR1 .* custom_r1 r=1k/);
+    expect(printNetlist(design, "spectre")).toMatch(/M1 \(.*\) custom_m1 w=/);
+
+    restored.netlistProcess = "sky130";
+    const masters = buildStructuralNetlist(restored).instances;
+    expect(masters.find(instance => instance.ref === "M1")?.master).toBe("custom_m1");
+    expect(masters.find(instance => instance.ref === "M2")?.master).toBe("sky130_fd_pr__nfet_01v8");
+
+    restored.components.find(component => component.ref === "M1")!.values[NETLIST_MODEL_VALUE_KEY] = "bad name";
+    expect(buildStructuralNetlist(restored).diagnostics).toContainEqual(expect.objectContaining({
+      componentId: "M1", code: "INVALID_MODEL"
+    }));
   });
 
   it("defaults a 3-terminal MOS bulk to its source and exposes supply ports", () => {

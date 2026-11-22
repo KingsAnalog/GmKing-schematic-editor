@@ -711,7 +711,7 @@
   border-radius: 3px;
   background: rgb(255 255 255 / 94%);
   color: #555550;
-  content: "Mixed";
+  content: var(--schematic-mixed-label, "Mixed");
   font-size: 0.7rem;
   line-height: 1.25;
   pointer-events: none;

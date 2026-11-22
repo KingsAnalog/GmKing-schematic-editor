@@ -22,6 +22,7 @@ export interface SchematicLayerObjectNode {
   targetType: "cell" | "note";
   kind: SchematicLayerObjectKind;
   label: string;
+  componentCaption?: { type: ComponentInstance["type"]; label: string; ref: string };
   visible: boolean;
   visibilityEditable: boolean;
   displayed: boolean;
@@ -59,6 +60,7 @@ function componentNode(document: SchematicDocument, component: ComponentInstance
     targetType: "cell",
     kind: shape ? "shape" : "component",
     label: `${definition.hotLabel} ${component.ref}`,
+    componentCaption: { type: component.type, label: definition.hotLabel, ref: component.ref },
     visible: layerObjectVisible(document, component.id),
     displayed,
     visibilityEditable: true,

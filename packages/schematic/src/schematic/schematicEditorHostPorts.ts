@@ -50,6 +50,7 @@ export interface SchematicDocumentTabsPort {
 }
 
 export interface SchematicAnalysisControllerPort {
+  refreshLanguage?(): void;
   bind(): void;
   destroy(): void;
   clearActivePick(): void;

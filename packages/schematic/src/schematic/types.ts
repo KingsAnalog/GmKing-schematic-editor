@@ -1,4 +1,5 @@
 import type { SymbolTemplateContext } from "./symbolTemplateModel";
+import type { ProcessId } from "./netlist/profiles";
 import type { SchematicTextFont } from "./schematicFont";
 
 /** Display and interaction snapping interval. */
@@ -278,6 +279,7 @@ export interface InductorCoupling {
 /** Durable schematic content. */
 export interface SchematicContent extends SymbolTemplateContext {
   display?: SchematicDisplaySettings;
+  netlistProcess?: ProcessId;
   components: ComponentInstance[];
   wires: Wire[];
   connections: SchematicConnections;

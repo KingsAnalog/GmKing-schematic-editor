@@ -1,5 +1,5 @@
 import { isLibraryShapeType, isOpenLibraryShapeType } from "./libraryShapeStyleModel";
-import { t } from "./schematicI18n";
+import { componentName, t } from "./schematicI18n";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER } from "./templates";
 import type { InstancePaletteItem } from "./instanceSelector";
@@ -137,11 +137,11 @@ export function deviceLibraryForItem(item: InstancePaletteItem): DeviceLibraryId
 }
 
 export function deviceItemName(item: InstancePaletteItem): string {
-  return isSchematicTemplateId(item) ? item : getComponentDef(item).hotLabel;
+  return componentName(item, isSchematicTemplateId(item) ? item : getComponentDef(item).hotLabel);
 }
 
 export function deviceItemLabel(item: InstancePaletteItem): string {
-  if (isSchematicTemplateId(item)) return "Template";
+  if (isSchematicTemplateId(item)) return t("library.template", "Template");
   if (isOpenLibraryShapeType(item)) return t("library.openShape", "Open shape");
   if (isLibraryShapeType(item)) return t("library.closedShape", "Closed shape");
   return getComponentDef(item).label;
@@ -152,9 +152,10 @@ export function deviceItemAliases(item: InstancePaletteItem): readonly string[] 
 }
 
 export function deviceItemSearchNames(item: InstancePaletteItem): readonly string[] {
-  if (isSchematicTemplateId(item)) return [item];
+  if (isSchematicTemplateId(item)) return [item, componentName(item, item, "zh")];
   const def = getComponentDef(item);
-  return [def.hotLabel, def.label, ...(def.aliases ?? [])];
+  const chineseName = componentName(item, def.hotLabel, "zh");
+  return [def.hotLabel, def.label, ...(chineseName === def.hotLabel ? [] : [chineseName]), ...(def.aliases ?? [])];
 }
 
 export function filterDeviceItems(

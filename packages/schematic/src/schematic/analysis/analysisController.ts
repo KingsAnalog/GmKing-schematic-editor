@@ -49,6 +49,8 @@ export class SchematicAnalysisController {
   private readonly findVoltageNetAtPoint: (document: SchematicDocument, point: Point) => VoltageNetPick | null;
   private bindingController: AbortController | null = null;
   private currentNetNames: string[] = [];
+  private diagnostics: readonly string[] = [];
+  private busy = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -125,6 +127,12 @@ export class SchematicAnalysisController {
 
   selection(): AnalysisPortSelection {
     return readAnalysisPortSelection(this.root);
+  }
+
+  refreshLanguage() {
+    renderAnalysisPortOptions(this.root, this.currentNetNames, this.selection());
+    setAnalysisBusy(this.root, this.busy);
+    renderAnalysisDiagnostics(this.root, this.diagnostics);
   }
 
   setSelection(selection: AnalysisPortSelection) {
@@ -211,10 +219,12 @@ export class SchematicAnalysisController {
   }
 
   private setBusy(busy: boolean) {
+    this.busy = busy;
     setAnalysisBusy(this.root, busy);
   }
 
   private renderDiagnostics(diagnostics: readonly string[]) {
+    this.diagnostics = diagnostics;
     renderAnalysisDiagnostics(this.root, diagnostics);
   }
 }

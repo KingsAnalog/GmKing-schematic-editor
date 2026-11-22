@@ -1119,12 +1119,152 @@
 }
 
 :root[data-effective-theme="dark"] .schematic-shell {
+  color-scheme: dark;
+  --schematic-paper: #191815;
+  --schematic-ink: #e8e4dc;
+  --schematic-muted: #b7b1a7;
+  --schematic-border: #706a60;
+  --schematic-soft-rule: #514d45;
+  --schematic-focus: #acd5f8;
+  --ink: var(--schematic-ink);
+  --muted: var(--schematic-muted);
+  --soft-rule: var(--schematic-soft-rule);
+  --viva-blue: var(--schematic-focus);
   --schematic-ui-panel: #211f1b;
   --schematic-ui-hover: #2c2a25;
   --schematic-ui-active: #34322c;
   --schematic-ui-line: #565149;
   --schematic-ui-ink: #e8e4dc;
   --schematic-ui-muted: #b7b1a7;
+  --schematic-ui-input: #191816;
+  --schematic-ui-selected: #28394a;
+  --schematic-ui-error: #ffb1a8;
+  --schematic-ui-warning: #f5cb80;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(.schematic-workspace, .property-editor) {
+  background: var(--schematic-ui-panel);
+  border-color: var(--schematic-soft-rule);
+}
+
+/* Keep the drawing's stored colors and exported SVG/PNG independent of the UI theme. */
+:root[data-effective-theme="dark"] .schematic-shell .joint-paper-background {
+  background: var(--schematic-paper) !important;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .joint-grid-layer, .joint-back-layer, .joint-cells-layer, .joint-labels-layer,
+  .joint-front-layer, .joint-tools-layer, .schematic-note-layer
+) {
+  color-scheme: light;
+  filter: invert(1) hue-rotate(180deg);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .property-empty, .selection-summary, .analysis-note, .analysis-diagnostics,
+  .analysis-results output, .analysis-progress, .schematic-close-snackbar, .instance-dropdown
+) {
+  background: var(--schematic-ui-input);
+  border-color: var(--schematic-ui-line);
+  color: var(--schematic-ui-muted);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .property-editor input:not([type="color"], [type="checkbox"]),
+  .property-editor select, .library-select, .browser-search, .net-pick-row select,
+  .schematic-log-drawer input, .schematic-log-drawer select, .schematic-dialog select,
+  .instance-query
+) {
+  background: var(--schematic-ui-input);
+  border-color: var(--schematic-border);
+  color: var(--schematic-ink);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(input, textarea)::placeholder {
+  color: var(--schematic-ui-muted);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .schematic-toolbar button, .schematic-toolbar-help, .property-segmented button,
+  .property-inline-action button, .property-inline-toggle-action button, .property-command-row button,
+  .property-coupling-list button, .property-primary-command, .analysis-actions button,
+  .net-pick-row button, .instance-dropdown-option, .instance-option, kbd
+) {
+  background: var(--schematic-ui-panel);
+  border-color: var(--schematic-border);
+  color: var(--schematic-ink);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .schematic-toolbar button, .schematic-toolbar-help, .property-segmented button,
+  .property-inline-action button, .net-pick-row button, .analysis-actions button,
+  .instance-dropdown-option, .instance-option
+):hover {
+  background: var(--schematic-ui-hover);
+  color: var(--schematic-ink);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .schematic-toolbar .is-active, .schematic-toolbar button:active,
+  .property-segmented button.is-selected, .property-segmented button[aria-pressed="true"],
+  .property-primary-command, .property-inline-action button[aria-pressed="true"],
+  .net-pick-row .is-picking, .instance-dropdown-option.is-active, .instance-option.is-active
+) {
+  background: var(--schematic-ui-selected);
+  border-color: var(--schematic-focus);
+  color: var(--schematic-ink);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .schematic-toolbar button[data-command] svg {
+  color: #111;
+  filter: invert(1) hue-rotate(180deg);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .property-error, .netlist-status[data-state="error"], .netlist-status[data-state="blocked"],
+  .netlist-diagnostics-head[data-state="error"], [data-severity="error"] .netlist-diagnostic-severity,
+  .schematic-log-row[data-level="error"]
+) {
+  color: var(--schematic-ui-error);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell :is(
+  .netlist-status[data-state="warning"], .netlist-diagnostics-head[data-state="warning"],
+  [data-severity="warning"] .netlist-diagnostic-severity, .schematic-log-row[data-level="warn"]
+) {
+  color: var(--schematic-ui-warning);
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .schematic-storage-error-notice {
+  color: var(--schematic-ui-error);
+  background: #30201e;
+  border-color: #9a645c;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .schematic-storage-error-notice button {
+  color: inherit;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .schematic-close-snackbar button {
+  color: var(--schematic-focus);
+}
+
+:root[data-effective-theme="dark"] .schematic-context-menu {
+  color: #e8e4dc;
+  background: #211f1b;
+  border-color: #706a60;
+}
+
+:root[data-effective-theme="dark"] .schematic-context-menu button {
+  color: inherit;
+}
+
+:root[data-effective-theme="dark"] .schematic-context-menu button:is(:hover, :focus-visible) {
+  background: #28394a;
+}
+
+:root[lang="zh-CN"] .schematic-shell {
+  --schematic-mixed-label: "混合";
 }
 
 :root[data-effective-theme="dark"] .schematic-shell .schematic-toolbar {
@@ -1367,6 +1507,16 @@
 
 .property-mos-params[hidden] {
   display: none;
+}
+
+.property-device-model {
+  padding-top: 6px;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.property-device-model:not([hidden]) + .property-mos-params {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .layer-toolbar {
@@ -1909,57 +2059,18 @@
 }
 
 .netlist-panel {
-  display: flex;
-  flex-direction: column;
-  align-content: stretch;
+  display: grid;
+  grid-template-rows: auto repeat(2, minmax(0, 1fr));
   gap: 8px;
-  overflow: auto;
+  overflow: hidden;
 }
 
-.netlist-config {
+.netlist-pane {
   display: grid;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 7px 8px;
-  border: 1px solid var(--schematic-ui-line);
-  background: var(--schematic-ui-panel);
-}
-
-.netlist-config-row {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-}
-
-.netlist-device-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 4px;
-}
-
-.netlist-device-row {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 5px;
-  font-size: 0.68rem;
-  color: var(--schematic-ui-muted);
-}
-
-.netlist-device-row select,
-.netlist-device-row input,
-.netlist-config-row select {
+  min-height: 0;
   min-width: 0;
-  width: 100%;
-  height: 25px;
-  padding: 1px 4px;
-  border: 1px solid var(--schematic-border);
-  background: var(--schematic-ui-panel);
-  color: var(--schematic-ink);
-  font: inherit;
-  font-size: 0.68rem;
 }
 
 .netlist-toolbar {
@@ -1993,16 +2104,6 @@
   background: var(--schematic-ui-active);
   color: var(--schematic-ink);
   font-weight: 600;
-}
-
-.netlist-process {
-  height: 26px;
-  padding: 2px 6px;
-  border: 1px solid var(--schematic-border);
-  background: var(--schematic-ui-panel);
-  color: var(--schematic-ink);
-  font: inherit;
-  font-size: 0.72rem;
 }
 
 .netlist-toolbar > button {
@@ -2050,8 +2151,6 @@
 }
 
 .netlist-code {
-  flex: 1 1 420px;
-  min-height: 340px;
   margin: 0;
   padding: 8px;
   overflow: auto;
@@ -2133,10 +2232,9 @@
 
 .netlist-diagnostics {
   display: grid;
+  align-content: start;
   gap: 6px;
-  flex: 0 1 auto;
   min-height: 0;
-  max-height: 220px;
   overflow: auto;
 }
 

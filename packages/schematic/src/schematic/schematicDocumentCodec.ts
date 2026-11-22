@@ -1,6 +1,7 @@
 import { supportsComponentScale } from "./componentScaleModel";
 import stringify from "json-stringify-pretty-compact";
 import { resolveSymbolTemplate } from "./symbolTemplateModel";
+import { PROCESS_IDS } from "./netlist/profiles";
 import { COMPONENT_CATALOG, isValidComponentVariant, resolveComponentDef } from "./catalog";
 import { cloneConnections } from "./connectionGraph";
 import { pointKey, snapPoint, transformPin } from "./geometry";
@@ -46,6 +47,7 @@ const ENVELOPE_KEYS = ["format", "schematic"] as const;
 const SCHEMATIC_KEYS = [
   "symbolTemplate",
   "display",
+  "netlistProcess",
   "components",
   "wires",
   "inductorCouplings",
@@ -92,6 +94,7 @@ export function createSchematicFile(document: SchematicDocumentFileSource): Sche
     schematic: {
       symbolTemplate: resolveSymbolTemplate(document.symbolTemplate).id,
       ...(document.display ? { display: { ...document.display } } : {}),
+      ...(document.netlistProcess !== undefined ? { netlistProcess: document.netlistProcess } : {}),
       components: document.components.map(snapshotComponent),
       wires: document.wires.map(snapshotWire),
       ...(inductorCouplings.length > 0
@@ -126,6 +129,7 @@ function formatSchematicFileJson(file: SchematicFile) {
     '  "schematic": {',
     `    "symbolTemplate": ${JSON.stringify(file.schematic.symbolTemplate)},`,
     ...(file.schematic.display ? [`    "display": ${stringifyInline(file.schematic.display)},`] : []),
+    ...(file.schematic.netlistProcess ? [`    "netlistProcess": ${JSON.stringify(file.schematic.netlistProcess)},`] : []),
     ...formatSchematicComponents(file.schematic.components),
     ...formatSchematicWires(file.schematic.wires),
     ...(file.schematic.inductorCouplings
@@ -319,7 +323,7 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     source,
     SCHEMATIC_KEYS,
     "$.schematic",
-    ["inductorCouplings", "symbolTemplate", "display", "layers", "layerObjectStates"]
+    ["inductorCouplings", "symbolTemplate", "display", "netlistProcess", "layers", "layerObjectStates"]
   );
   let symbolTemplate;
   try {
@@ -363,6 +367,9 @@ function decodeSchematicFile(value: unknown): SchematicContent {
   return {
     symbolTemplate,
     ...(hasOwn(source, "display") ? { display: decodeDisplaySettings(source.display) } : {}),
+    ...(hasOwn(source, "netlistProcess") ? {
+      netlistProcess: requireEnum(source.netlistProcess, PROCESS_IDS, "$.schematic.netlistProcess")
+    } : {}),
     components,
     wires,
     connections,

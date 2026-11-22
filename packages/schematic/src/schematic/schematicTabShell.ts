@@ -1,5 +1,6 @@
 import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
 import { message } from "./schematicI18n";
+import { PROCESS_IDS, processProfile } from "./netlist/profiles";
 import { buildSchematicToolbar } from "./schematicToolbarWeb";
 import { buildSchematicEditorSidebar, buildSymbolTemplateControl, schematicTextFontOptions } from "./schematicEditorUiProjection";
 export {
@@ -42,12 +43,19 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
     },
       el("h2", { id: `${namespace}-options-title` }, message("options.title", "Options")),
       el("div", { class: "schematic-options-fields" },
-        buildSymbolTemplateControl(el),
         el("label", {},
-          el("span", {}, message("options.wireCrossings", "Wire crossings")),
-          el("select", { "data-schematic-wire-crossings": true },
-            el("option", { value: "plain" }, message("options.crossingPlain", "Plain")),
-            el("option", { value: "hop" }, message("options.crossingHop", "Hop"))
+          el("span", {}, "Language"),
+          el("select", { "data-schematic-language-select": true },
+            el("option", { value: "en", selected: true }, message("options.english", "English")),
+            el("option", { value: "zh" }, "中文")
+          )
+        ),
+        el("label", {},
+          el("span", {}, message("options.colorMode", "Color mode")),
+          el("select", { "data-schematic-theme-select": true },
+            el("option", { value: "system", selected: true }, message("options.system", "Follow system")),
+            el("option", { value: "light" }, message("options.light", "Light")),
+            el("option", { value: "dark" }, message("options.dark", "Dark"))
           )
         ),
         el("label", {},
@@ -55,18 +63,18 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           el("select", { "data-schematic-text-font": true }, ...schematicTextFontOptions(el))
         ),
         el("label", {},
-          el("span", {}, message("options.language", "Language")),
-          el("select", { "data-schematic-language-select": true },
-            el("option", { value: "en", selected: true }, message("options.english", "English")),
-            el("option", { value: "zh", disabled: true }, message("options.chinesePending", "中文 (not ready)"))
+          el("span", {}, message("ui.process", "Process")),
+          el("select", { "data-netlist-process": true },
+            ...PROCESS_IDS.map(id => el("option", { value: id },
+              id === "custom" ? message("ui.custom", "Custom") : processProfile(id).label))
           )
         ),
+        buildSymbolTemplateControl(el),
         el("label", {},
-          el("span", {}, message("options.colorMode", "Color mode")),
-          el("select", { "data-schematic-theme-select": true },
-            el("option", { value: "light", selected: true }, message("options.light", "Light")),
-            el("option", { value: "system", disabled: true }, message("options.systemPending", "Follow system (not ready)")),
-            el("option", { value: "dark", disabled: true }, message("options.darkPending", "Dark (not ready)"))
+          el("span", {}, message("options.wireCrossings", "Wire crossings")),
+          el("select", { "data-schematic-wire-crossings": true },
+            el("option", { value: "plain" }, message("options.crossingPlain", "Plain")),
+            el("option", { value: "hop" }, message("options.crossingHop", "Hop"))
           )
         )
       ),
@@ -75,19 +83,19 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
     el("div", {
       class: "schematic-panel-resizer",
       role: "separator",
-      "aria-label": "Resize or reveal controls panel",
+      "aria-label": message("ui.resizeOrRevealControlsPanel", "Resize or reveal controls panel"),
       "aria-orientation": "vertical",
       "aria-valuemin": "0",
       tabindex: "0",
-      title: "Drag to resize or collapse controls",
+      title: message("ui.dragToResizeOrCollapseControls", "Drag to resize or collapse controls"),
       "data-schematic-panel-resizer": "left"
     }),
-    el("section", { class: "schematic-workspace", "aria-label": "Schematic drawing area" },
-      el("div", { class: "schematic-document-tabs", "aria-label": "Open schematics", "data-schematic-document-tabs": true },
+    el("section", { class: "schematic-workspace", "aria-label": message("ui.schematicDrawingArea", "Schematic drawing area") },
+      el("div", { class: "schematic-document-tabs", "aria-label": message("ui.openSchematics", "Open schematics"), "data-schematic-document-tabs": true },
         el("div", {
           class: "schematic-document-tab-list",
           role: "tablist",
-          "aria-label": "Schematic documents",
+          "aria-label": message("ui.schematicDocuments", "Schematic documents"),
           "data-schematic-document-tab-list": true
         }),
         el("button", {
@@ -175,7 +183,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           hidden: true
         },
           el("span", { "data-schematic-close-message": true }),
-          el("button", { type: "button", "data-schematic-close-undo": true }, "Undo")
+          el("button", { type: "button", "data-schematic-close-undo": true }, message("ui.undo", "Undo"))
         ),
         el("div", {
           class: "schematic-storage-error-notice",
@@ -185,18 +193,18 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           hidden: true
         },
           el("span", { "data-schematic-storage-error-message": true }),
-          el("button", { type: "button", "data-schematic-storage-retry": true }, "Retry save"),
+          el("button", { type: "button", "data-schematic-storage-retry": true }, message("ui.retrySave", "Retry save")),
           el("button", {
             type: "button",
             class: "schematic-storage-error-dismiss",
             "data-schematic-storage-error-dismiss": true,
-            "aria-label": "Dismiss storage error",
-            title: "Dismiss"
+            "aria-label": message("ui.dismissStorageError", "Dismiss storage error"),
+            title: message("ui.dismiss", "Dismiss")
           })
         )
       ),
       el("div", { class: "schematic-toolbar" }, ...buildSchematicToolbar(ui, namespace)),
-      el("div", { class: "schematic-paper", tabindex: "0", "aria-label": "Schematic canvas", "data-schematic-paper": true }),
+      el("div", { class: "schematic-paper", tabindex: "0", "aria-label": message("ui.schematicCanvas", "Schematic canvas"), "data-schematic-paper": true }),
       el("div", {
         class: "schematic-log-drawer",
         "data-schematic-log": true,
@@ -206,7 +214,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
         el("div", {
           class: "schematic-log-resizer",
           role: "separator",
-          "aria-label": "Resize log",
+          "aria-label": message("ui.resizeLog", "Resize log"),
           "aria-orientation": "horizontal",
           "aria-valuemin": "180",
           "aria-valuemax": "400",
@@ -234,7 +242,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
             type: "button",
             class: "schematic-log-close",
             "data-log-close": true,
-            "aria-label": "Close log"
+            "aria-label": message("ui.closeLog", "Close log")
           }, "×")
         ),
         el("div", {
@@ -249,7 +257,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           class: "schematic-status",
           "aria-live": "polite",
           "data-schematic-status": true
-        }, "Select a tool or press i to add an instance."),
+        }, message("ui.selectAToolOrPressIToAddAnInstance", "Select a tool or press i to add an instance.")),
         el("div", { class: "schematic-status-actions" },
           el("span", { class: "schematic-status-count", "data-diagnostic-count": true, hidden: true }),
           el("button", {
@@ -265,20 +273,20 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
     el("div", {
       class: "schematic-panel-resizer",
       role: "separator",
-      "aria-label": "Resize or reveal analysis panel",
+      "aria-label": message("ui.resizeOrRevealAnalysisPanel", "Resize or reveal analysis panel"),
       "aria-orientation": "vertical",
       "aria-valuemin": "0",
       tabindex: "0",
-      title: "Drag to resize or collapse analysis",
+      title: message("ui.dragToResizeOrCollapseAnalysis", "Drag to resize or collapse analysis"),
       "data-schematic-panel-resizer": "right"
     }),
     el("aside", {
       class: "analysis-panel right-dock",
-      "aria-label": "Schematic inspector",
+      "aria-label": message("ui.schematicInspector", "Schematic inspector"),
       "data-schematic-analysis-panel": true,
       "data-right-dock": true
     },
-      el("div", { class: "schematic-sidebar-tabs right-dock-tabs", role: "tablist", "aria-label": "Inspector views" },
+      el("div", { class: "schematic-sidebar-tabs right-dock-tabs", role: "tablist", "aria-label": message("ui.inspectorViews", "Inspector views") },
         el("button", {
           type: "button",
           class: "schematic-sidebar-tab is-active",
@@ -296,33 +304,33 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
         }, message("right.netlist", "Netlist"))
       ),
       el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
-        el("p", { class: "analysis-note" }, "Uses component values from the Property Editor."),
-        el("div", { "data-selection-summary": true, class: "selection-summary" }, "No object selected."),
+        el("p", { class: "analysis-note" }, message("ui.usesComponentValuesFromThePropertyEditor", "Uses component values from the Property Editor.")),
+        el("div", { "data-selection-summary": true, class: "selection-summary" }, message("ui.noObjectSelected", "No object selected.")),
         el("div", { class: "net-pick-row" },
-          el("label", { for: analysisIds.inputP }, "Input +"),
+          el("label", { for: analysisIds.inputP }, message("ui.inputPositive", "Input +")),
           el("select", { id: analysisIds.inputP, "data-net-select": "inputP" }),
-          el("button", { type: "button", "data-pick-net": "inputP" }, "Pick")
+          el("button", { type: "button", "data-pick-net": "inputP" }, message("ui.pick", "Pick"))
         ),
         el("div", { class: "net-pick-row" },
-          el("label", { for: analysisIds.inputN }, "Input -"),
+          el("label", { for: analysisIds.inputN }, message("ui.inputNegative", "Input -")),
           el("select", { id: analysisIds.inputN, "data-net-select": "inputN" }),
-          el("button", { type: "button", "data-pick-net": "inputN" }, "Pick")
+          el("button", { type: "button", "data-pick-net": "inputN" }, message("ui.pick", "Pick"))
         ),
         el("div", { class: "net-pick-row" },
-          el("label", { for: analysisIds.outputP }, "Output +"),
+          el("label", { for: analysisIds.outputP }, message("ui.outputPositive", "Output +")),
           el("select", { id: analysisIds.outputP, "data-net-select": "outputP" }),
-          el("button", { type: "button", "data-pick-net": "outputP" }, "Pick")
+          el("button", { type: "button", "data-pick-net": "outputP" }, message("ui.pick", "Pick"))
         ),
         el("div", { class: "net-pick-row" },
-          el("label", { for: analysisIds.outputN }, "Output -"),
+          el("label", { for: analysisIds.outputN }, message("ui.outputNegative", "Output -")),
           el("select", { id: analysisIds.outputN, "data-net-select": "outputN" }),
-          el("button", { type: "button", "data-pick-net": "outputN" }, "Pick")
+          el("button", { type: "button", "data-pick-net": "outputN" }, message("ui.pick", "Pick"))
         ),
         el("div", { class: "analysis-actions" },
           el("button", { type: "button", "data-analysis": "compute" },
-            "Compute H(s), Z",
+            message("ui.computeFormula", "Compute H(s), Z"),
             el("sub", {}, "IN"),
-            "(s), Z",
+            message("ui.formulaSeparator", "(s), Z"),
             el("sub", {}, "out"),
             "(s)"
           )
@@ -332,24 +340,24 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           "data-analysis-progress": true,
           hidden: true,
           role: "progressbar",
-          "aria-label": "Symbolic analysis progress"
+          "aria-label": message("ui.symbolicAnalysisProgress", "Symbolic analysis progress")
         },
           el("div", { class: "analysis-progress-bar" }),
-          el("span", { "data-analysis-progress-text": true }, "Solving symbolic MNA...")
+          el("span", { "data-analysis-progress-text": true }, message("ui.solvingSymbolicMna", "Solving symbolic MNA..."))
         ),
         el("div", { "data-analysis-diagnostics": true, class: "analysis-diagnostics" }),
         el("div", { class: "analysis-results" },
-          el("h3", {}, "Transfer Function"),
+          el("h3", {}, message("ui.transferFunction", "Transfer Function")),
           el("output", { "data-analysis-transfer": true }),
-          el("h3", {}, "Input Impedance"),
+          el("h3", {}, message("ui.inputImpedance", "Input Impedance")),
           el("output", { "data-analysis-zin": true }),
-          el("h3", {}, "Output Impedance"),
+          el("h3", {}, message("ui.outputImpedance", "Output Impedance")),
           el("output", { "data-analysis-zout": true })
         )
       ),
       el("section", { class: "right-dock-panel netlist-panel", "data-right-panel": "netlist", role: "tabpanel", hidden: true },
         el("div", { class: "netlist-toolbar" },
-          el("div", { class: "netlist-format", role: "group", "aria-label": "Netlist format" },
+          el("div", { class: "netlist-format", role: "group", "aria-label": message("ui.netlistFormat", "Netlist format") },
             el("button", {
               type: "button",
               class: "netlist-format-button is-active",
@@ -363,31 +371,23 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
               "aria-pressed": "false"
             }, "Spectre")
           ),
-          el("button", { type: "button", "data-netlist-copy": true }, "Copy"),
-          el("button", { type: "button", "data-netlist-download": true }, "Download")
+          el("button", { type: "button", "data-netlist-copy": true }, message("ui.copy", "Copy")),
+          el("button", { type: "button", "data-netlist-download": true }, message("ui.download", "Download"))
         ),
-        el("div", { class: "netlist-config" },
-          el("label", { class: "netlist-config-row" },
-            el("span", {}, "Process"),
-            el("select", { "data-netlist-process": true, "aria-label": "Process" },
-              el("option", { value: "sky130" }, "SkyWater SKY130"),
-              el("option", { value: "gf180mcu" }, "GF180MCU"),
-              el("option", { value: "ihp-sg13g2" }, "IHP SG13G2"),
-              el("option", { value: "custom" }, "Custom")
-            )
-          ),
-          el("div", { class: "netlist-device-grid", "data-netlist-devices": true })
+        el("section", { class: "netlist-pane" },
+          el("div", { class: "netlist-status", "data-netlist-status": true }, message("ui.ready", "Ready")),
+          el("pre", { class: "netlist-code", "data-netlist-code": true })
         ),
-        el("div", { class: "netlist-status", "data-netlist-status": true }, "Ready"),
-        el("pre", { class: "netlist-code", "data-netlist-code": true }),
-        el("div", { class: "netlist-diagnostics-head", "data-netlist-diagnostics-summary": true }, "No diagnostics."),
-        el("div", { class: "netlist-diagnostics", "data-netlist-diagnostics-list": true })
+        el("section", { class: "netlist-pane" },
+          el("div", { class: "netlist-diagnostics-head", "data-netlist-diagnostics-summary": true }, message("ui.noDiagnostics", "No diagnostics.")),
+          el("div", { class: "netlist-diagnostics", "data-netlist-diagnostics-list": true })
+        )
       )
     ),
     el("button", {
       type: "button",
       class: "schematic-panel-backdrop",
-      "aria-label": "Close side panel",
+      "aria-label": message("ui.closeSidePanel", "Close side panel"),
       "data-schematic-panel-backdrop": true,
       hidden: true
     })

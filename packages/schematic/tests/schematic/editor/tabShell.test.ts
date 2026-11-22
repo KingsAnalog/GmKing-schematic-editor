@@ -97,10 +97,8 @@ describe("renderSchematicTabShell", () => {
   it("keeps the focusable paper and initial status text unchanged", () => {
     const shell = renderSchematicTabShell();
 
-    expect(shell).toContain('<div class="schematic-paper" tabindex="0" aria-label="Schematic canvas" data-schematic-paper></div>');
-    expect(shell).toContain(
-      '<div class="schematic-status" aria-live="polite" data-schematic-status>Select a tool or press i to add an instance.</div>'
-    );
+    expect(shell).toMatch(/<div class="schematic-paper" tabindex="0" aria-label="Schematic canvas"[^>]*data-schematic-paper><\/div>/);
+    expect(shell).toMatch(/<div class="schematic-status" aria-live="polite" data-schematic-status[^>]*>Select a tool or press i to add an instance\.<\/div>/);
   });
 
   it("keeps the four symbolic analysis net selectors and pick buttons", () => {
@@ -164,7 +162,7 @@ describe("renderSchematicTabShell", () => {
     ]);
     expect(shell.match(/title="Black \(default\)"/g)).toHaveLength(3);
     expect(valuesFor(shell, "data-note-text-color-swatch")).toContain("#111111");
-    expect(shell).toContain('role="group" aria-label="Gain polarity" data-property-gain-polarity');
+    expect(shell).toMatch(/role="group" aria-label="Gain polarity"[^>]*data-property-gain-polarity/);
     expect(valuesFor(shell, "data-property-gain-polarity-value")).toEqual(["default", "positive", "negative"]);
     expect(shell).toContain('data-property-gain-polarity-value="negative">−</button>');
     expect(shell).toContain("data-property-value-row");
@@ -234,28 +232,33 @@ describe("renderSchematicTabShell", () => {
     const options = shell.match(/<dialog[^>]+data-schematic-options-dialog[^>]*>[\s\S]*?<\/dialog>/)?.[0];
     expect(optionsId).toBeTruthy();
     expect(options).toContain(`id="${optionsId}"`);
-    expect(options).toMatch(/<select[^>]+data-symbol-template[\s\S]*<select[^>]+data-schematic-language-select[\s\S]*<select[^>]+data-schematic-theme-select/);
+    expect([...options!.matchAll(/<select[^>]*? (data-schematic-[\w-]+|data-netlist-process|data-symbol-template)(?=[ >])/g)].map(match => match[1])).toEqual([
+      "data-schematic-language-select", "data-schematic-theme-select", "data-schematic-text-font",
+      "data-netlist-process", "data-symbol-template", "data-schematic-wire-crossings"
+    ]);
     expect(shell).toContain('class="schematic-sidebar-heading">Schematic Editor</h2>');
     expect(shell.match(/<select[^>]+data-symbol-template/g)).toHaveLength(1);
   });
 
-  it("defaults to English and Light and disables the pending options", () => {
+  it("defaults to English and follows the system theme with both overrides available", () => {
     const shell = renderSchematicTabShell();
     const language = shell.match(/<select[^>]+data-schematic-language-select[^>]*>(.*?)<\/select>/)?.[1];
     const theme = shell.match(/<select[^>]+data-schematic-theme-select[^>]*>(.*?)<\/select>/)?.[1];
 
     expect(language).toMatch(/<option value="en" selected[^>]*>English<\/option>/);
-    expect(language).toMatch(/<option value="zh" disabled[^>]*>中文 \(not ready\)<\/option>/);
-    expect(theme).toMatch(/<option value="light" selected[^>]*>Light<\/option>/);
-    expect(theme).toMatch(/<option value="system" disabled[^>]*>Follow system \(not ready\)<\/option>/);
-    expect(theme).toMatch(/<option value="dark" disabled[^>]*>Dark \(not ready\)<\/option>/);
+    expect(language).toMatch(/<option value="zh"[^>]*>中文<\/option>/);
+    expect(theme).toMatch(/<option value="system" selected[^>]*>Follow system<\/option>/);
+    expect(theme).toMatch(/<option value="light"[^>]*>Light<\/option>/);
+    expect(theme).toMatch(/<option value="dark"[^>]*>Dark<\/option>/);
+    expect(language).not.toContain("disabled");
+    expect(theme).not.toContain("disabled");
   });
 
   it("assigns translation keys to display options and font overrides", () => {
     const shell = renderSchematicTabShell();
     for (const key of [
       "options.wireCrossings", "options.crossingPlain", "options.crossingHop",
-      "options.defaultTextFont", "options.chinesePending",
+      "options.defaultTextFont", "options.colorMode", "options.system",
       "textFont.label", "textFont.inherit", "textFont.sans", "textFont.serif", "textFont.mono"
     ]) {
       expect(shell).toContain(`&quot;key&quot;:&quot;${key}&quot;`);

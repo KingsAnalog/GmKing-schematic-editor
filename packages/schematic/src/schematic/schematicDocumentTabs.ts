@@ -1,4 +1,6 @@
 import { MAX_SCHEMATIC_TAB_TITLE_LENGTH } from "./schematicTabTitle";
+import { applySchematicMessage, message } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
 
 export interface SchematicDocumentTabItem {
   id: string;
@@ -115,7 +117,7 @@ export class SchematicDocumentTabs {
 
     this.clearCloseSnackbarTimer();
     this.closeUndo = options.onUndo;
-    message.textContent = options.message;
+    message.textContent = localizeSchematicStatus(options.message);
     snackbar.hidden = false;
 
     const timeoutMs = options.timeoutMs ?? 6000;
@@ -137,7 +139,7 @@ export class SchematicDocumentTabs {
     const notice = this.root.querySelector<HTMLElement>("[data-schematic-storage-error]");
     const message = notice?.querySelector<HTMLElement>("[data-schematic-storage-error-message]");
     if (!notice || !message) return;
-    message.textContent = messageText;
+    message.textContent = localizeSchematicStatus(messageText);
     notice.hidden = false;
   }
 
@@ -160,8 +162,7 @@ export class SchematicDocumentTabs {
     close.type = "button";
     close.className = "schematic-document-tab-close";
     close.dataset.schematicDocumentClose = item.id;
-    close.setAttribute("aria-label", `Close ${item.title}`);
-    close.title = `Close ${item.title}`;
+    setCloseTabLabel(close, item.title);
 
     wrapper.append(tab, close);
     return wrapper;
@@ -183,8 +184,7 @@ export class SchematicDocumentTabs {
     const close = wrapper.querySelector<HTMLButtonElement>("[data-schematic-document-close]");
     if (close) {
       close.dataset.schematicDocumentClose = item.id;
-      close.setAttribute("aria-label", `Close ${item.title}`);
-      close.title = `Close ${item.title}`;
+      setCloseTabLabel(close, item.title);
     }
   }
 
@@ -471,7 +471,7 @@ export class SchematicDocumentTabs {
     input.dataset.schematicDocumentRename = id;
     input.dataset.schematicDocumentOriginalTitle = title;
     input.value = title;
-    input.setAttribute("aria-label", `Rename ${title}`);
+    applySchematicMessage(input, message("document.renameTab", "Rename {name}", { name: title }), "aria-label");
     input.setAttribute("autocomplete", "off");
     input.setAttribute("spellcheck", "false");
     input.setAttribute("maxlength", String(MAX_SCHEMATIC_TAB_TITLE_LENGTH));
@@ -496,10 +496,7 @@ export class SchematicDocumentTabs {
 
     this.renameInput = null;
     if (label) input.replaceWith(label);
-    if (close) {
-      close.setAttribute("aria-label", `Close ${title}`);
-      close.title = `Close ${title}`;
-    }
+    if (close) setCloseTabLabel(close, title);
     if (commit && id && nextTitle && nextTitle !== originalTitle) {
       void this.options.onRename?.(id, nextTitle);
     }
@@ -536,4 +533,10 @@ export class SchematicDocumentTabs {
     this.runtime.clearTimeout(this.closeSnackbarTimer);
     this.closeSnackbarTimer = null;
   }
+}
+
+function setCloseTabLabel(button: HTMLButtonElement, title: string) {
+  const label = message("document.closeTab", "Close {name}", { name: title });
+  applySchematicMessage(button, label, "aria-label");
+  applySchematicMessage(button, label, "title");
 }

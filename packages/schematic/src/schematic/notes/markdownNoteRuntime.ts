@@ -1,5 +1,6 @@
 import "@milkdown/kit/prose/view/style/prosemirror.css";
 import "@milkdown/kit/prose/tables/style/tables.css";
+import { applySchematicMessage, message, messageText } from "../schematicI18n";
 
 import {
   defaultValueCtx,
@@ -211,7 +212,7 @@ function createMathView(display: boolean) {
       rendered.dataset.tex = value;
       if (!value.trim()) {
         rendered.textContent = display ? "$$ $$" : "$ $";
-        rendered.setAttribute("aria-label", "Empty formula");
+        applySchematicMessage(rendered, message("note.emptyFormula", "Empty formula"), "aria-label");
         rendered.classList.remove("is-math-error");
         dom.classList.remove("is-math-error");
         dom.dataset.mathRenderState = "ready";
@@ -505,7 +506,7 @@ const taskListItemView = $view(listItemSchema.node, () => (initialNode: any) => 
   checkbox.type = "checkbox";
   checkbox.disabled = true;
   checkbox.tabIndex = -1;
-  checkbox.setAttribute("aria-label", "Task status");
+  applySchematicMessage(checkbox, message("note.taskStatus", "Task status"), "aria-label");
   contentDOM.className = "schematic-markdown-list-item-content";
   dom.append(checkbox, contentDOM);
 
@@ -723,6 +724,7 @@ export class MarkdownNoteRuntime {
 
   private async mount() {
     if (this.destroyed) return;
+    const noteLabel = message("note.markdown", "Schematic Markdown note");
     const editor = Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, this.options.host);
@@ -734,7 +736,8 @@ export class MarkdownNoteRuntime {
         ctx.set(editorViewOptionsCtx, {
           editable: () => this.editable,
           attributes: {
-            "aria-label": "Schematic Markdown note",
+            "aria-label": messageText(noteLabel),
+            "data-schematic-message-aria-label": JSON.stringify(noteLabel),
             "data-note-editor": "",
             "data-markdown-note-runtime-key": this.runtimeKey
           }

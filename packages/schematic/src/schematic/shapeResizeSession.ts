@@ -4,7 +4,6 @@ import { isVertexLibraryShapeType, type VertexLibraryShapeType } from "./library
 import { polygonPoints, setPolygonVertex } from "./polygonComponentModel";
 import { setPolylineVertex, polylinePoints } from "./polylineComponentModel";
 import { snapPoint } from "./geometry";
-import { t } from "./schematicI18n";
 import { cloneSchematicDocument } from "./document/documentModel";
 import { executeSchematicPropertyBatchCommand } from "./propertyBatchCommands";
 import { RectangleResizeSession, type RectangleResizeHandle } from "./rectangleResizeSession";
@@ -82,7 +81,7 @@ export class ShapeResizeSession {
     if (!active) return this.rectangle.commit();
     this.vertexResize = null;
     const changed = JSON.stringify(this.document) !== JSON.stringify(active.baseline);
-    const status = t(`${active.kind}.reshaped`, vertexResizeMessages[active.kind]);
+    const status = vertexResizeMessages[active.kind];
     return { kind: "committed" as const, changed, status: changed ? status : "" };
   }
   cancel() {

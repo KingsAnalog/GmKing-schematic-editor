@@ -1,5 +1,6 @@
 import { getComponentDef, isValidComponentVariant, resolveComponentDef } from "../catalog";
 import { DEFAULT_SYMBOL_TEMPLATE, resolveSymbolTemplate } from "../symbolTemplateModel";
+import { isProcessId } from "../netlist/profiles";
 import { applyNormalizedDocumentWires } from "./documentWires";
 import { cloneConnections, emptyConnections, connectGeometry } from "../connectionGraph";
 import { normalizeMarkdownNoteWidth } from "../notes/noteSizing";
@@ -85,6 +86,7 @@ export function contentFromDocument(document: SchematicDocument): SchematicConte
   return {
     symbolTemplate: resolveSymbolTemplate(snapshot.symbolTemplate).id,
     ...(snapshot.display ? { display: snapshot.display } : {}),
+    ...(snapshot.netlistProcess && isProcessId(snapshot.netlistProcess) ? { netlistProcess: snapshot.netlistProcess } : {}),
     components: snapshot.components,
     wires: snapshot.wires,
     connections: snapshot.connections,
@@ -139,6 +141,7 @@ export function restoreSchematicDocument(document: SchematicDocument): Schematic
 export function assignRestoredSchematicDocument(target: SchematicDocument, source: SchematicDocument) {
   target.symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
   target.display = source.display && { ...source.display };
+  target.netlistProcess = source.netlistProcess;
   target.components = source.components;
   target.wires = source.wires;
   target.connections = cloneConnections(source.connections);

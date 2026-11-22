@@ -3,7 +3,6 @@ import {
   captureCopyLayers, copySourceCount, instantiateCopyAt, mirrorCopySourceAroundAnchor,
   planCopyLayers, rotateCopySourceAroundAnchor, type CopyLayerTarget, type CopySource, type CopyState
 } from "./copyModel";
-import { t } from "./schematicI18n";
 import {
   buildSelectionCopySource,
   buildTargetCopySource,
@@ -284,7 +283,7 @@ export class SchematicCopyController {
     if (layerPlan?.locked) {
       return {
         ok: false,
-        status: t("layer.copyLocked", "A destination layer is locked. Unlock it before placing the copy."),
+        status: "A destination layer is locked. Unlock it before placing the copy.",
         keepSourceArmed: true
       };
     }

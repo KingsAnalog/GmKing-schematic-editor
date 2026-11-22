@@ -15,6 +15,7 @@ import { SPNT_POSITION_VALUE_KEY, validSpntPosition } from "./spntSwitchModel";
 import { isTransistorComponentType, TRANSISTOR_CIRCLE_VALUE_KEY } from "./transistorCircleModel";
 import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
 import { validVoltageSourceFieldValue } from "./voltageSourceModel";
+import { isDeviceKind, isNetlistModelText, NETLIST_MODEL_VALUE_KEY } from "./netlist/profiles";
 import {
   isLibraryShapeType,
   isOpenLibraryShapeType,
@@ -66,6 +67,12 @@ export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
   enumeration("labelVisible", booleanValues),
   enumeration("valueVisible", booleanValues),
   enumeration(MOS_THICK_GATE_VALUE_KEY, booleanValues, component => isMosComponentType(component.type)),
+  {
+    key: NETLIST_MODEL_VALUE_KEY,
+    supports: component => isDeviceKind(component.type),
+    valid: isNetlistModelText,
+    expected: "a netlist model name on one line"
+  },
   ...["mos:w", "mos:l", "mos:m", "mos:nf"].map(key => ({
     key,
     supports: (component: ComponentInstance) => isMosComponentType(component.type),

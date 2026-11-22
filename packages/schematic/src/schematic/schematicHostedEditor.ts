@@ -36,6 +36,7 @@ export interface SchematicEditorAnalysisBridge {
   selection(): AnalysisPortSelection;
   setSelection(selection: AnalysisPortSelection): void;
   cancelPendingCompute(): void;
+  refreshLanguage?(): void;
 }
 
 export interface SchematicEditorContextMenuBridge {

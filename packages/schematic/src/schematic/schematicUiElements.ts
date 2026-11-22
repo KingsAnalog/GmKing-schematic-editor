@@ -5,7 +5,7 @@ import { escapeHtml } from "./uiUtils";
 type UiTag = "a" | "aside" | "button" | "dialog" | "div" | "h2" | "h3" | "input" | "label" | "main" | "option"
   | "output" | "p" | "pre" | "section" | "select" | "span" | "strong" | "sub" | "svg" | "path" | "textarea";
 type Attribute = `data-${string}` | `aria-${string}` | "accept" | "autocomplete" | "class" | "d"
-  | "disabled" | "focusable" | "for" | "hidden" | "href" | "id" | "max" | "min" | "placeholder" | "readonly" | "rel" | "role"
+  | "disabled" | "focusable" | "for" | "hidden" | "href" | "id" | "max" | "maxlength" | "min" | "placeholder" | "readonly" | "rel" | "role"
   | "selected" | "spellcheck" | "step" | "style" | "tabindex" | "target" | "title" | "type" | "value" | "viewBox";
 type Attributes = Partial<Record<Attribute, string | boolean | number | SchematicMessage>>;
 type Child<T> = T | string | SchematicMessage;

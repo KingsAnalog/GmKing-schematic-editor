@@ -23,6 +23,7 @@ import type {
 import {
   defaultDeviceConfig,
   normalizeDeviceConfig,
+  NETLIST_MODEL_VALUE_KEY,
   type DeviceKind,
   type NetlistDeviceConfig
 } from "./profiles";
@@ -76,7 +77,10 @@ export function buildStructuralNetlist(
   document: SchematicDocument,
   options: NetlistBuildOptions = {}
 ): NetlistDesign {
-  const config: NetlistDeviceConfig = normalizeDeviceConfig(options.config);
+  const config: NetlistDeviceConfig = normalizeDeviceConfig({
+    ...options.config,
+    process: options.config?.process ?? document.netlistProcess
+  });
   const defaultDevices = defaultDeviceConfig(config.process).devices;
   const resolution = resolveSchematicNets(document);
   const extracted = extractNetlist(document, resolution);
@@ -98,7 +102,7 @@ export function buildStructuralNetlist(
   };
 
   const deviceModel = (kind: DeviceKind, instance: ComponentInstance) => {
-    const master = config.devices[kind];
+    const master = instance.values[NETLIST_MODEL_VALUE_KEY]?.trim() || config.devices[kind];
     if (IDENTIFIER.test(master)) return master;
     const fallback = defaultDevices[kind];
     report(

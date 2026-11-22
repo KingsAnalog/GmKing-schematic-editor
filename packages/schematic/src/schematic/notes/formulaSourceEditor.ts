@@ -1,4 +1,5 @@
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import { applySchematicMessage, message } from "../schematicI18n";
 import {
   defaultHighlightStyle,
   bracketMatching,
@@ -219,9 +220,13 @@ export function createFormulaSourceEditor(options: FormulaSourceEditorOptions): 
     })
   });
   view.dom.dataset.mathSourceEditor = "";
-  view.dom.setAttribute(
-    "aria-label",
-    options.ariaLabel ?? (options.mode === "block" ? "Edit block formula" : "Edit inline formula")
+  if (options.ariaLabel) view.dom.setAttribute("aria-label", options.ariaLabel);
+  else applySchematicMessage(
+    view.dom,
+    options.mode === "block"
+      ? message("note.editBlockFormula", "Edit block formula")
+      : message("note.editInlineFormula", "Edit inline formula"),
+    "aria-label"
   );
 
   return {

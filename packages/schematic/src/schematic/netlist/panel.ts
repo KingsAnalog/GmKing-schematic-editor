@@ -1,18 +1,7 @@
 import type { SchematicDocument } from "../types";
-import {
-  buildStructuralNetlist,
-  defaultDeviceConfig,
-  DEVICE_KINDS,
-  DEVICE_LABELS,
-  printNetlist,
-  processProfile,
-  type DeviceKind,
-  type NetlistDesign,
-  type NetlistDiagnostic,
-  type NetlistDeviceConfig,
-  type NetlistFormat,
-  type ProcessId
-} from "./index";
+import { t, uiFormat } from "../schematicI18n";
+import { localizeNetlistDiagnostic } from "../schematicUiText";
+import { buildStructuralNetlist, printNetlist, type NetlistDesign, type NetlistDiagnostic, type NetlistFormat } from "./index";
 
 interface NetlistPanelOptions {
   onSelect?: (componentId: string) => void;
@@ -25,8 +14,6 @@ interface HighlightToken {
 
 export class NetlistPanelController {
   private design: NetlistDesign | null = null;
-  private schematic: SchematicDocument | null = null;
-  private config: NetlistDeviceConfig = defaultDeviceConfig("sky130");
   private format: NetlistFormat = "spice";
   private readonly lifecycle = new AbortController();
   private mounted = false;
@@ -34,8 +21,6 @@ export class NetlistPanelController {
   private statusEl: HTMLElement | null = null;
   private summaryEl: HTMLElement | null = null;
   private diagnosticsEl: HTMLElement | null = null;
-  private processEl: HTMLSelectElement | null = null;
-  private devicesEl: HTMLElement | null = null;
   private copyButton: HTMLButtonElement | null = null;
   private downloadButton: HTMLButtonElement | null = null;
 
@@ -51,29 +36,12 @@ export class NetlistPanelController {
     this.statusEl = this.root.querySelector<HTMLElement>("[data-netlist-status]");
     this.summaryEl = this.root.querySelector<HTMLElement>("[data-netlist-diagnostics-summary]");
     this.diagnosticsEl = this.root.querySelector<HTMLElement>("[data-netlist-diagnostics-list]");
-    this.processEl = this.root.querySelector<HTMLSelectElement>("[data-netlist-process]");
-    this.devicesEl = this.root.querySelector<HTMLElement>("[data-netlist-devices]");
     this.copyButton = this.root.querySelector<HTMLButtonElement>("[data-netlist-copy]");
     this.downloadButton = this.root.querySelector<HTMLButtonElement>("[data-netlist-download]");
     const { signal } = this.lifecycle;
     this.root.querySelectorAll<HTMLElement>("[data-netlist-format]").forEach((button) => {
       button.addEventListener("click", () => this.setFormat(button.dataset.netlistFormat === "spectre" ? "spectre" : "spice"), { signal });
     });
-    this.processEl?.addEventListener("change", () => {
-      this.config = defaultDeviceConfig(this.processEl?.value as ProcessId);
-      this.renderConfig();
-      this.rebuild();
-    }, { signal });
-    this.devicesEl?.addEventListener("change", (event) => {
-      const control = (event.target as HTMLElement | null)?.closest<HTMLInputElement | HTMLSelectElement>("[data-netlist-device]");
-      const kind = control?.dataset.netlistDevice as DeviceKind | undefined;
-      if (!control || !kind) return;
-      this.config = {
-        ...this.config,
-        devices: { ...this.config.devices, [kind]: control.value.trim() }
-      };
-      this.rebuild();
-    }, { signal });
     this.copyButton?.addEventListener("click", () => this.copy(), { signal });
     this.downloadButton?.addEventListener("click", () => this.download(), { signal });
     this.diagnosticsEl?.addEventListener("click", (event) => {
@@ -81,7 +49,6 @@ export class NetlistPanelController {
       const componentId = target?.dataset.netlistDiagnosticComponent;
       if (componentId) this.options.onSelect?.(componentId);
     }, { signal });
-    this.renderConfig();
     this.render();
   }
 
@@ -91,14 +58,11 @@ export class NetlistPanelController {
   }
 
   refresh(schematic: SchematicDocument) {
-    this.schematic = schematic;
-    this.rebuild();
+    this.design = buildStructuralNetlist(schematic);
+    this.render();
   }
 
-  private rebuild() {
-    this.design = this.schematic
-      ? buildStructuralNetlist(this.schematic, { config: this.config })
-      : null;
+  refreshLanguage() {
     this.render();
   }
 
@@ -113,71 +77,18 @@ export class NetlistPanelController {
     this.renderCode();
   }
 
-  private renderConfig() {
-    if (this.processEl) this.processEl.value = this.config.process;
-    const grid = this.devicesEl;
-    if (!grid) return;
-    const document = grid.ownerDocument;
-    grid.replaceChildren();
-    DEVICE_KINDS.forEach((kind) => {
-      const row = document.createElement("label");
-      row.className = "netlist-device-row";
-      const label = document.createElement("span");
-      label.textContent = DEVICE_LABELS[kind];
-      row.append(label);
-      if (this.config.process === "custom") {
-        const input = document.createElement("input");
-        input.type = "text";
-        input.spellcheck = false;
-        input.autocomplete = "off";
-        input.dataset.netlistDevice = kind;
-        input.value = this.config.devices[kind];
-        input.placeholder = DEVICE_LABELS[kind];
-        input.title = input.value;
-        input.addEventListener("input", () => { input.title = input.value; });
-        const list = document.createElement("datalist");
-        list.id = `at-netlist-${kind}-options`;
-        processProfile("custom").options[kind].forEach((option) => {
-          const item = document.createElement("option");
-          item.value = option;
-          list.append(item);
-        });
-        input.setAttribute("list", list.id);
-        row.append(input, list);
-      } else {
-        const select = document.createElement("select");
-        select.dataset.netlistDevice = kind;
-        const options = processProfile(this.config.process).options[kind];
-        const values = options.includes(this.config.devices[kind])
-          ? options
-          : [this.config.devices[kind], ...options];
-        values.forEach((option) => {
-          const item = document.createElement("option");
-          item.value = option;
-          item.textContent = option;
-          select.append(item);
-        });
-        select.value = this.config.devices[kind];
-        select.title = select.value;
-        select.addEventListener("change", () => { select.title = select.value; });
-        row.append(select);
-      }
-      grid.append(row);
-    });
-  }
-
   private render() {
     const design = this.design;
     const errors = design?.diagnostics.filter(item => item.severity === "error").length ?? 0;
     const warnings = design?.diagnostics.filter(item => item.severity === "warning").length ?? 0;
     if (this.statusEl) {
       this.statusEl.textContent = !design
-        ? "Netlist is not ready."
+        ? t("netlist.notReady", "Netlist is not ready.")
         : errors > 0
-          ? `Generated · ${errors} error${errors === 1 ? "" : "s"}`
+          ? uiFormat("netlist.generatedErrors", `Generated · {count} error${errors === 1 ? "" : "s"}`, { count: String(errors) })
           : warnings > 0
-            ? `Ready · ${warnings} warning${warnings === 1 ? "" : "s"}`
-            : `Ready · ${design.instances.length} instance${design.instances.length === 1 ? "" : "s"}`;
+            ? uiFormat("netlist.readyWarnings", `Ready · {count} warning${warnings === 1 ? "" : "s"}`, { count: String(warnings) })
+            : uiFormat("netlist.readyInstances", `Ready · {count} instance${design.instances.length === 1 ? "" : "s"}`, { count: String(design.instances.length) });
       this.statusEl.dataset.state = !design ? "blocked" : errors > 0 ? "error" : warnings > 0 ? "warning" : "ready";
     }
     if (this.copyButton) this.copyButton.disabled = !design;
@@ -192,7 +103,7 @@ export class NetlistPanelController {
     const document = code.ownerDocument;
     code.replaceChildren();
     if (!this.design) {
-      code.textContent = "Waiting for a schematic.";
+      code.textContent = t("netlist.waiting", "Waiting for a schematic.");
       return;
     }
     const text = printNetlist(this.design, this.format);
@@ -224,8 +135,12 @@ export class NetlistPanelController {
     const errors = diagnostics.filter(item => item.severity === "error").length;
     const warnings = diagnostics.filter(item => item.severity === "warning").length;
     summary.textContent = diagnostics.length
-      ? `Diagnostics · ${errors} error${errors === 1 ? "" : "s"} · ${warnings} warning${warnings === 1 ? "" : "s"}`
-      : "Diagnostics · none";
+      ? uiFormat(
+        "netlist.diagnosticCounts",
+        `Diagnostics · {errors} error${errors === 1 ? "" : "s"} · {warnings} warning${warnings === 1 ? "" : "s"}`,
+        { errors: String(errors), warnings: String(warnings) }
+      )
+      : t("netlist.noDiagnostics", "Diagnostics · none");
     summary.dataset.state = errors > 0 ? "error" : warnings > 0 ? "warning" : "ready";
     const document = list.ownerDocument;
     list.replaceChildren();
@@ -246,14 +161,14 @@ export class NetlistPanelController {
     head.className = "netlist-diagnostic-head";
     const severity = document.createElement("span");
     severity.className = "netlist-diagnostic-severity";
-    severity.textContent = diagnostic.severity.toUpperCase();
+    severity.textContent = diagnostic.severity === "error" ? t("log.error", "ERROR") : t("log.warn", "WARNING");
     const code = document.createElement("span");
     code.className = "netlist-diagnostic-code";
     code.textContent = diagnostic.code;
     head.append(severity, code);
     const message = document.createElement("span");
     message.className = "netlist-diagnostic-message";
-    message.textContent = diagnostic.message;
+    message.textContent = localizeNetlistDiagnostic(diagnostic.message);
     row.append(head, message);
     return row;
   }

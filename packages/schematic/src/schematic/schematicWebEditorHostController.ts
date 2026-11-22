@@ -153,7 +153,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     this.analysis = analysis;
     this.contextMenu = contextMenu;
     this.documentHost = documentHost;
-    this.unbindOptions = bindSchematicWebOptions(mounts.shellEl);
+    this.unbindOptions = bindSchematicWebOptions(mounts.shellEl, () => editor.hostRefreshLanguage());
   }
 
   init() {

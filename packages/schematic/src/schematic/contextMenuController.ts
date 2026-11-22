@@ -16,6 +16,7 @@ import {
   type SchematicContextMenuScope,
   type SchematicCopyFormat
 } from "./contextMenuModel";
+import { t } from "./schematicI18n";
 
 export type SchematicSelectionExportFormat = SchematicCopyFormat;
 
@@ -71,13 +72,21 @@ export class SchematicContextMenuController {
       button.hidden = hidden;
       button.style.display = hidden ? "none" : "";
     });
+    schematicContextMenuActions("selection").forEach(action => {
+      if (action.kind !== "copy") return;
+      const button = this.element.querySelector(`[data-copy-export="${action.format}"]`);
+      if (button) button.textContent = t(`menu.${action.format}`, action.label);
+    });
     const paste = this.element.querySelector<HTMLElement>("[data-paste-schematic]");
     if (paste) {
       const hidden = scope !== "blank";
       paste.hidden = hidden;
       paste.style.display = hidden ? "none" : "";
+      paste.textContent = t("menu.paste", SCHEMATIC_PASTE_MENU_LABEL);
     }
-    this.element.setAttribute("aria-label", scope === "blank" ? "Schematic clipboard menu" : "Schematic selection copy menu");
+    this.element.setAttribute("aria-label", scope === "blank"
+      ? t("menu.clipboard", "Schematic clipboard menu")
+      : t("menu.selection", "Schematic selection copy menu"));
     this.element.hidden = false;
     this.element.style.removeProperty("left");
     this.element.style.removeProperty("top");

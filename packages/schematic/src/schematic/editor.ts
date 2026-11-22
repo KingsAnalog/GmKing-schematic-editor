@@ -13,6 +13,7 @@ import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog, type LogEntry } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
+import { DEFAULT_NETLIST_PROCESS, isDeviceKind, isNetlistModelText, isProcessId, NETLIST_MODEL_VALUE_KEY, processProfile, type ProcessId } from "./netlist/profiles";
 import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
 import { createCircleGeometry } from "./circleComponentModel";
 import { LIBRARY_PATH_MAX_POINTS } from "./libraryPathPoints";
@@ -20,7 +21,8 @@ import { createPolygonGeometry } from "./polygonComponentModel";
 import { quadraticArcSymbol } from "./symbols/arcSymbols";
 import { createPolylineGeometry } from "./polylineComponentModel";
 import { isLibraryShapeType, isVertexLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
-import { t } from "./schematicI18n";
+import { componentName, t, uiFormat } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
 import { getComponentDef } from "./catalog";
 import { RECTANGLE_RESIZE_HANDLE_SELECTORS } from "./componentRenderer";
 import {
@@ -31,7 +33,7 @@ import {
   TRIANGLE_VERTICES,
   triangleVertexKey
 } from "./triangleComponentModel";
-import { defaultSchematicLayer, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
+import { DEFAULT_LAYER_ID, defaultSchematicLayer, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
 import {
   buildSchematicLayerObjectTree,
   layerObjectStackIds,
@@ -1152,6 +1154,8 @@ export class SchematicEditor implements SchematicHostedEditor {
             this.noteLayer.resizeNoteToContent(note, noteFontSizePx(note));
           });
         });
+      } else if (select.hasAttribute("data-netlist-process") && isProcessId(value)) {
+        this.changeNetlistProcess(value);
       } else if (select.hasAttribute("data-property-text-font") && (value === "" || isSchematicTextFont(value))) {
         const target = this.selectedTextObject();
         if (!target || select.dataset.propertyTextFont !== target.kind || value === (target.object.fontFamily ?? "")) return;
@@ -1192,6 +1196,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.toolbarController?.bind();
     this.propertyPanelController.bind();
     this.bindMosParamEvents();
+    this.bindDeviceModelEvents();
     this.bindLayerEvents();
     this.bindLayerAssignmentEvents();
   }
@@ -1297,8 +1302,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       applyNormalizedDocumentWires(this.document);
       this.renderDocument();
       this.commitCurrentContent("assign-layer", "editor");
-      this.setStatus(t("layer.moved", "Moved {count} object(s) to {name}.")
-        .replace("{count}", String(plan.ids.size)).replace("{name}", () => plan.target.name));
+      this.setStatus(`Moved ${plan.ids.size} object(s) to ${plan.target.name}.`);
     }, { signal });
   }
 
@@ -1327,10 +1331,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     const instructions = {
       rectangle: "Rectangle: click the first grid point, then drag or click the opposite point. Esc cancels.",
       triangle: "Triangle: click three grid points. Esc cancels.",
-      polyline: t("polyline.draw", "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels."),
-      arc: t("arc.firstPoint", "Arc: click the left endpoint."),
-      circle: t("circle.drawCenter", "Circle: click a grid point to set the center."),
-      polygon: t("polygon.draw", "Polygon: add vertices, then click the first point, press Enter, or choose Finish polygon. Esc cancels.")
+      polyline: "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels.",
+      arc: "Arc: click the left endpoint.",
+      circle: "Circle: click a grid point to set the center.",
+      polygon: "Polygon: add vertices, then click the first point, press Enter, or choose Finish polygon. Esc cancels."
     };
     this.setStatus(instructions[kind]);
     this.focusCanvas();
@@ -1362,7 +1366,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         if (draft.points.length === 0) {
           draft.points.push(point);
           this.previewLibraryShapeDraw(point);
-          this.setStatus(t("circle.drawRadius", "Circle: move to preview and click to set the radius."));
+          this.setStatus("Circle: move to preview and click to set the radius.");
         } else {
           this.finishLibraryShapeDraw([draft.points[0], point]);
         }
@@ -1425,7 +1429,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     if (points.length === 1 && pointKey(points[0]) === pointKey(point)) {
-      this.setStatus(t("arc.distinctEndpoints", "Choose a different right endpoint."));
+      this.setStatus("Choose a different right endpoint.");
       return;
     }
     points.push(point);
@@ -1433,8 +1437,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     const preview = points.length === 1 ? point : { x: (start.x + point.x) / 2, y: (start.y + point.y) / 2 };
     this.previewLibraryShapeDraw(preview);
     this.setStatus(points.length === 1
-      ? t("arc.secondPoint", "Arc: click the right endpoint.")
-      : t("arc.throughPoint", "Arc: click the third point on the curve."));
+      ? "Arc: click the right endpoint."
+      : "Arc: click the third point on the curve.");
   }
 
   private ensureShapeFinishButton() {
@@ -1590,10 +1594,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     const geometry = isVertexLibraryShapeType(kind) ? VERTEX_SHAPE_GEOMETRY[kind](points) : null;
     if (isVertexLibraryShapeType(kind) && !geometry) {
       const invalid = {
-        arc: t("arc.invalid", "Choose a third point within the supported drawing area."),
-        circle: t("circle.invalidRadius", "Choose a different radius point within the supported dimensions."),
-        polygon: t("polygon.invalid", "Choose at least three non-collinear vertices within the supported dimensions."),
-        polyline: t("polyline.outOfRange", "Polyline exceeds the supported dimensions.")
+        arc: "Choose a third point within the supported drawing area.",
+        circle: "Choose a different radius point within the supported dimensions.",
+        polygon: "Choose at least three non-collinear vertices within the supported dimensions.",
+        polyline: "Polyline exceeds the supported dimensions."
       };
       this.setStatus(invalid[kind]);
       return;
@@ -1650,10 +1654,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     const created = {
       rectangle: "Rectangle created.",
       triangle: "Triangle created.",
-      polyline: t("polyline.created", "Polyline created."),
-      arc: t("arc.created", "Arc created."),
-      circle: t("circle.created", "Circle created. Drag the handles to resize it into an ellipse."),
-      polygon: t("polygon.created", "Polygon created.")
+      polyline: "Polyline created.",
+      arc: "Arc created.",
+      circle: "Circle created. Drag the handles to resize it into an ellipse.",
+      polygon: "Polygon created."
     };
     this.setStatus(created[kind]);
   }
@@ -1662,7 +1666,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const layers = this.layers();
     const layer: SchematicLayer = {
       id: nextLayerId(layers),
-      name: `Layer ${layers.length + 1}`,
+      name: uiFormat("layer.numbered", "Layer {number}", { number: String(layers.length + 1) }),
       visible: true,
       locked: false
     };
@@ -1762,40 +1766,43 @@ export class SchematicEditor implements SchematicHostedEditor {
     list.replaceChildren();
     groups.forEach((group) => {
       const { layer } = group;
+      const displayName = this.layerDisplayName(layer);
       const container = doc.createElement("section");
       container.className = "layer-stack-group";
       container.dataset.layerId = layer.id;
       const row = doc.createElement("div");
       row.className = "layer-stack-row";
       row.classList.toggle("is-active", layer.id === this.activeLayerId);
-      row.append(this.createLayerTreeToggle(doc, `layer:${layer.id}`, `Toggle ${layer.name} objects`));
+      row.append(this.createLayerTreeToggle(doc, `layer:${layer.id}`, uiFormat("layer.toggleObjects", "Toggle {name} objects", { name: displayName })));
       const visible = doc.createElement("input");
       visible.type = "checkbox";
       visible.checked = layer.visible;
       visible.dataset.layerVisible = layer.id;
-      visible.title = "Visible";
+      visible.title = t("layer.visible", "Visible");
+      visible.ariaLabel = visible.title;
       const lock = doc.createElement("input");
       lock.type = "checkbox";
       lock.checked = layer.locked;
       lock.dataset.layerLock = layer.id;
-      lock.title = "Locked";
+      lock.title = t("layer.locked", "Locked");
+      lock.ariaLabel = lock.title;
       const select = doc.createElement("button");
       select.type = "button";
       select.className = "layer-select";
       select.dataset.layerSelect = layer.id;
       select.dataset.layerName = layer.name;
-      select.textContent = `${layer.name} (${group.objectCount})`;
-      select.title = layer.name;
+      select.textContent = `${displayName} (${group.objectCount})`;
+      select.title = displayName;
       const up = doc.createElement("button");
       up.type = "button";
       up.textContent = "↑";
       up.dataset.layerUp = layer.id;
-      up.title = "Raise layer";
+      up.title = t("layer.raise", "Raise layer");
       const down = doc.createElement("button");
       down.type = "button";
       down.textContent = "↓";
       down.dataset.layerDown = layer.id;
-      down.title = "Lower layer";
+      down.title = t("layer.lower", "Lower layer");
       row.append(visible, lock, select, up, down);
       container.append(row);
       if (!this.layerTreeCollapseState().has(`layer:${layer.id}`)) {
@@ -1805,7 +1812,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         if (group.objects.length === 0) {
           const empty = doc.createElement("div");
           empty.className = "layer-object-empty";
-          empty.textContent = "No objects";
+          empty.textContent = localizeSchematicStatus("No objects");
           objects.append(empty);
         } else {
           group.objects.forEach((object, index) => objects.append(
@@ -1852,8 +1859,9 @@ export class SchematicEditor implements SchematicHostedEditor {
     row.dataset.layerObjectId = node.id;
     row.classList.toggle("is-temporarily-deleted", node.temporarilyDeleted);
     row.classList.toggle("is-object-hidden", !parentVisible || !node.visible);
+    const label = this.layerObjectLabel(node);
     if (node.children.length > 0) {
-      row.append(this.createLayerTreeToggle(doc, node.id, `Toggle ${node.label} pins`));
+      row.append(this.createLayerTreeToggle(doc, node.id, uiFormat("layer.togglePins", "Toggle {name} pins", { name: label })));
     } else {
       const spacer = doc.createElement("span");
       spacer.className = "layer-tree-leaf";
@@ -1867,7 +1875,9 @@ export class SchematicEditor implements SchematicHostedEditor {
     visible.checked = node.visible;
     visible.dataset.layerObjectVisible = node.id;
     visible.disabled = layer.locked || !node.visibilityEditable;
-    visible.title = node.visibilityEditable ? `${node.visible ? "Hide" : "Show"} ${node.label}` : "Pin visibility is fixed";
+    visible.title = node.visibilityEditable
+      ? uiFormat(node.visible ? "layer.hideObject" : "layer.showObject", node.visible ? "Hide {name}" : "Show {name}", { name: label })
+      : t("layer.pinFixed", "Pin visibility is fixed");
     visible.setAttribute("aria-label", visible.title);
 
     const select = doc.createElement("button");
@@ -1878,27 +1888,27 @@ export class SchematicEditor implements SchematicHostedEditor {
     select.dataset.layerObjectTargetType = node.targetType;
     select.disabled = layer.locked || !node.displayed || !parentVisible || !node.visible;
     select.title = !layer.visible
-      ? "Layer is hidden"
+      ? t("layer.hiddenHint", "Layer is hidden")
       : layer.locked
-        ? "Layer is locked"
+        ? t("layer.lockedHint", "Layer is locked")
         : !parentVisible || !node.visible
-          ? "Object is hidden"
-          : node.label;
-    select.textContent = node.label;
+          ? t("layer.objectHidden", "Object is hidden")
+          : label;
+    select.textContent = label;
 
     const up = doc.createElement("button");
     up.type = "button";
     up.textContent = "↑";
     up.dataset.layerObjectUp = node.id;
     up.disabled = layer.locked || !node.reorderable || index <= 0;
-    up.title = node.reorderable ? `Raise ${node.label}` : "Pins cannot be reordered";
+    up.title = node.reorderable ? uiFormat("layer.raiseObject", "Raise {name}", { name: label }) : t("layer.pinOrder", "Pins cannot be reordered");
     up.setAttribute("aria-label", up.title);
     const down = doc.createElement("button");
     down.type = "button";
     down.textContent = "↓";
     down.dataset.layerObjectDown = node.id;
     down.disabled = layer.locked || !node.reorderable || index >= count - 1;
-    down.title = node.reorderable ? `Lower ${node.label}` : "Pins cannot be reordered";
+    down.title = node.reorderable ? uiFormat("layer.lowerObject", "Lower {name}", { name: label }) : t("layer.pinOrder", "Pins cannot be reordered");
     down.setAttribute("aria-label", down.title);
 
     row.append(visible, select, up, down);
@@ -1965,7 +1975,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const options = groups.map(({ layer }) => {
       const suffix = layer.locked ? t("layer.lockedSuffix", " (locked)")
         : layer.visible ? "" : t("layer.hiddenSuffix", " (hidden)");
-      return createOption(layer.id, layer.name + suffix, layer.locked);
+      return createOption(layer.id, this.layerDisplayName(layer) + suffix, layer.locked);
     });
     if (mixed) options.unshift(createOption("", t("layer.mixed", "Multiple layers"), true));
     select.replaceChildren(...options);
@@ -1978,7 +1988,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const layers = this.layers();
     const layer = layers.find(candidate => candidate.id === this.activeLayerId) ?? defaultSchematicLayer(layers);
     if (layer.locked) {
-      this.setStatus(t("layer.placementLocked", "The active layer is locked. Unlock it or select another layer."));
+      this.setStatus("The active layer is locked. Unlock it or select another layer.");
       return null;
     }
     this.activeLayerId = layer.id;
@@ -2044,6 +2054,101 @@ export class SchematicEditor implements SchematicHostedEditor {
       if (!force && this.host.ownerDocument.activeElement === input) return;
       input.value = component.values[`mos:${parameter}`] ?? "";
     });
+  }
+
+  private changeNetlistProcess(process: ProcessId) {
+    const previous = this.document.netlistProcess;
+    if (process === (previous ?? DEFAULT_NETLIST_PROCESS)) return;
+    this.hostFinishActiveEdits();
+    this.document.netlistProcess = process === DEFAULT_NETLIST_PROCESS ? undefined : process;
+    if (!this.commitCurrentContent("netlist-process")) this.document.netlistProcess = previous;
+    this.syncToolUi();
+  }
+
+  private bindDeviceModelEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    root.addEventListener("change", event => {
+      const control = (event.target as Element | null)?.closest<HTMLInputElement | HTMLSelectElement>(
+        "[data-property-model-select], [data-property-model-input]"
+      );
+      if (control) this.commitDeviceModel(control);
+    }, { signal });
+    root.addEventListener("keydown", event => {
+      const input = (event.target as Element | null)?.closest<HTMLInputElement>("[data-property-model-input]");
+      if (!input || (event.key !== "Enter" && event.key !== "Escape")) return;
+      event.preventDefault();
+      if (event.key === "Enter") this.commitDeviceModel(input);
+      else this.syncDeviceModel(true);
+      input.blur();
+    }, { signal });
+  }
+
+  private selectedModelDevice() {
+    if (!this.netlistPanel || this.transientToolSession.mode !== "select") return null;
+    const component = this.selectedSingleComponent();
+    if (!component || !isDeviceKind(component.type) || this.graphAdapter.getCell(component.id)?.get("layerLocked")) return null;
+    return { component, kind: component.type };
+  }
+
+  private commitDeviceModel(control: HTMLInputElement | HTMLSelectElement) {
+    const selected = this.selectedModelDevice();
+    if (!selected || control.dataset.componentId !== selected.component.id || control.hidden) return;
+    const { component } = selected;
+    const key = NETLIST_MODEL_VALUE_KEY;
+    const previous = component.values[key] ?? "";
+    const model = control.value.trim();
+    if (model !== previous && isNetlistModelText(model)) {
+      if (model) component.values[key] = model;
+      else delete component.values[key];
+      if (!this.commitCurrentContent("device-model")) {
+        if (previous) component.values[key] = previous;
+        else delete component.values[key];
+      }
+      this.syncToolUi();
+    }
+    this.syncDeviceModel(true);
+  }
+
+  private syncDeviceModel(force = false) {
+    const selected = this.selectedModelDevice();
+    const profile = processProfile(this.document.netlistProcess ?? DEFAULT_NETLIST_PROCESS);
+    const rows = this.options.propertyEl.querySelectorAll<HTMLElement>("[data-property-device-model]");
+    for (const row of rows) {
+      const section = selected && (["resistor", "capacitor", "inductor"].includes(selected.kind) ? "passive" : "transistor");
+      row.hidden = row.dataset.propertyDeviceModel !== section;
+      if (!selected || row.hidden) continue;
+      const { component, kind } = selected;
+      const model = component.values[NETLIST_MODEL_VALUE_KEY] ?? "";
+      const defaultModel = profile.defaults[kind];
+      const select = row.querySelector<HTMLSelectElement>("[data-property-model-select]")!;
+      const input = row.querySelector<HTMLInputElement>("[data-property-model-input]")!;
+      const custom = profile.id === "custom";
+      select.hidden = custom;
+      input.hidden = !custom;
+      if (custom) {
+        if (force || input.dataset.componentId !== component.id || this.host.ownerDocument.activeElement !== input) input.value = model;
+        input.dataset.componentId = component.id;
+        input.placeholder = defaultModel;
+      } else {
+        const caption = uiFormat("parameter.processDefaultModel", "Process default ({name})", { name: defaultModel });
+        const choices = [...new Set([...profile.options[kind], ...(model ? [model] : [])])];
+        const options = [["", caption], ...choices.map(name => [name, name])];
+        if (select.options.length !== options.length || options.some(
+          ([value, label], index) => select.options[index].value !== value || select.options[index].text !== label
+        )) {
+          select.replaceChildren(...options.map(([value, label]) => {
+            const option = select.ownerDocument.createElement("option");
+            option.value = value;
+            option.text = label;
+            return option;
+          }));
+        }
+        select.dataset.componentId = component.id;
+        select.value = model;
+        select.title = model || caption;
+      }
+    }
   }
 
   private bindGlobalDocumentWindowInteractions() {
@@ -2781,7 +2886,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.document.connections,
       this.document.symbolTemplate
     );
-    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile(captureCopyLayers(source, this.document)) : null;
+    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile({
+      ...captureCopyLayers(source, this.document),
+      netlistProcess: this.document.netlistProcess
+    }) : null;
   }
 
   private contextTargetFromEvent(event: MouseEvent): SchematicContextTarget | null {
@@ -3218,7 +3326,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.consumeHistoryIntent(result);
     if (layer.visible) this.beginNoteEditing(noteId);
     this.setStatus(layer.visible ? result.status
-      : t("layer.noteCreatedHidden", "Note created on a hidden layer. Show the layer to edit it."));
+      : "Note created on a hidden layer. Show the layer to edit it.");
   }
 
   private nextComponentRef(type: ComponentType) {
@@ -3745,6 +3853,17 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   hostSetStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
     this.setStatus(message, undefined, log);
+  }
+
+  hostRefreshLanguage() {
+    this.renderPalette();
+    this.renderLayersPanel();
+    this.instanceBrowser.refresh();
+    this.analysisController.refreshLanguage?.();
+    this.eventLog.refreshLanguage();
+    this.netlistPanel?.refreshLanguage();
+    this.renderSelectionSummary(this.netResolutionCache);
+    if (this.options.statusEl) this.options.statusEl.textContent = localizeSchematicStatus(this.statusMessage);
   }
 
   hostPrepareAnalysisNetPick() {
@@ -4848,6 +4967,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (wireCrossings) wireCrossings.value = this.document.display?.wireCrossings ?? "plain";
     const textFont = this.options.shellEl.querySelector<HTMLSelectElement>("[data-schematic-text-font]");
     if (textFont) textFont.value = this.document.display?.textFont ?? "sans";
+    const process = this.options.shellEl.querySelector<HTMLSelectElement>("[data-netlist-process]");
+    if (process) process.value = this.document.netlistProcess ?? DEFAULT_NETLIST_PROCESS;
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
     this.options.paperEl.classList.toggle(
       "is-coupling-pick-mode",
@@ -4903,6 +5024,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       select.value = !row.hidden ? textObject?.object.fontFamily ?? "" : "";
     }
     this.syncMosParams();
+    this.syncDeviceModel();
     this.syncLayerAssignment();
     this.syncLayerObjectSelection();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
@@ -4996,13 +5118,29 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.emitStateChange();
   }
 
+  private layerDisplayName(layer: SchematicLayer) {
+    if (layer.id === DEFAULT_LAYER_ID && layer.name === "Layer 1") {
+      return uiFormat("layer.numbered", "Layer {number}", { number: "1" });
+    }
+    return layer.name;
+  }
+
+  private layerObjectLabel(node: SchematicLayerObjectNode) {
+    if (node.componentCaption) {
+      const { type, label, ref } = node.componentCaption;
+      return `${componentName(type, label)} ${ref}`;
+    }
+    const prefix = node.kind === "coupling" ? "Inductor coupling" : node.label.split(" ", 1)[0];
+    return uiFormat(`layer.object.${node.kind}`, `${prefix} {name}`, { name: node.label.slice(prefix.length + 1) });
+  }
+
   private writeStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
     this.statusMessage = message;
     if (message && (log || message !== this.lastLoggedStatus)) {
       this.lastLoggedStatus = message;
       this.eventLog?.log(log?.level ?? "info", log?.source ?? "status", message);
     }
-    if (this.options.statusEl) this.options.statusEl.textContent = message;
+    if (this.options.statusEl) this.options.statusEl.textContent = localizeSchematicStatus(message);
     this.hostBridge.onStatusChange?.(message);
   }
 }

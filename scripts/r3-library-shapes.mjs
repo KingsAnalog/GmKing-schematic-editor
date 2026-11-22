@@ -22,6 +22,16 @@ async function clickPoint(x, y) {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
 
+async function chooseLanguage(value) {
+  await clickSelector(page, "[data-schematic-open-options]");
+  await evaluate(page, value => {
+    const select = document.querySelector("[data-schematic-language-select]");
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+  await clickSelector(page, "[data-schematic-options-close]");
+}
+
 async function readSnapMarker() {
   return evaluate(page, () => {
     const marker = document.querySelector(".schematic-shape-draft-grid-point");
@@ -71,7 +81,9 @@ try {
   await navigate(page, server.url);
   await waitFor(page, () => Boolean(document.querySelector("[data-schematic-paper] svg")), "editor did not mount");
 
+  await chooseLanguage("zh");
   await evaluate(page, () => document.querySelector("[data-library-item='rectangle']")?.click());
+  await waitFor(page, () => document.querySelector("[data-schematic-status]").textContent.startsWith("矩形："), "rectangle drawing instructions were not localized");
   await waitFor(page, () => document.querySelector(".schematic-shape-draft")?.hasAttribute("hidden") === false, "rectangle draw mode did not start");
   const rectangleStart = await assertInitialSnapMarker("rectangle");
   await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x: rectangleStart.x, y: rectangleStart.y, button: "left", clickCount: 1 });
@@ -88,6 +100,31 @@ try {
   }
   await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rectangleStart.x + 30, y: rectangleStart.y + 40, button: "left", clickCount: 1 });
   await waitFor(page, () => document.querySelectorAll("[model-id]").length === 1, "rectangle was not created");
+  await waitFor(page, () => document.querySelector("[data-schematic-status]").textContent === "已创建矩形。", "rectangle status was not localized");
+  await clickSelector(page, "[data-log-toggle]");
+  const chineseLog = await evaluate(page, () => {
+    const search = document.querySelector("[data-log-search]");
+    search.value = "已创建矩形";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    const visible = Array.from(document.querySelectorAll(".schematic-log-message"), row => row.textContent);
+    const execCommand = document.execCommand;
+    let copiedLog;
+    document.execCommand = () => { copiedLog = document.activeElement.value; return true; };
+    try {
+      document.querySelector("[data-log-copy]").click();
+    } finally {
+      document.execCommand = execCommand;
+    }
+    search.value = "";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    return { visible, copiedLog };
+  });
+  if (chineseLog.visible.join("") !== "已创建矩形。" || !chineseLog.copiedLog?.includes("已创建矩形。")) {
+    throw new Error("localized rectangle log was missing from search or copy: " + JSON.stringify(chineseLog));
+  }
+  await chooseLanguage("en");
+  await waitFor(page, () => Array.from(document.querySelectorAll(".schematic-log-message")).some(row => row.textContent === "Rectangle created."), "existing rectangle log did not switch to English");
+  await clickSelector(page, "[data-log-close]");
   const rectangle = await evaluate(page, () => {
     const cell = document.querySelector("[model-id]");
     const visiblePaths = [...(cell?.querySelectorAll("path") ?? [])].filter((path) => {
@@ -313,6 +350,11 @@ try {
   }
   await clickPoint(triangleThirdPoint.x, triangleThirdPoint.y);
   await waitFor(page, () => document.querySelectorAll("[model-id]").length === 2, "triangle was not created");
+  await chooseLanguage("zh");
+  await clickSelector(page, "[data-log-toggle]");
+  await waitFor(page, () => Array.from(document.querySelectorAll(".schematic-log-message")).some(row => row.textContent === "已创建三角形。"), "existing triangle log did not switch to Chinese");
+  await clickSelector(page, "[data-log-close]");
+  await chooseLanguage("en");
   const triangle = await evaluate(page, () => {
     const cells = [...document.querySelectorAll("[model-id]")];
     const cell = cells[cells.length - 1];

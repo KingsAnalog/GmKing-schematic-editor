@@ -1,26 +1,99 @@
+import { SCHEMATIC_UI_ZH } from "./schematicUiZh";
+import { COMPONENT_NAMES_ZH, PARAMETER_LABELS_ZH } from "./schematicLabelsZh";
+
 export type SchematicLanguage = "zh" | "en";
 
 const ZH: Record<string, string> = {
+  ...SCHEMATIC_UI_ZH,
   "options.title": "选项",
   "options.close": "关闭",
   "options.symbolTemplate": "符号模板",
   "options.templatePending": "{name}（未就绪）",
-  "options.language": "语言",
   "options.colorMode": "颜色模式",
-  "options.systemPending": "跟随系统（未就绪）",
+  "options.system": "跟随系统",
   "options.light": "亮色",
-  "options.darkPending": "暗色（未就绪）",
+  "options.dark": "暗色",
   "options.wireCrossings": "导线交叉",
   "options.crossingPlain": "直线交叉",
   "options.crossingHop": "跨线桥",
   "options.defaultTextFont": "默认文字字体",
-  "options.chinesePending": "中文（未就绪）",
   "options.english": "English",
   "textFont.label": "字体",
   "textFont.inherit": "文档默认",
   "textFont.sans": "无衬线",
   "textFont.serif": "衬线",
   "textFont.mono": "等宽",
+  "parameter.componentCaption": "元件{label}",
+  "parameter.deviceModel": "器件模型",
+  "parameter.processDefaultModel": "工艺默认（{name}）",
+  "parameter.pinVisibility": "显示 {pin} 引脚",
+  "parameter.pinRole": "{pin} 引脚角色",
+  "parameter.pinSymbol": "显示 {pin} 引脚角色符号",
+  "library.template": "模板",
+  "browser.close": "关闭器件浏览器",
+  "netlist.notReady": "网表尚未生成。",
+  "netlist.waiting": "等待原理图。",
+  "netlist.generatedErrors": "已生成 · {count} 个错误",
+  "netlist.readyWarnings": "就绪 · {count} 个警告",
+  "netlist.readyInstances": "就绪 · {count} 个实例",
+  "netlist.diagnosticCounts": "诊断 · {errors} 个错误 · {warnings} 个警告",
+  "netlist.noDiagnostics": "诊断 · 无",
+  "analysis.computeLabel": "计算 H(s)、ZIN(s)、Zout(s)",
+  "analysis.computing": "计算中…",
+  "analysis.noDiagnostics": "无网表诊断信息。",
+  "analysis.selectNet": "选择网络",
+  "analysis.solving": "正在求解符号 MNA 方程…",
+  "document.closeTab": "关闭 {name}",
+  "document.renameTab": "重命名 {name}",
+  "layer.numbered": "图层 {number}",
+  "note.region": "原理图注释",
+  "note.item": "注释",
+  "note.edit": "编辑注释",
+  "note.editSource": "编辑注释源码",
+  "note.markdown": "Markdown 注释",
+  "note.resize": "调整注释宽度",
+  "note.emptyFormula": "空公式",
+  "note.editBlockFormula": "编辑独立公式",
+  "note.editInlineFormula": "编辑行内公式",
+  "note.taskStatus": "任务状态",
+  "layer.toggleObjects": "展开或收起 {name} 中的对象",
+  "layer.togglePins": "展开或收起 {name} 的引脚",
+  "layer.visible": "可见",
+  "layer.locked": "锁定",
+  "layer.raise": "上移图层",
+  "layer.lower": "下移图层",
+  "layer.hideObject": "隐藏 {name}",
+  "layer.showObject": "显示 {name}",
+  "layer.raiseObject": "上移 {name}",
+  "layer.lowerObject": "下移 {name}",
+  "layer.hiddenHint": "图层已隐藏",
+  "layer.lockedHint": "图层已锁定",
+  "layer.objectHidden": "对象已隐藏",
+  "layer.pinFixed": "引脚可见性固定",
+  "layer.pinOrder": "引脚无法调整层序",
+  "layer.object.wire": "导线 {name}",
+  "layer.object.junction": "连接点 {name}",
+  "layer.object.pin": "引脚 {name}",
+  "layer.object.label": "标签 {name}",
+  "layer.object.note": "注释 {name}",
+  "layer.object.coupling": "电感耦合 {name}",
+  "color.default": "使用黑色（默认）{target}颜色",
+  "color.set": "设置{target}颜色：{color}",
+  "color.noteText": "设置注释文字颜色：{color}",
+  "color.noteFill": "设置注释填充：{color}",
+  "color.custom.network": "自定义导线或连接点颜色",
+  "color.custom.component": "自定义符号颜色",
+  "color.custom.coupling": "自定义耦合颜色",
+  "menu.clipboard": "原理图剪贴板菜单",
+  "menu.selection": "原理图选区菜单",
+  "menu.paste": "粘贴原理图",
+  "menu.svg": "复制为 SVG",
+  "menu.png": "复制为 PNG",
+  "menu.netlist": "复制为网表",
+  "menu.json": "复制为 JSON",
+  "log.source.status": "状态",
+  "log.source.command": "命令",
+  "log.source.import": "导入",
   "toolbar.help": "帮助（在新标签页打开）",
   "toolbar.instance": "元件",
   "toolbar.wire": "导线",
@@ -36,6 +109,7 @@ const ZH: Record<string, string> = {
   "toolbar.reset": "重置",
   "toolbar.undo": "撤销",
   "toolbar.redo": "重做",
+  "toolbar.log": "日志",
   "sidebar.shortcut": "按 i 打开元件浏览器，按 Esc 取消",
   "properties.title": "属性编辑器",
   "properties.empty": "尚未选择对象。",
@@ -52,10 +126,6 @@ const ZH: Record<string, string> = {
   "layer.mixed": "多个图层",
   "layer.hiddenSuffix": "（隐藏）",
   "layer.lockedSuffix": "（锁定）",
-  "layer.moved": "已将 {count} 个对象移到「{name}」。",
-  "layer.copyLocked": "目标图层已锁定。请先解锁再放置副本。",
-  "layer.placementLocked": "当前活动图层已锁定。请先解锁或选择其他图层。",
-  "layer.noteCreatedHidden": "注释已创建在隐藏图层。显示该图层后可编辑注释。",
   "sidebar.library": "器件库",
   "sidebar.properties": "属性",
   "sidebar.layers": "图层",
@@ -105,36 +175,16 @@ const ZH: Record<string, string> = {
   "library.shapes": "图形",
   "library.openShape": "开放图形",
   "library.closedShape": "闭合图形",
-  "circle.drawCenter": "圆形：点击网格点设置圆心。",
-  "circle.drawRadius": "圆形：移动指针预览，点击设置半径。",
-  "circle.invalidRadius": "请选择不同的半径点，并使圆形保持在支持的尺寸范围内。",
-  "circle.created": "已创建圆形。拖动四个手柄可调整为椭圆。",
-  "circle.reshaped": "已调整椭圆。",
   "circle.dragTop": "从上方调整尺寸",
   "circle.dragRight": "从右侧调整尺寸",
   "circle.dragBottom": "从下方调整尺寸",
   "circle.dragLeft": "从左侧调整尺寸",
-  "polygon.draw": "多边形：点击添加顶点，点击起点、按 Enter 或点击完成闭合。按 Esc 取消。",
   "polygon.finish": "完成多边形",
-  "polygon.invalid": "请绘制至少三个不共线的顶点，并使多边形保持在支持的尺寸范围内。",
-  "polygon.created": "已创建多边形。",
-  "polygon.reshaped": "已调整多边形。",
-  "arc.firstPoint": "弧形：点击左端点。",
-  "arc.secondPoint": "弧形：点击右端点。",
-  "arc.throughPoint": "弧形：点击曲线经过的第三点。",
-  "arc.distinctEndpoints": "请选择不同的右端点。",
-  "arc.invalid": "请在支持的绘图范围内选择第三点。",
-  "arc.created": "已创建弧形。",
-  "arc.reshaped": "已调整弧形。",
   "arc.dragStart": "拖动起点",
   "arc.dragEnd": "拖动终点",
   "arc.dragThrough": "拖动弧上点",
-  "polyline.draw": "折线：点击添加顶点，按 Enter 或点击完成，按 Esc 取消。",
   "polyline.finish": "完成折线",
-  "polyline.created": "已创建折线。",
-  "polyline.reshaped": "已调整折线。",
   "polyline.vertex": "拖动顶点",
-  "polyline.outOfRange": "折线超出允许的尺寸。",
   "polyline.startArrow": "起点箭头",
   "polyline.endArrow": "终点箭头",
   "polyline.startArrowSize": "起点箭头大小",
@@ -157,7 +207,7 @@ const ZH: Record<string, string> = {
 
 /** Hosts that expose a language switch (for example the site) publish AT_LANG. */
 export function schematicLanguage(): SchematicLanguage {
-  const preference = globalThis.document?.documentElement.dataset.schematicLanguage;
+  const preference = globalThis.document?.documentElement?.dataset.schematicLanguage;
   if (preference === "en" || preference === "zh") return preference;
   const current = (globalThis as { AT_LANG?: { current?: () => unknown } }).AT_LANG?.current?.();
   return current === "zh" ? "zh" : "en";
@@ -168,11 +218,27 @@ export function t(key: string, fallback: string): string {
   return ZH[key] ?? fallback;
 }
 
+export function uiFormat(key: string, fallback: string, values: Readonly<Record<string, string>>) {
+  return messageText(message(key, fallback, values));
+}
+
+export function componentName(type: string, fallback: string, language = schematicLanguage()) {
+  return language === "zh" && Object.hasOwn(COMPONENT_NAMES_ZH, type) ? COMPONENT_NAMES_ZH[type] : fallback;
+}
+
+/** Localizes fixed model captions without translating entered values or identifiers. */
+export function parameterLabel(label: string): string {
+  if (schematicLanguage() !== "zh") return label;
+  const indexed = /^(Time|Voltage) (\d+)$/.exec(label);
+  if (indexed) return `${indexed[1] === "Time" ? "时间" : "电压"} ${indexed[2]}`;
+  return Object.hasOwn(PARAMETER_LABELS_ZH, label) ? PARAMETER_LABELS_ZH[label] : label;
+}
+
 export interface SchematicMessage {
   readonly type: "schematic-message";
   readonly key: string;
   readonly fallback: string;
-  readonly values?: Readonly<Record<string, string>>;
+  readonly values?: Readonly<Record<string, string | SchematicMessage>>;
   readonly suffix?: string;
 }
 
@@ -180,8 +246,16 @@ export function message(key: string, fallback: string, values?: SchematicMessage
   return { type: "schematic-message", key, fallback, values };
 }
 
-export function messageText(value: SchematicMessage) {
-  return t(value.key, value.fallback).replace(/\{(\w+)\}/g, (token, key) => value.values?.[key] ?? token) + (value.suffix ?? "");
+export function messageText(value: SchematicMessage): string {
+  const text = value.key.startsWith("parameterCaption.") ? parameterLabel(value.fallback) : t(value.key, value.fallback);
+  return text.replace(/\{(\w+)\}/g, (token, key) => {
+    const parameter = value.values?.[key];
+    return typeof parameter === "object" ? messageText(parameter) : parameter ?? token;
+  }) + (value.suffix ?? "");
+}
+
+export function parameterMessage(caption: string): SchematicMessage {
+  return message(`parameterCaption.${caption}`, caption);
 }
 
 export function refreshSchematicMessages(root: HTMLElement) {
@@ -194,4 +268,11 @@ export function refreshSchematicMessages(root: HTMLElement) {
       element.setAttribute(attr, messageText(JSON.parse(element.getAttribute(metadata)!)));
     }
   }
+}
+
+export function applySchematicMessage(element: HTMLElement, value: SchematicMessage, attr?: "aria-label" | "title" | "placeholder") {
+  const text = messageText(value);
+  if (attr) element.setAttribute(attr, text);
+  else element.textContent = text;
+  element.setAttribute(attr ? `data-schematic-message-${attr}` : "data-schematic-message", JSON.stringify(value));
 }

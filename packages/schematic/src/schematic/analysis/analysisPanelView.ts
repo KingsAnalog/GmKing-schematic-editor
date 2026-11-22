@@ -1,4 +1,6 @@
 import { typesetMath } from "../../shared/mathjax";
+import { t } from "../schematicI18n";
+import { localizeAnalysisDiagnostic } from "../schematicUiText";
 import type { AnalysisPortSelection, AnalysisResult } from "../types";
 
 const COMPUTE_BUTTON_TEXT = "Compute H(s), ZIN(s), Zout(s)";
@@ -28,9 +30,9 @@ export function setAnalysisBusy(root: HTMLElement, busy: boolean): void {
 }
 
 function renderComputeButton(button: HTMLButtonElement, busy: boolean) {
-  button.setAttribute("aria-label", COMPUTE_BUTTON_TEXT);
+  button.setAttribute("aria-label", t("analysis.computeLabel", COMPUTE_BUTTON_TEXT));
   if (busy) {
-    button.textContent = "Computing...";
+    button.textContent = t("analysis.computing", "Computing...");
     return;
   }
   const document = button.ownerDocument;
@@ -39,9 +41,9 @@ function renderComputeButton(button: HTMLButtonElement, busy: boolean) {
   const outputSubscript = document.createElement("sub");
   outputSubscript.textContent = "out";
   button.replaceChildren(
-    document.createTextNode("Compute H(s), Z"),
+    document.createTextNode(t("ui.computeFormula", "Compute H(s), Z")),
     inputSubscript,
-    document.createTextNode("(s), Z"),
+    document.createTextNode(t("ui.formulaSeparator", "(s), Z")),
     outputSubscript,
     document.createTextNode("(s)")
   );
@@ -51,10 +53,11 @@ export function renderAnalysisDiagnostics(root: HTMLElement, diagnostics: readon
   const target = root.querySelector<HTMLElement>("[data-analysis-diagnostics]");
   if (!target) return;
 
-  const messages = diagnostics.length ? diagnostics : ["No netlist diagnostics."];
+  const messages = diagnostics.length ? diagnostics : [t("analysis.noDiagnostics", "No netlist diagnostics.")];
   const paragraphs = messages.map((diagnostic) => {
     const paragraph = target.ownerDocument.createElement("p");
-    paragraph.textContent = diagnostic;
+    paragraph.textContent = diagnostic === "Solving symbolic MNA equations..."
+      ? t("analysis.solving", diagnostic) : localizeAnalysisDiagnostic(diagnostic);
     return paragraph;
   });
   target.replaceChildren(...paragraphs);
@@ -99,11 +102,13 @@ export function renderAnalysisPortOptions(root: HTMLElement, nets: Iterable<stri
     const optionValues = ["", ...netList];
     if (!analysisPortOptionsMatch(select, optionValues)) {
       const options = [
-        createAnalysisPortOption(select.ownerDocument, "", "Select net"),
+        createAnalysisPortOption(select.ownerDocument, "", t("analysis.selectNet", "Select net")),
         ...netList.map((net) => createAnalysisPortOption(select.ownerDocument, net, net))
       ];
       select.replaceChildren(...options);
     }
+    const placeholder = select.children[0];
+    if (placeholder) placeholder.textContent = t("analysis.selectNet", "Select net");
     const selectedValue = field ? selection[field] : "";
     select.value = selectedValue && selectableNets.has(selectedValue) ? selectedValue : "";
   });

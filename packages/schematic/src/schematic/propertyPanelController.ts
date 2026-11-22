@@ -1,4 +1,6 @@
 import { COMPONENT_SCALES, type ComponentScale } from "./componentScaleModel";
+import { componentName, messageText, parameterLabel, schematicLanguage, uiFormat } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
 import { DEFAULT_NOTE_TEXT_COLOR } from "./notes/noteAppearance";
 import {
   type MosArrowView,
@@ -773,11 +775,11 @@ export class SchematicPropertyPanelController {
     if (network.netName) this.syncReadonlyAggregate(elements.netNameInput, network.netName);
     elements.netLabelRow.hidden = !network.label;
     if (network.label) this.syncTextAggregate(elements.netLabelInput, network.label.name);
-    elements.netMessage.textContent = network.label?.message ?? "";
+    elements.netMessage.textContent = localizeSchematicStatus(network.label?.message ?? "");
     elements.netMessage.hidden = !network.label?.message;
     if (network.color && elements.networkColorRow && elements.networkColorInput) {
       elements.networkColorRow.hidden = false;
-      elements.networkColorInput.ariaLabel = "Ink color";
+      elements.networkColorInput.ariaLabel = parameterLabel("Ink color");
       this.syncColorAggregate(
         elements.networkColorInput,
         elements.networkColorSwatches,
@@ -836,12 +838,12 @@ export class SchematicPropertyPanelController {
     }
     elements.labelToolForm.hidden = false;
     if (elements.labelToolInput.value !== labelTool.value) elements.labelToolInput.value = labelTool.value;
-    elements.labelToolError.textContent = labelTool.error ?? "";
+    elements.labelToolError.textContent = localizeSchematicStatus(labelTool.error ?? "");
     elements.labelToolError.hidden = !labelTool.error;
   }
 
   private syncEmpty(elements: PropertyPanelElements, hasSelection: boolean) {
-    elements.empty.textContent = hasSelection ? "No common editable properties." : "No object selected.";
+    elements.empty.textContent = parameterLabel(hasSelection ? "No common editable properties." : "No object selected.");
     elements.empty.hidden = false;
   }
 
@@ -888,9 +890,7 @@ export class SchematicPropertyPanelController {
         const row = this.root.ownerDocument.createElement("label");
         row.className = "property-row";
         const label = this.root.ownerDocument.createElement("span");
-        label.textContent = field.label;
         const input = this.root.ownerDocument.createElement(field.options ? "select" : "input");
-        input.setAttribute("aria-label", field.label);
         if (field.options) {
           input.dataset.propertyVsourceOption = field.key;
         } else {
@@ -911,6 +911,9 @@ export class SchematicPropertyPanelController {
     const inputs = container.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select");
     fields.forEach((field, index) => {
       const input = inputs[index];
+      const caption = parameterLabel(field.label);
+      input.setAttribute("aria-label", caption);
+      input.previousElementSibling!.textContent = caption;
       if (field.options) {
         const select = input as HTMLSelectElement;
         select.replaceChildren(...field.options.map(value => this.createOption(value, value || "Default")));
@@ -926,7 +929,7 @@ export class SchematicPropertyPanelController {
     elements.cellRow.hidden = !component.cellType || !component.cells;
     if (component.cellType && component.cells) {
       elements.cellSelect.replaceChildren(
-        ...component.cells.map((cell) => this.createOption(cell.type, cell.label, cell.disabled))
+        ...component.cells.map((cell) => this.createOption(cell.type, componentName(cell.type, cell.label), cell.disabled))
       );
       this.syncSelectAggregate(elements.cellSelect, component.cellType);
     }
@@ -984,7 +987,7 @@ export class SchematicPropertyPanelController {
 
     elements.valueRow.hidden = !component.value;
     if (component.value) {
-      elements.valueLabel.textContent = component.value.label;
+      elements.valueLabel.textContent = parameterLabel(component.value.label);
       this.syncTextAggregate(elements.valueInput, component.value.value);
       if (component.value.value.state === "uniform") {
         elements.valueInput.placeholder = component.value.placeholder;
@@ -1030,9 +1033,11 @@ export class SchematicPropertyPanelController {
     if (component.variants) {
       const variantLabel = component.variants.label ?? "View";
       elements.variantRow.classList.toggle("is-source-type", variantLabel === "Source type");
-      elements.variantLabel.textContent = variantLabel;
-      elements.variantSegmented.ariaLabel = `Component ${variantLabel.toLowerCase()}`;
-      elements.variantSegmented.dataset.propertyBaseAriaLabel = elements.variantSegmented.ariaLabel;
+      elements.variantLabel.textContent = parameterLabel(variantLabel);
+      elements.variantSegmented.ariaLabel = uiFormat("parameter.componentCaption", "Component {label}", {
+        label: schematicLanguage() === "zh" ? parameterLabel(variantLabel) : variantLabel.toLowerCase()
+      });
+      elements.variantSegmented.dataset.propertyBaseAriaLabel = elements.variantSegmented.ariaLabel ?? "";
       elements.variantSelect.replaceChildren(
         ...component.variants.options.map((variant) => this.createVariantOption(variant))
       );
@@ -1190,12 +1195,12 @@ export class SchematicPropertyPanelController {
       const row = this.root.ownerDocument.createElement("div");
       row.className = "property-coupling-list-row";
       const label = this.root.ownerDocument.createElement("span");
-      label.textContent = "Coupled";
+      label.textContent = parameterLabel("Coupled");
       const partner = this.root.ownerDocument.createElement("span");
       partner.textContent = coupling.partnerRef;
       const button = this.root.ownerDocument.createElement("button");
       button.type = "button";
-      button.textContent = "Edit";
+      button.textContent = parameterLabel("Edit");
       button.dataset.propertyInductorCouplingId = coupling.id;
       row.append(label, partner, button);
       return row;
@@ -1250,7 +1255,7 @@ export class SchematicPropertyPanelController {
     header.className = `property-pin-header${showModes ? "" : " is-visibility-only"}`;
     (showModes ? ["Pin", "Show", "Role", "Sign"] : ["Pin", "Show"]).forEach((text) => {
       const label = this.root.ownerDocument.createElement("span");
-      label.textContent = text;
+    label.textContent = parameterLabel(text);
       header.append(label);
     });
     return header;
@@ -1291,11 +1296,11 @@ export class SchematicPropertyPanelController {
     const row = this.root.ownerDocument.createElement("div");
     row.className = `property-pin-row${pin.modeEditable ? "" : " is-visibility-only"}`;
     const label = this.root.ownerDocument.createElement("span");
-    label.textContent = pin.label;
+    label.textContent = parameterLabel(pin.label);
     const visibilityInput = this.root.ownerDocument.createElement("input");
     visibilityInput.type = "checkbox";
     visibilityInput.className = "property-toggle";
-    visibilityInput.ariaLabel = `Show ${pin.label.toLowerCase()} pin`;
+    visibilityInput.ariaLabel = uiFormat("parameter.pinVisibility", "Show {pin} pin", { pin: parameterLabel(pin.label.toLowerCase()) });
     visibilityInput.dataset.propertyPinVisibilityId = pin.id;
     this.syncCheckboxAggregate(visibilityInput, pin.visible);
     if (!pin.modeEditable) {
@@ -1304,7 +1309,7 @@ export class SchematicPropertyPanelController {
     }
     const modeControl = this.root.ownerDocument.createElement("div");
     modeControl.className = "property-segmented property-segmented-compact";
-    modeControl.ariaLabel = `${pin.label} pin role`;
+    modeControl.ariaLabel = uiFormat("parameter.pinRole", "{pin} pin role", { pin: parameterLabel(pin.label) });
     this.syncSegmentedButtons(
       modeControl,
       [
@@ -1321,7 +1326,7 @@ export class SchematicPropertyPanelController {
     const symbolInput = this.root.ownerDocument.createElement("input");
     symbolInput.type = "checkbox";
     symbolInput.className = "property-toggle";
-    symbolInput.ariaLabel = `Show ${pin.label.toLowerCase()} pin role symbol`;
+    symbolInput.ariaLabel = uiFormat("parameter.pinSymbol", "Show {pin} pin role symbol", { pin: parameterLabel(pin.label.toLowerCase()) });
     symbolInput.dataset.propertyPinSymbolVisibilityId = pin.id;
     this.syncCheckboxAggregate(symbolInput, pin.symbolVisible ?? { state: "mixed" });
     symbolInput.disabled = pin.symbolEditable === false;
@@ -1371,7 +1376,7 @@ export class SchematicPropertyPanelController {
     container.replaceChildren(...options.map((option) => {
       const button = this.root.ownerDocument.createElement("button");
       button.type = "button";
-      button.textContent = option.label;
+      button.textContent = parameterLabel(option.label);
       button.dataset[datasetKey] = option.value;
       button.disabled = !!option.disabled;
       const selected = aggregateIsUniform(selectedValue) && option.value === selectedValue.value;
@@ -1405,7 +1410,7 @@ export class SchematicPropertyPanelController {
   private createOption(value: string, label: string, disabled = false) {
     const option = this.root.ownerDocument.createElement("option");
     option.value = value;
-    option.textContent = label;
+    option.textContent = parameterLabel(label);
     option.disabled = disabled;
     return option;
   }
@@ -1426,7 +1431,7 @@ export class SchematicPropertyPanelController {
   ) {
     const syncedValue = aggregateIsUniform(value) ? format(value.value) : "";
     input.value = syncedValue;
-    input.placeholder = value.state === "mixed" ? "Multiple values" : "";
+    input.placeholder = value.state === "mixed" ? parameterLabel("Multiple values") : "";
     input.dataset.propertyMixed = String(value.state === "mixed");
     input.dataset.propertySyncedValue = syncedValue;
     input.dataset.propertySyncedPlaceholder = input.placeholder;
@@ -1539,10 +1544,11 @@ export class SchematicPropertyPanelController {
   }
 
   private syncMixedAriaLabel(element: HTMLElement, mixed: boolean) {
-    const baseLabel = element.dataset.propertyBaseAriaLabel ?? element.ariaLabel ?? "";
+    const message = element.dataset.schematicMessageAriaLabel;
+    const baseLabel = message ? messageText(JSON.parse(message)) : element.dataset.propertyBaseAriaLabel ?? element.ariaLabel ?? "";
     element.dataset.propertyBaseAriaLabel = baseLabel;
     element.ariaLabel = mixed
-      ? `${baseLabel ? `${baseLabel}: ` : ""}Multiple values`
+      ? `${baseLabel ? `${baseLabel}: ` : ""}${parameterLabel("Multiple values")}`
       : baseLabel;
   }
 

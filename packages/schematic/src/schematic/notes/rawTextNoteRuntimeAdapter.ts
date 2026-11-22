@@ -1,3 +1,4 @@
+import { applySchematicMessage, message } from "../schematicI18n";
 import type {
   SchematicNoteRuntime,
   SchematicNoteRuntimeAdapter,
@@ -129,7 +130,7 @@ class RawTextNoteRuntime implements SchematicNoteRuntime {
     textarea.value = this.text;
     textarea.wrap = "off";
     textarea.spellcheck = false;
-    textarea.setAttribute("aria-label", "Edit schematic note source");
+    applySchematicMessage(textarea, message("note.editSource", "Edit schematic note source"), "aria-label");
     textarea.addEventListener("input", this.handleInput);
     this.textarea = textarea;
     this.options.host.replaceChildren(textarea);
