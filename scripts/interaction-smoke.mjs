@@ -109,14 +109,24 @@ try {
     const control = document.querySelector('[data-property-component-color-row] .property-color-control');
     const bounds = control.getBoundingClientRect();
     const boxes = [...control.querySelectorAll('button,input[type=color]')].map(e => { const b=e.getBoundingClientRect(); return {x:b.x,y:b.y,w:b.width,h:b.height}; });
-    const labels = [...document.querySelectorAll('.property-pin-header span,.property-row > span:first-child')].filter(e=>e.getBoundingClientRect().width && /^(Show|Show label|Show value)$/.test(e.textContent.trim())).map(e=>({text:e.textContent.trim(),h:e.getBoundingClientRect().height,line:parseFloat(getComputedStyle(e).lineHeight)||parseFloat(getComputedStyle(e).fontSize)*1.25}));
+    const labels = [...document.querySelectorAll(".property-pin-header span, .property-row > span:first-child")]
+      .filter(label => label.getBoundingClientRect().width && /^(Show|Show label|Show value)$/.test(label.textContent.trim()))
+      .map(label => {
+        const text = document.createRange();
+        text.selectNodeContents(label);
+        return {
+          text: label.textContent.trim(),
+          lineCount: new Set([...text.getClientRects()].map(rect => rect.top)).size
+        };
+      });
     return {right:bounds.right,boxes,labels};
   });
   for (const b of layout.boxes) { assert(Math.abs(b.w-b.h)<1); assert(b.x+b.w<=layout.right+1); }
   for (let i=0;i<layout.boxes.length;i++) for(let j=i+1;j<layout.boxes.length;j++) {
     const a=layout.boxes[i],b=layout.boxes[j]; assert(a.x+a.w<=b.x+0.5||b.x+b.w<=a.x+0.5||a.y+a.h<=b.y+0.5||b.y+b.h<=a.y+0.5,"Palette swatches overlap");
   }
-  assert(layout.labels.length>=3); for(const label of layout.labels) assert(label.h<=label.line+1,JSON.stringify(label));
+  assert(layout.labels.length >= 3);
+  for (const label of layout.labels) assert.equal(label.lineCount, 1, JSON.stringify(label));
   console.log("[properties] host button height and word-breaking do not distort colors or Show labels");
 
   // Use actual mouse/keyboard routing, deletion, history and reload for detached junctions.
