@@ -15,6 +15,7 @@ export interface SchematicSelectionExportInput extends SymbolTemplateContext {
   inductorCouplings?: InductorCoupling[];
   wires: Wire[];
   wireEndpoints?: SchematicSvgScene["wireEndpoints"];
+  busWireIds?: SchematicSvgScene["busWireIds"];
   junctionPoints: Point[];
   junctionColors?: Readonly<Record<string, string>>;
   netLabels: NetLabel[];

@@ -40,7 +40,7 @@ const NARROW_CONTAINER_WIDTH = 1080;
 const STORAGE_KEY = "at-schematic-layout";
 const LEGACY_STORAGE_KEY = "adc-helper/schematic-layout";
 const KEYBOARD_RESIZE_STEP = 20;
-const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["analysis", "netlist"];
+const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["hierarchy", "analysis", "netlist"];
 
 export interface SchematicPanelResizeResult {
   width: number;

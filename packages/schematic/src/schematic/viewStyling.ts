@@ -140,9 +140,10 @@ export function applySchematicCellSelectionStyles({
       const wire = document.wires.find((candidate) => candidate.id === wireId);
       if (!wire) continue;
       const selected = selectedIds.has(wireId) || hoverIds.has(wireId);
+      const bus = netResolution?.busWireIds.has(wireId);
       cell.attr({
-        line: wireLineAttrs(wire),
-        selectionHalo: wireSelectionHaloAttrs(wire, { selected })
+        line: wireLineAttrs(wire, { bus }),
+        selectionHalo: wireSelectionHaloAttrs(wire, { selected, bus })
       });
     }
   }

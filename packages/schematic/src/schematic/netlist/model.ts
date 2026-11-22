@@ -12,6 +12,7 @@ export interface NetlistDiagnostic {
   componentId?: string;
   pinId?: string;
   netName?: string;
+  sheetId?: string;
 }
 
 export interface NetlistParameter {
@@ -24,7 +25,7 @@ export interface NetlistInstance {
   ref: string;
   master: string;
   type: ComponentType;
-  kind: "primitive" | "mos" | "source" | "probe" | "bjt" | "modeledPassive";
+  kind: "primitive" | "mos" | "source" | "probe" | "bjt" | "modeledPassive" | "subckt";
   nodes: string[];
   params: Record<string, string>;
   sourceKind?: VoltageSourceType | "dc";
@@ -36,10 +37,14 @@ export interface NetlistDesign {
   parameters: NetlistParameter[];
   instances: NetlistInstance[];
   diagnostics: NetlistDiagnostic[];
+  groundPort?: string;
+  sheets?: NetlistDesign[];
+  globalNets?: string[];
 }
 
 export interface NetlistBuildOptions {
   config?: Partial<NetlistDeviceConfig>;
+  hierarchy?: boolean;
 }
 
 export function hasNetlistErrors(design: NetlistDesign) {

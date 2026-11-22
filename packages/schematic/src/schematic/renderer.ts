@@ -76,11 +76,11 @@ export function wireAppearance(wire: Wire): WireAppearance {
   return resolvedWireAppearance(wire);
 }
 
-export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean } = {}) {
+export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean; bus?: boolean } = {}) {
   const preview = !!options.preview;
   const deleted = !!wire.temporarilyDeleted;
   const baseStroke = wireColor(wire);
-  const baseWidth = wireStrokeWidth(wire);
+  const baseWidth = wireStrokeWidth(wire, options.bus);
   return {
     stroke: preview ? SCHEMATIC_SELECTION_COLOR : deleted ? "#b00020" : baseStroke,
     strokeWidth: preview ? Math.max(2, baseWidth) : baseWidth,
@@ -94,8 +94,8 @@ export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected
   };
 }
 
-export function wireSelectionHaloAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean } = {}) {
-  const baseWidth = wireStrokeWidth(wire);
+export function wireSelectionHaloAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean; bus?: boolean } = {}) {
+  const baseWidth = wireStrokeWidth(wire, options.bus);
   return {
     stroke: SCHEMATIC_SELECTION_COLOR,
     strokeWidth: baseWidth + 3,
@@ -153,6 +153,7 @@ export function makeWireCell(
 export interface WireCellRenderOptions {
   preview?: boolean;
   selected?: boolean;
+  bus?: boolean;
   endpointConnections?: WireEndpointConnections;
 }
 

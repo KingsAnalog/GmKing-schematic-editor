@@ -18,6 +18,7 @@ import type {
 import type { SchematicDocumentExportFormat, SchematicDocumentTabsOptions } from "./schematicDocumentTabs";
 import type { SchematicDocument } from "./types";
 import { defaultSchematicView } from "./viewAdapter";
+import { singleSheetProject } from "./schematicProject";
 
 const CLOSED_TAB_UNDO_WINDOW_MS = 10_000;
 
@@ -61,7 +62,7 @@ implements SchematicDocumentHostPort<EditorState> {
       onReorder: (id, insertionIndex) => this.runAction(() => this.reorder(id, insertionIndex)),
       onRename: (id, title) => this.runAction(() => this.rename(id, title)),
       onImport: (file) => this.importDocument(() => this.options.documentFiles.read(file), "Import failed"),
-      onImportFromClipboard: () => this.importDocument(async () => ({
+      onImportFromClipboard: () => this.importDocument(async () => this.options.clipboard.readImport?.() ?? ({
         title: "Imported schematic",
         document: await this.options.clipboard.readDocument()
       }), "Clipboard import failed"),
@@ -190,7 +191,7 @@ implements SchematicDocumentHostPort<EditorState> {
     }
     const closedDocumentIsEmpty = isEmptySchematicDocument(
       closed.state?.document ?? createEmptySchematicDocument()
-    );
+    ) && !closed.state?.project;
 
     const previousSessions = this.sessions;
     const previousActiveId = this.activeDocumentId;
@@ -395,7 +396,12 @@ implements SchematicDocumentHostPort<EditorState> {
     try {
       this.options.bridge.finishActiveEdits();
       const document = this.options.bridge.currentDocument();
-      if (format === "json") {
+      if (format === "project" || (format === "json" && document.components.some(component => component.type === "sheetBlock"))) {
+        void this.persistActive();
+        this.options.documentFiles.downloadProject?.(
+          session.state?.project ?? singleSheetProject(session.id, session.title, document), session.title
+        );
+      } else if (format === "json") {
         void this.persistActive();
         this.options.documentFiles.download(document, session.title);
       } else {
@@ -479,6 +485,7 @@ implements SchematicDocumentHostPort<EditorState> {
       storageStatus: "new",
       editorState: this.options.bridge.createEditorState(imported.document)
     };
+    if (imported.project) state.project = imported.project;
     if (!await this.persistSession(session, "The imported schematic could not be written to storage.")) {
       this.options.bridge.destroySession(session);
       return;

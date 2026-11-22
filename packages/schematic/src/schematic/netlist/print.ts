@@ -1,10 +1,30 @@
 import type { NetlistDesign, NetlistFormat, NetlistInstance } from "./model";
 
 export function printNetlist(design: NetlistDesign, format: NetlistFormat) {
+  if (design.sheets) {
+    const spice = format === "spice";
+    const lines = spice ? ["* analog-tools hierarchical netlist"] : ["// analog-tools hierarchical netlist", "simulator lang=spectre"];
+    const globals = design.globalNets?.filter(name => name !== "0").sort() ?? [];
+    const globalAliases = spice ? spiceNodeAliases(globals) : new Map<string, string>();
+    if (globals.length) lines.push(`${spice ? ".global" : "global"} ${globals.map(name => globalAliases.get(name) ?? name).join(" ")}`);
+    for (const source of design.sheets) {
+      const sheet = spice ? spiceNodes(source, globalAliases) : source;
+      const header = spice ? subcktHeader(sheet, ".subckt")
+        : sheet.ports.length ? `subckt ${sheet.name} (${sheet.ports.join(" ")})` : `subckt ${sheet.name}`;
+      lines.push(header);
+      if (sheet.parameters.length) lines.push(
+        `  ${spice ? ".param" : "parameters"} ${sheet.parameters.map(p => `${p.name}=${spice ? spiceLiteral(p.value) : p.value}`).join(" ")}`
+      );
+      for (const instance of sheet.instances) lines.push(`  ${spice ? spiceInstance(instance, sheet) : spectreInstance(instance, sheet)}`);
+      lines.push(`${spice ? ".ends" : "ends"} ${sheet.name}`, "");
+    }
+    return lines.join("\n");
+  }
   return format === "spice" ? printSpice(design) : printSpectre(design);
 }
 
-export function printSpice(design: NetlistDesign) {
+export function printSpice(source: NetlistDesign) {
+  const design = spiceNodes(source);
   const lines = ["* analog-tools structural netlist"];
   if (design.parameters.length > 0) {
     lines.push(`.param ${design.parameters.map(parameter => `${parameter.name}=${spiceLiteral(parameter.value)}`).join(" ")}`);
@@ -13,6 +33,38 @@ export function printSpice(design: NetlistDesign) {
   design.instances.forEach((instance) => lines.push(`  ${spiceInstance(instance, design)}`));
   lines.push(`.ends ${design.name}`);
   return `${lines.join("\n")}\n`;
+}
+
+/** SPICE resolves node names without case. Keep each editor net unique at export. */
+function spiceNodeAliases(names: readonly string[], inherited = new Map<string, string>(), groundPort?: string) {
+  const aliases = new Map(inherited);
+  if (groundPort) aliases.set(groundPort, groundPort);
+  const used = new Set([...aliases.values()].map(name => name.toLowerCase()));
+  // ngspice treats any spelling of gnd as node 0.
+  used.add("gnd");
+  const reserved = new Set([...names.map(name => name.toLowerCase()), ...used]);
+  for (const name of names) {
+    if (aliases.has(name)) continue;
+    let alias = name;
+    if (used.has(name.toLowerCase())) {
+      let suffix = 2;
+      do {
+        alias = `${name}_${suffix++}`;
+      } while (reserved.has(alias.toLowerCase()));
+    }
+    aliases.set(name, alias);
+    used.add(alias.toLowerCase());
+    reserved.add(alias.toLowerCase());
+  }
+  return aliases;
+}
+
+function spiceNodes(design: NetlistDesign, globals?: Map<string, string>): NetlistDesign {
+  const aliases = spiceNodeAliases([...design.ports, ...design.instances.flatMap(instance => instance.nodes)], globals, design.groundPort);
+  const emitted = (name: string) => aliases.get(name) ?? name;
+  return { ...design, ports: design.ports.map(emitted), instances: design.instances.map(instance => ({
+    ...instance, nodes: instance.nodes.map(emitted)
+  })) };
 }
 
 export function printSpectre(design: NetlistDesign) {
@@ -32,6 +84,10 @@ function subcktHeader(design: NetlistDesign, keyword: string) {
 
 function spiceInstance(instance: NetlistInstance, design: NetlistDesign) {
   const nodes = instance.nodes.join(" ");
+  if (instance.kind === "subckt") {
+    const ref = instance.ref.toUpperCase().startsWith("X") ? instance.ref : `X${instance.ref}`;
+    return [ref, nodes, instance.master].filter(Boolean).join(" ");
+  }
   if (instance.kind === "mos") {
     const ref = instance.ref.toUpperCase().startsWith("X") ? instance.ref : `X${instance.ref}`;
     return `${ref} ${nodes} ${instance.master} ${formatParams(design, instance.params, ["w", "l", "m", "nf"], "spice")}`;
@@ -78,6 +134,7 @@ function spiceSource(instance: NetlistInstance, design: NetlistDesign) {
 
 function spectreInstance(instance: NetlistInstance, design: NetlistDesign) {
   const nodes = instance.nodes.join(" ");
+  if (instance.kind === "subckt") return `${instance.ref} (${nodes}) ${instance.master}`;
   if (instance.kind === "mos") {
     return `${instance.ref} (${nodes}) ${instance.master} ${formatParams(design, instance.params, ["w", "l", "m", "nf"], "spectre")}`;
   }

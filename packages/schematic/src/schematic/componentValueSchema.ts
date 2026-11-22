@@ -15,6 +15,7 @@ import { SPNT_POSITION_VALUE_KEY, validSpntPosition } from "./spntSwitchModel";
 import { isTransistorComponentType, TRANSISTOR_CIRCLE_VALUE_KEY } from "./transistorCircleModel";
 import { isMosComponentType, MOS_THICK_GATE_VALUE_KEY } from "./mosViewModel";
 import { validVoltageSourceFieldValue } from "./voltageSourceModel";
+import { blockPorts, PORT_SIDES, PORT_TYPES, validSheetPort, readSheetPort } from "./hierarchyPins";
 import { isDeviceKind, isNetlistModelText, NETLIST_MODEL_VALUE_KEY } from "./netlist/profiles";
 import {
   isLibraryShapeType,
@@ -64,6 +65,16 @@ function enumeration(key: string, values: readonly string[], supports = anyCompo
  * Other stored settings must be declared in this table.
  */
 export const COMPONENT_VALUE_RULES: readonly ComponentValueRule[] = [
+  enumeration("port:type", PORT_TYPES, only("sheetPort")),
+  enumeration("port:side", PORT_SIDES, only("sheetPort")),
+  ...["port:order", "port:slot"].map(key => ({
+    key, supports: only("sheetPort"), valid: (value: string) => /^\d+$/.test(value),
+    expected: "a nonnegative integer"
+  })),
+  { key: "sheet:target", supports: only("sheetBlock"), valid: value => value.length > 0, expected: "a target sheet ID" },
+  { key: "sheet:name", supports: only("sheetBlock"), valid: value => value.length > 0 && value.length <= 128, expected: "a sheet name" },
+  { key: "sheet:ports", supports: only("sheetBlock"), valid: (value, component) =>
+    value === "[]" || blockPorts(component).length > 0, expected: "a projected list of valid sheet ports" },
   enumeration("labelVisible", booleanValues),
   enumeration("valueVisible", booleanValues),
   enumeration(MOS_THICK_GATE_VALUE_KEY, booleanValues, component => isMosComponentType(component.type)),
@@ -175,6 +186,12 @@ export function componentSupportsProperty(component: ComponentInstance, key: str
 }
 
 export function componentValueIssue(component: ComponentInstance): ComponentValueIssue | null {
+  if (component.type === "sheetPort" && !validSheetPort(readSheetPort(component))) {
+    return { key: "port:type", expected: "a named scalar sheet port with valid type, side and order" };
+  }
+  if (component.type === "sheetBlock" && !component.values["sheet:target"]) {
+    return { key: "sheet:target", expected: "a target sheet ID" };
+  }
   for (const [key, value] of Object.entries(component.values)) {
     // Older files could contain electrical configuration on library artwork.
     // Decoding accepts it once; document restoration removes it before use.

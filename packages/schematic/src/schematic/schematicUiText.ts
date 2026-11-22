@@ -154,6 +154,7 @@ const STATUS_ZH: Readonly<Record<string, string>> = {
   "Fit view to schematic contents.": "视图已适应原理图内容。",
   "Fit view reached minimum zoom; contents may exceed the viewport.": "已达到最小缩放级别，部分内容可能超出视图。",
   "Label name is required.": "请输入标签名称。",
+  "Use a bus name like OUT<7:0> or OUT<3>. A bus may contain up to 256 bits.": "请输入 OUT<7:0> 或 OUT<3> 这类总线名。总线最多 256 位。",
   "Multiple label states.": "所选标签的状态不一致。",
   "The label is not attached to an active wire.": "标签尚未附着到有效导线。",
   "The supporting wire is temporarily deleted.": "标签所附着的导线已临时删除。",

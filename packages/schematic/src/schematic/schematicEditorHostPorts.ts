@@ -27,6 +27,7 @@ import type {
   SchematicDocument
 } from "./types";
 import type { SchematicNoteRuntimeAdapter } from "./notes/noteRuntimeAdapter";
+import type { SchematicProject } from "./schematicProject";
 
 export interface SchematicDocumentFileLike {
   readonly name: string;
@@ -37,6 +38,7 @@ export interface SchematicDocumentFileLike {
 export interface ImportedSchematicDocumentFile {
   title: string;
   document: SchematicDocument;
+  project?: SchematicProject;
 }
 
 export interface SchematicDocumentTabsPort {
@@ -92,6 +94,7 @@ export interface SchematicWorkspacePort {
 export interface SchematicDocumentFilePort {
   read(file: SchematicDocumentFileLike): Promise<ImportedSchematicDocumentFile>;
   download(document: SchematicDocument, title: string): void;
+  downloadProject?(project: SchematicProject, title: string): void;
   downloadImage(
     document: SchematicDocument,
     title: string,
@@ -102,6 +105,7 @@ export interface SchematicDocumentFilePort {
 
 export interface SchematicClipboardPort {
   readDocument(): Promise<SchematicDocument>;
+  readImport?(): Promise<ImportedSchematicDocumentFile>;
 }
 
 export interface SchematicHostedDocumentSession<EditorState> {

@@ -1,6 +1,9 @@
 import type { AnalysisPortSelection, SchematicDocument } from "../schematic/types";
+import type { SchematicProject } from "../schematic/schematicProject";
 export interface SchematicDocumentState {
   document?: SchematicDocument;
+  project?: SchematicProject;
+  sheetPath?: { sheetId: string; instanceId?: string }[];
   analysisSelection?: AnalysisPortSelection;
   zoom?: number;
   viewTranslate?: { x: number; y: number };

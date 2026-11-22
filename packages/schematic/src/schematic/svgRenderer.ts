@@ -61,6 +61,7 @@ export interface SchematicSvgScene extends SymbolTemplateContext {
   wires: readonly Wire[];
   /** Endpoint state calculated against the complete circuit, including hidden conductors. */
   wireEndpoints?: ReadonlyMap<string, WireEndpointConnections>;
+  busWireIds?: ReadonlySet<string>;
   junctionPoints: readonly Point[];
   junctionColors?: Readonly<Record<string, string>>;
   netLabels: readonly NetLabel[];
@@ -110,7 +111,7 @@ function sceneBounds(scene: SchematicSvgScene, options: Pick<SchematicSvgRenderO
     const path = hops.get(wire.id);
     const bounds = path && svgPathBounds(path);
     if (!bounds) continue;
-    const padding = wireStrokeWidth(wire) / 2;
+    const padding = wireStrokeWidth(wire, scene.busWireIds?.has(wire.id)) / 2;
     rects.push({ x: bounds.x - padding, y: bounds.y - padding, width: bounds.width + padding * 2, height: bounds.height + padding * 2 });
   }
   scene.junctionPoints.forEach((point) => rects.push({
@@ -148,7 +149,7 @@ export function renderSchematicSvgScene(
     })),
     ...scene.wires.map((wire) => ({
       id: wire.id,
-      svg: renderWire(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire), hops.get(wire.id))
+      svg: renderWire(wire, scene.wireEndpoints?.get(wire.id) ?? wireEndpointConnections(scene, wire), hops.get(wire.id), scene.busWireIds?.has(wire.id))
     })),
     ...scene.components.map((component) => ({
       id: component.id,
@@ -210,9 +211,9 @@ function wrapSvg(
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${number(viewBox.x)} ${number(viewBox.y)} ${number(viewBox.width)} ${number(viewBox.height)}">${background}${grid}<g font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}">${body}</g></svg>`;
 }
 
-function renderWire(wire: Wire, connections: { start: boolean; end: boolean }, hopPath?: string) {
+function renderWire(wire: Wire, connections: { start: boolean; end: boolean }, hopPath?: string, bus?: boolean) {
   if (wire.points.length < 2) return "";
-  const attrs = wireAttrs(wire);
+  const attrs = wireAttrs(wire, bus);
   const points = wire.points.map((point) => `${number(point.x)},${number(point.y)}`).join(" ");
   const geometry = hopPath ? `path d="${hopPath}"` : `polyline points="${escapeAttribute(points)}"`;
   const line = `<${geometry} fill="none" stroke="${attrs.stroke}" stroke-width="${number(attrs.strokeWidth)}" stroke-linecap="round" stroke-linejoin="round"${attrs.dash ? ` stroke-dasharray="${attrs.dash}"` : ""}${opacityAttr(attrs.opacity)} />`;
@@ -224,11 +225,11 @@ function renderWire(wire: Wire, connections: { start: boolean; end: boolean }, h
   return `<g data-wire-id="${escapeAttribute(wire.id)}">${line}${decorations}</g>`;
 }
 
-function wireAttrs(wire: Wire) {
+function wireAttrs(wire: Wire, bus?: boolean) {
   const deleted = !!wire.temporarilyDeleted;
   return {
     stroke: deleted ? "#b00020" : wireColor(wire),
-    strokeWidth: wireStrokeWidth(wire),
+    strokeWidth: wireStrokeWidth(wire, bus),
     dash: deleted ? "7 5" : "",
     opacity: deleted ? 0.48 : 1
   };

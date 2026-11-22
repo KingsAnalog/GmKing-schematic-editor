@@ -326,6 +326,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private shapeDraftOverlay: SVGSVGElement | null = null;
   private shapeFinishButton: HTMLButtonElement | null = null;
   private placementPointerStart: { x: number; y: number; blank: boolean; maxDistance: number } | null = null;
+  private hierarchyPlacement: ComponentInstance | null = null;
   private lastLoggedStatus = "";
   private lastHadSelection = false;
   private readonly contextMenuController;
@@ -600,7 +601,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       makeComponentCell: (component) => this.makeComponentCell(component),
       makeWireCell: (wire) => this.makeWireCell(wire),
       makeJunctionCell: makeJunctionViewCell,
-      isWireSelected: (wireId) => this.selectionSession.isCellSelected(wireId)
+      isWireSelected: (wireId) => this.selectionSession.isCellSelected(wireId),
+      isBusWire: (wireId) => this.netResolutionCache?.busWireIds.has(wireId) ?? false
     });
     this.cellGeometryInteractionCoordinator = new SchematicCellGeometryInteractionCoordinator({
       document: this.document,
@@ -787,6 +789,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       symbolTemplate: () => this.document.symbolTemplate,
       initialTab: layout?.getSidebarTab?.() ?? "library",
       onTabChange: (tab) => layout?.setSidebarTab?.(tab),
+      hierarchy: this.hostBridge.hierarchyLibrary,
+      onHierarchyPick: this.hostBridge.placeHierarchySheet,
       onPick: (item) => {
         this.beginPlacement(item);
         this.focusCanvas();
@@ -813,7 +817,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     this.netlistPanel = analysisEl
       ? new NetlistPanelController(analysisEl, {
-          onSelect: (componentId) => this.selectNetlistDiagnostic(componentId)
+          onSelect: (componentId, sheetId) => sheetId
+            ? this.hostBridge.selectProjectDiagnostic?.(sheetId, componentId)
+            : this.selectNetlistDiagnostic(componentId),
+          buildDesign: document => this.hostBridge.projectNetlist?.(document) ?? null
         })
       : null;
 
@@ -1084,6 +1091,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.redo();
         return true;
       case "cancel":
+        this.cancelHierarchyPlacement();
         this.cancelTool();
         return true;
     }
@@ -1125,6 +1133,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private bindEvents() {
+    this.bindHierarchyPlacement();
     this.bindControllerEvents();
     this.bindDisplaySettings();
     this.bindLibraryShapeDrawEvents();
@@ -1133,6 +1142,72 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.bindCellGeometrySelectionMovePaperHooks();
     this.bindPaperElementViewportCanvasDomInteractions();
     this.bindPaperPointerMoveDownClickJointJsInteractions();
+  }
+
+  private bindHierarchyPlacement() {
+    const { signal } = this.lifecycleController;
+    const paper = this.options.paperEl;
+    paper.addEventListener("pointermove", event => {
+      if (this.hierarchyPlacement && !event.buttons) this.previewHierarchyPlacement(this.pointFromClientEvent(event));
+    }, { signal });
+    paper.addEventListener("pointerdown", event => {
+      const pending = this.hierarchyPlacement;
+      if (!pending || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const layer = this.editablePlacementLayer();
+      if (!layer) return;
+      const point = this.pointFromClientEvent(event);
+      this.cancelHierarchyPlacement();
+      const component = { ...pending, ...point, values: { ...pending.values, "layer:id": layer.id } };
+      this.transact(content => content.components.push(component), { origin: "editor", reason: "hierarchy-place" });
+      this.hostSelectHierarchyComponent(component.id);
+    }, { capture: true, signal });
+  }
+
+  private previewHierarchyPlacement(point: Point) {
+    if (this.hierarchyPlacement) {
+      this.previewRenderer.renderPlacement({ components: [{ ...this.hierarchyPlacement, ...point }], wires: [] });
+    }
+  }
+
+  private cancelHierarchyPlacement() {
+    if (!this.hierarchyPlacement) return;
+    this.hierarchyPlacement = null;
+    this.previewRenderer.clearPlacement();
+    this.options.paperEl.classList.remove("is-hierarchy-placing");
+  }
+
+  hostArmHierarchyPlacement(component: ComponentInstance) {
+    this.cancelTool();
+    this.hierarchyPlacement = component;
+    if (this.options.layout?.isNarrow?.()) this.options.layout.closePanel("left");
+    this.options.paperEl.classList.add("is-hierarchy-placing");
+    this.previewHierarchyPlacement(this.lastPointerPoint ?? this.viewportCenterPoint());
+    this.focusCanvas();
+  }
+
+  hostSelectedHierarchyComponent() {
+    return this.selectedSingleComponent();
+  }
+
+  hostShowHierarchy() {
+    this.openRightView("hierarchy");
+  }
+
+  hostRefreshHierarchy() {
+    this.sidebarLibrary.refresh();
+    this.scheduleNetlistRefresh();
+    this.syncToolUi();
+  }
+
+  hostSelectHierarchyComponent(id: string, center = false) {
+    if (center) this.selectNetlistDiagnostic(id);
+    else {
+      this.selectionSession.setMixed([id], []);
+      this.finishSelectionChange();
+      this.sidebarLibrary.showProperties();
+    }
   }
 
   private bindDisplaySettings() {
@@ -2517,9 +2592,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
-    if (target.closest("[data-schematic-options-dialog][open]")) return;
+    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
+    if (key === "escape" && this.hierarchyPlacement) {
+      event.preventDefault();
+      this.cancelHierarchyPlacement();
+      this.setStatus("Tool canceled.");
+      return;
+    }
     if (key === "enter" && !editable && isPathDraft(this.libraryShapeDraw?.kind)) {
       event.preventDefault();
       event.stopPropagation();
@@ -2594,6 +2675,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.transientToolSession.mode
     );
     if (shortcutIntent.kind === "none") return;
+    if (this.hierarchyPlacement) this.cancelHierarchyPlacement();
 
     this.applySchematicKeyboardShortcutIntent(event, shortcutIntent);
   }
@@ -2683,6 +2765,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private runCommand(command: string) {
+    this.cancelHierarchyPlacement();
     this.eventLog.info("command", command);
     const intent = projectSchematicToolbarCommandIntent(command);
     this.applySchematicToolbarCommandIntent(intent);
@@ -2866,6 +2949,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       display,
       crossingJunctions,
       wireEndpoints,
+      busWireIds: resolution.busWireIds,
       layerObjectOrder,
       renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
       renderedNoteText: Object.fromEntries(renderedNotes.map(({ id, text }) => [id, text])),
@@ -3064,8 +3148,10 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyCommand() {
+    const selection = this.selectedTransformObjects();
+    if (this.hasHierarchyCopyObjects(selection.components)) return;
     const result = this.copyController.prepareSelectionEntry({
-      selection: this.selectedTransformObjects(),
+      selection,
       junctionAppearances: this.document.junctionAppearances,
       inductorCouplings: this.document.inductorCouplings,
       connections: this.document.connections,
@@ -3085,6 +3171,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyFromTargets(ids: string[], noteIds: string[], anchor: Point) {
+    if (this.hasHierarchyCopyObjects(this.document.components.filter(component => ids.includes(component.id)))) return;
     const result = this.copyController.prepareTargetEntry(
       this.document, ids, noteIds, anchor, this.lastPointerPoint ?? anchor, this.activeHostedDocumentId
     );
@@ -3765,6 +3852,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   hostCaptureView() { return this.currentViewState(); }
 
   hostActivateDocument(input: SchematicHostedDocumentActivation) {
+    this.cancelHierarchyPlacement();
     if (this.destroyed) return;
     const preserveCopy =
       this.transientToolSession.mode === "copy"
@@ -3822,7 +3910,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   hostBeginClipboardCopy(document: SchematicDocument) {
-    if (this.destroyed) return false;
+    if (this.destroyed || this.hasHierarchyCopyObjects(document.components)) return false;
     const source = copySourceFromDocument(document);
     const anchor = copySourceCenterAnchor(source);
     if (copySourceCount(source) === 0 || !anchor) {
@@ -3840,6 +3928,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
     this.hostFinishActiveEdits();
     this.applyCopyToolEntryIntent(entry.intent, entry.attachSource, entry.previewPoint);
+    return true;
+  }
+
+  private hasHierarchyCopyObjects(components: ComponentInstance[]) {
+    if (!components.some(component => component.type === "sheetPort" || component.type === "sheetBlock")) return false;
+    this.setStatus(t("hierarchy.copyUnsupported", "Place sheet instances from the Hierarchy library and create ports with the Pin tool."));
     return true;
   }
 
@@ -3967,12 +4061,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     );
     this.graphAdapter.addCells(this.document.components.filter(component => displayed(component.id))
       .map(component => this.makeComponentCell(component)));
+    this.netResolutionCache = resolution;
     this.graphAdapter.addCells(
       this.document.wires
         .filter(wire => displayed(wire.id))
         .map(wire => this.makeWireCell(wire))
     );
-    this.netResolutionCache = resolution;
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
     this.graphAdapter.addCells((this.document.netLabels ?? [])
       .filter(label => displayed(label.id))
@@ -4018,9 +4112,13 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     this.renderInductorCouplings();
 
-    this.incrementalRenderer.updateWireCellsFromDocument(changedTransformWireIds(renderSnapshot, this.document));
     const resolution = resolveSchematicNets(this.document);
+    const previousBusWires = this.netResolutionCache?.busWireIds;
+    const changedWires = new Set(changedTransformWireIds(renderSnapshot, this.document));
+    previousBusWires?.forEach(id => { if (!resolution.busWireIds.has(id)) changedWires.add(id); });
+    resolution.busWireIds.forEach(id => { if (!previousBusWires?.has(id)) changedWires.add(id); });
     this.netResolutionCache = resolution;
+    this.incrementalRenderer.updateWireCellsFromDocument(changedWires);
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
     (this.document.netLabels ?? []).forEach((label) => {
       this.incrementalRenderer.replaceGraphCellPreservingZ(label.id, makeNetLabelCell(label, {
@@ -4225,6 +4323,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     return makeWireCell(wire, {
       ...options,
       selected: this.selectionSession.isCellSelected(wire.id),
+      bus: !options.preview && this.netResolutionCache?.busWireIds.has(wire.id),
       endpointConnections: options.endpointConnections
         ?? (options.preview ? undefined : wireEndpointConnections(this.document, wire))
     });
@@ -4836,7 +4935,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       selectedIds: this.selectionSession.selectedIds,
       hoverIds: this.deleteHoverState(),
       presentationMode: this.presentationMode,
-      resolution: options.resolution
+      resolution: options.resolution ?? this.netResolutionCache
     });
     this.syncShapeResizeHandles();
   }
@@ -5025,6 +5124,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
     this.syncMosParams();
     this.syncDeviceModel();
+    this.hostBridge.onHierarchySelectionChange?.(this.selectedSingleComponent()?.id);
     this.syncLayerAssignment();
     this.syncLayerObjectSelection();
     const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();

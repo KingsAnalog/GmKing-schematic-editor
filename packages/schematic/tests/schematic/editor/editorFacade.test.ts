@@ -235,7 +235,7 @@ describe("schematic editor public facade", () => {
     );
     expect(renderTransform).toContain("this.incrementalRenderer.runWithDocumentGeometryGuard(() => {");
     expect(renderTransform).toContain(
-      "this.incrementalRenderer.updateWireCellsFromDocument(changedTransformWireIds(renderSnapshot, this.document));"
+      "this.incrementalRenderer.updateWireCellsFromDocument(changedWires);"
     );
     expect(renderTransform).toContain("this.junctionRenderCoordinator.refreshFull(resolution);");
     expect(renderTransform).not.toContain("this.graphAdapter.clear()");

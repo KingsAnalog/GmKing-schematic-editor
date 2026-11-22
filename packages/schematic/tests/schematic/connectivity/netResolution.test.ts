@@ -24,6 +24,9 @@ function document(wires: Wire[], netLabels: NetLabel[] = []): SchematicDocument 
 describe("schematic net resolution", () => {
   it("validates and normalizes label names", () => {
     expect(validateNetLabelName("  CLK<1>  ")).toEqual({ valid: true, name: "CLK<1>" });
+    expect(validateNetLabelName("OUT<07:0>")).toEqual({ valid: true, name: "OUT<7:0>" });
+    expect(validateNetLabelName("OUT<3:>")).toMatchObject({ valid: false });
+    expect(validateNetLabelName("OUT<256:0>")).toMatchObject({ valid: false });
     expect(validateNetLabelName("CLK 1").valid).toBe(false);
     expect(validateNetLabelName("\u0000CLK").valid).toBe(false);
   });
@@ -103,6 +106,23 @@ describe("schematic net resolution", () => {
     expect(promoted.labelStates.get("loser")?.status).toBe("valid");
     expect(promoted.nets.size).toBe(1);
     expect(promoted.wireNetNames.get("shared")).toBe("B");
+  });
+
+  it("merges disconnected and overlapping bundles by bit name and connects single-bit taps", () => {
+    const branches = ["trunk", "remote", "slice", "tap", "other", "scalar"].map((id, index) =>
+      wire(id, { x: 0, y: index * 60 }, { x: 100, y: index * 60 }));
+    const names = ["OUT<7:0>", "OUT<0:7>", "OUT<4:2>", "OUT<3>", "OUT<5>", "OUT"];
+    const doc = document(branches, names.map((name, index) =>
+      label("label-" + index, name, branches[index].id, { x: 40, y: index * 60 })));
+    const result = resolveSchematicNets(doc);
+
+    expect([...result.busWireIds]).toEqual(["trunk", "remote", "slice"]);
+    expect(result.labelStates.get("label-0")?.netNames).toEqual(["OUT<7>", "OUT<6>", "OUT<5>", "OUT<4>", "OUT<3>", "OUT<2>", "OUT<1>", "OUT<0>"]);
+    expect(result.labelStates.get("label-1")?.netNames).toEqual(["OUT<0>", "OUT<1>", "OUT<2>", "OUT<3>", "OUT<4>", "OUT<5>", "OUT<6>", "OUT<7>"]);
+    expect(result.nets.get("OUT<3>")?.wireIds).toEqual(["trunk", "remote", "slice", "tap"]);
+    expect(result.nets.get("OUT<5>")?.wireIds).toEqual(["trunk", "remote", "other"]);
+    expect(result.nets.get("OUT")?.wireIds).toEqual(["scalar"]);
+    expect(result.nets.size).toBe(9);
   });
 
   it("keeps label conflicts out of blocking netlist diagnostics", () => {

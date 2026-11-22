@@ -24,6 +24,7 @@ export interface SchematicIncrementalRenderCoordinatorOptions<
   makeWireCell: (wire: Wire) => Cell;
   makeJunctionCell: (point: Point) => Cell;
   isWireSelected: (wireId: string) => boolean;
+  isBusWire?: (wireId: string) => boolean;
 }
 
 export class SchematicIncrementalRenderCoordinator<
@@ -132,11 +133,12 @@ export class SchematicIncrementalRenderCoordinator<
         cell.source({ ...points[0] });
         cell.target({ ...points[points.length - 1] });
         cell.vertices(points.slice(1, -1));
-        const line = wireLineAttrs(wire);
+        const bus = this.options.isBusWire?.(wireId);
+        const line = wireLineAttrs(wire, { bus });
         cell.attr({
           line,
           selectionHalo: wireSelectionHaloAttrs(wire, {
-            selected: this.options.isWireSelected(wire.id)
+            selected: this.options.isWireSelected(wire.id), bus
           }),
           wrapper: { pointerEvents: "stroke" }
         });

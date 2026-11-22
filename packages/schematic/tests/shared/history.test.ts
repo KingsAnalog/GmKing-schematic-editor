@@ -62,6 +62,18 @@ describe("snapshot history", () => {
     expect(history.redo()).toBeNull();
   });
 
+  it("can wrap a drawing in a project while retaining the existing undo and redo entries", () => {
+    const drawing = createSnapshotHistory(1);
+    drawing.push(2);
+    drawing.push(3);
+    drawing.undo();
+    const project = drawing.map(content => ({ sheets: [{ content }] }));
+    expect(project.undo()).toEqual({ sheets: [{ content: 1 }] });
+    expect(project.redo()).toEqual({ sheets: [{ content: 2 }] });
+    expect(project.redo()).toEqual({ sheets: [{ content: 3 }] });
+    expect(drawing.canRedo).toBe(true);
+  });
+
   it("trims old states at max depth", () => {
     const history = createSnapshotHistory({ value: 1 }, { maxDepth: 3 });
     history.push({ value: 2 });

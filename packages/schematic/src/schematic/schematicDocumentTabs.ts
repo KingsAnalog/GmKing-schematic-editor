@@ -7,7 +7,7 @@ export interface SchematicDocumentTabItem {
   title: string;
 }
 
-export type SchematicDocumentExportFormat = "json" | "svg" | "png";
+export type SchematicDocumentExportFormat = "json" | "svg" | "png" | "project";
 
 /** Async callbacks own error reporting; DOM events dispatch them without waiting. */
 type SchematicTabAction<Args extends unknown[] = []> =
@@ -239,8 +239,8 @@ export class SchematicDocumentTabs {
         return;
       }
       const format = target?.closest<HTMLElement>("[data-schematic-export-format]")?.dataset.schematicExportFormat;
-      if (format === "json" || format === "svg" || format === "png") {
-        const includeHidden = format !== "json"
+      if (format === "json" || format === "svg" || format === "png" || format === "project") {
+        const includeHidden = (format === "svg" || format === "png")
           && exportDialog.querySelector<HTMLInputElement>("[data-schematic-export-hidden]")?.checked === true;
         exportDialog.close();
         void this.options.onExport?.(format, includeHidden);

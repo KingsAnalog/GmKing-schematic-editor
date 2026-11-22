@@ -1,4 +1,4 @@
-import { createSnapshotHistory } from "../../shared/history";
+import { createSnapshotHistory, type SnapshotHistory } from "../../shared/history";
 import { contentFromDocument } from "./documentModel";
 import type { SchematicContent } from "../types";
 
@@ -11,6 +11,7 @@ export interface SchematicContentHistoryAdapter {
   undo(): SchematicContent | null;
   redo(): SchematicContent | null;
   resetBaseline(content: SchematicContent): void;
+  map<T>(transform: (content: SchematicContent) => T): SnapshotHistory<T>;
 }
 
 export function createSchematicContentHistoryAdapter(
@@ -40,6 +41,9 @@ export function createSchematicContentHistoryAdapter(
     },
     resetBaseline(content) {
       history.reset(content);
+    },
+    map(transform) {
+      return history.map(transform);
     }
   };
 }

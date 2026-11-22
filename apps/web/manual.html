@@ -20,10 +20,18 @@
         <section>
           <h2>Connect and label nets</h2>
           <p>Press <kbd>W</kbd> and click a pin, wire end, or grid point to start a wire. Click to add bends. Click a pin or press <kbd>Enter</kbd> to finish. Press <kbd>L</kbd>, enter a net name, and click the wire or junction to place the label.</p>
+          <p>Net Labels are case-sensitive. Wires on the same sheet with identical labels are electrically connected. Use <code>OUT&lt;7:0&gt;</code> for a bus. To use one bit, draw a separate wire and label it <code>OUT&lt;3&gt;</code>.</p>
         </section>
         <section>
           <h2>Arrange the drawing</h2>
           <p>Use <strong>Layers</strong> to show, hide, or lock layers. Use <strong>Properties → Layer</strong> to move a selected object to a different layer. Press <kbd>R</kbd> to rotate, <kbd>Ctrl+R</kbd> to mirror across X, or <kbd>Shift+R</kbd> to mirror across Y.</p>
+        </section>
+        <section>
+          <h2>Build a hierarchical schematic</h2>
+          <p>Open <strong>Hierarchy</strong> in the right dock and create a sheet. Press <kbd>P</kbd> to set a Pin Name, Type and Direction, then place the pin on the sheet and connect it. Edit an existing pin in <strong>Properties</strong>.</p>
+          <p>Choose <strong>Library → Hierarchy</strong> in the parent sheet to place the sheet symbol. Connect wires to the square terminals. Press <kbd>E</kbd> and click a symbol to enter its sheet. Press <kbd>Ctrl+E</kbd> to return one level. The Hierarchy panel shows the current path, included cells, pin list, and callers.</p>
+          <p>Pin names are case-sensitive. Use a range in a Pin Name to expose a bus on the sheet symbol, and connect it to a bus of the same width. The arrows in the pin list set its netlist order.</p>
+          <p>Renaming a pin preserves its connection. Moving a pin to another side or deleting it leaves parent wires where they are. Reconnect any loose ends in the parent sheet. Export <strong>Project JSON</strong> to save all sheets in one editable file.</p>
         </section>
         <section>
           <h2>Save and reopen a schematic</h2>
@@ -47,10 +55,18 @@
         <section>
           <h2>连接导线并命名网络</h2>
           <p>按 <kbd>W</kbd>，点击引脚、导线端点或网格点开始绘制。点击画布添加拐点，点击引脚或按 <kbd>Enter</kbd> 结束。按 <kbd>L</kbd> 输入网络名，再点击导线或连接点放置标签。</p>
+          <p>网络标签严格区分大小写。同一张原理图内，标签名称完全相同的导线会电气相连。将标签设为 <code>OUT&lt;7:0&gt;</code> 可定义总线。需要使用某一位时，另画一段导线并标成 <code>OUT&lt;3&gt;</code>。</p>
         </section>
         <section>
           <h2>整理图纸</h2>
           <p>在<strong>图层</strong>中管理图层的可见性和锁定状态，通过<strong>属性 → 图层</strong>调整所选对象所属的图层。按 <kbd>R</kbd> 旋转，按 <kbd>Ctrl+R</kbd> 沿 X 轴镜像，按 <kbd>Shift+R</kbd> 沿 Y 轴镜像。</p>
+        </section>
+        <section>
+          <h2>创建层次原理图</h2>
+          <p>在右栏打开<strong>层次</strong>并新建子图。按 <kbd>P</kbd> 设置端口名称、类型和所在边，再到画布放置并接线。已有端口可在<strong>属性</strong>中修改。</p>
+          <p>在父图通过<strong>器件库 → 层次</strong>放置子图符号，将导线接到方框端子。按 <kbd>E</kbd> 后点选符号进入子图，按 <kbd>Ctrl+E</kbd> 返回上一层。层次面板显示当前路径、包含的子图、端口列表和引用。</p>
+          <p>Pin Name 严格区分大小写，也可使用总线范围。父图中的端子接入同宽总线。用端口列表中端口旁的箭头调整网表顺序。</p>
+          <p>端口改名会保留连接。修改所在边或删除端口时，父图导线保留在原处，可在父图手动重接悬空线头。导出<strong>项目 JSON</strong>可保存全部子图。</p>
         </section>
         <section>
           <h2>保存与重新打开图纸</h2>

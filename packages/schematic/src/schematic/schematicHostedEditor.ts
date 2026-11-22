@@ -2,6 +2,7 @@ import type { SchematicContextMenuScope } from "./contextMenuModel";
 import type { SchematicEditorHandle } from "./editorHandle";
 import type { SchematicNoteRuntimeAdapter } from "./notes/noteRuntimeAdapter";
 import type { SchematicSelectionExportInput } from "./selection/selectionExport";
+import type { NetlistDesign } from "./netlist/model";
 import type {
   AnalysisPortSelection,
   ExtractedNetlist,
@@ -61,6 +62,11 @@ export interface SchematicEditorHostBridge {
   ownsKeyboardTarget?(target: EventTarget): boolean;
   readonly closeInstanceSearchAfterActivation?: boolean;
   onInstanceSearchVisibilityChange?(open: boolean): void;
+  projectNetlist?(document: SchematicDocument): NetlistDesign | null;
+  selectProjectDiagnostic?(sheetId: string, componentId: string): void;
+  hierarchyLibrary?(): { id: string; name: string; enabled: boolean; preview: () => string }[];
+  placeHierarchySheet?(id: string): void;
+  onHierarchySelectionChange?(componentId?: string): void;
 }
 
 export interface SchematicEditorCommitMetadata {

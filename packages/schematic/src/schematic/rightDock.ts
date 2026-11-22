@@ -1,4 +1,4 @@
-export type RightDockView = "analysis" | "netlist";
+export type RightDockView = "hierarchy" | "analysis" | "netlist";
 
 export interface RightDockState {
   activeView: RightDockView;
@@ -9,7 +9,7 @@ interface RightDockOptions {
   onChange?: (state: RightDockState) => void;
 }
 
-const VIEWS: readonly RightDockView[] = ["analysis", "netlist"];
+const VIEWS: readonly RightDockView[] = ["hierarchy", "analysis", "netlist"];
 
 function isView(value: unknown): value is RightDockView {
   return typeof value === "string" && (VIEWS as readonly string[]).includes(value);

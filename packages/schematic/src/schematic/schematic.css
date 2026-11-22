@@ -2058,6 +2058,138 @@
   display: none;
 }
 
+.hierarchy-body,
+.hierarchy-header,
+.hierarchy-sheet-list,
+.hierarchy-dialog form,
+.hierarchy-properties:not([hidden]) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hierarchy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.hierarchy-search,
+.hierarchy-actions button,
+.hierarchy-breadcrumb button,
+.hierarchy-dialog input,
+.hierarchy-dialog select {
+  min-width: 0;
+  color: var(--schematic-ink);
+  background: var(--schematic-ui-panel);
+  border: 1px solid var(--schematic-ui-line);
+  padding: 5px 7px;
+}
+
+.hierarchy-actions button:enabled,
+.hierarchy-breadcrumb button,
+.hierarchy-sheet summary {
+  cursor: pointer;
+}
+
+.hierarchy-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.hierarchy-toolbar button {
+  overflow-wrap: anywhere;
+}
+
+.hierarchy-current-path {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--schematic-ui-line);
+  padding-top: 7px;
+}
+
+.hierarchy-breadcrumb {
+  direction: rtl;
+  overflow: auto hidden;
+  scrollbar-width: none;
+}
+
+.hierarchy-breadcrumb ol {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+  direction: ltr;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hierarchy-breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hierarchy-breadcrumb li + li::before {
+  content: "/";
+  opacity: 0.65;
+}
+
+.hierarchy-breadcrumb button {
+  max-width: 22ch;
+  border-color: transparent;
+  background: transparent;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 3px 4px;
+}
+
+.hierarchy-breadcrumb button[aria-current="page"] {
+  font-weight: 600;
+}
+
+.hierarchy-sheet {
+  border: 1px solid var(--schematic-ui-line);
+  padding: 6px;
+  overflow-wrap: anywhere;
+}
+
+.hierarchy-sheet .hierarchy-actions {
+  margin-top: 5px;
+}
+
+.hierarchy-fold {
+  margin-top: 6px;
+  border-top: 1px solid var(--schematic-ui-line);
+  padding-top: 6px;
+}
+
+.hierarchy-properties {
+  padding: 8px 0;
+}
+
+.property-editor.has-hierarchy-pin [data-property-component-form],
+.property-editor.has-hierarchy-pin [data-property-empty] {
+  display: none;
+}
+
+.schematic-paper.is-hierarchy-placing,
+.schematic-paper.is-hierarchy-picking {
+  cursor: crosshair;
+}
+
+.schematic-paper.is-hierarchy-picking [data-sheet-block] [joint-selector="frame"] {
+  cursor: crosshair;
+  pointer-events: all;
+}
+
 .netlist-panel {
   display: grid;
   grid-template-rows: auto repeat(2, minmax(0, 1fr));

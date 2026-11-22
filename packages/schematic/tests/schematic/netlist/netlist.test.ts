@@ -273,7 +273,7 @@ describe("structural netlist", () => {
     }
   });
 
-  it("reports case-only instance and net collisions without joining distinct nets", () => {
+  it("preserves case-sensitive labels and exports distinct SPICE names for them", () => {
     const document = dividerDocument();
     const wireA = document.wires.find(wire => wire.id === "w1")!;
     const wireB = document.wires.find(wire => wire.id === "w2")!;
@@ -283,10 +283,12 @@ describe("structural netlist", () => {
     ];
     document.components.push({ ...fixtureComponent("resistor", "R3", 600, 260), ref: "r1" });
     const design = buildStructuralNetlist(document);
-    expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "NAME_COLLISION" }));
+    expect(design.diagnostics).not.toContainEqual(expect.objectContaining({ code: "NAME_COLLISION" }));
     expect(design.diagnostics).toContainEqual(expect.objectContaining({ code: "DUPLICATE_REF", componentId: "R3" }));
     const resistor = design.instances.find(instance => instance.ref === "R1")!;
-    expect(new Set(resistor.nodes.map(node => node.toLowerCase())).size).toBe(2);
+    expect(resistor.nodes).toEqual(["INPUT", "input"]);
+    expect(printNetlist(design, "spectre")).toContain("R1 (INPUT input)");
+    expect(printNetlist(design, "spice")).toContain("R1 INPUT input_2");
   });
 
   it("keeps exportable instances when the bulk is floating or source waveform is unknown", () => {

@@ -4,7 +4,8 @@ import { localizeNetlistDiagnostic } from "../schematicUiText";
 import { buildStructuralNetlist, printNetlist, type NetlistDesign, type NetlistDiagnostic, type NetlistFormat } from "./index";
 
 interface NetlistPanelOptions {
-  onSelect?: (componentId: string) => void;
+  onSelect?: (componentId: string, sheetId?: string) => void;
+  buildDesign?: (document: SchematicDocument) => NetlistDesign | null;
 }
 
 interface HighlightToken {
@@ -47,7 +48,7 @@ export class NetlistPanelController {
     this.diagnosticsEl?.addEventListener("click", (event) => {
       const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-netlist-diagnostic-component]");
       const componentId = target?.dataset.netlistDiagnosticComponent;
-      if (componentId) this.options.onSelect?.(componentId);
+      if (componentId) this.options.onSelect?.(componentId, target?.dataset.netlistDiagnosticSheet);
     }, { signal });
     this.render();
   }
@@ -58,7 +59,7 @@ export class NetlistPanelController {
   }
 
   refresh(schematic: SchematicDocument) {
-    this.design = buildStructuralNetlist(schematic);
+    this.design = this.options.buildDesign?.(schematic) ?? buildStructuralNetlist(schematic);
     this.render();
   }
 
@@ -156,6 +157,7 @@ export class NetlistPanelController {
     if (diagnostic.componentId) {
       (row as HTMLButtonElement).type = "button";
       row.dataset.netlistDiagnosticComponent = diagnostic.componentId;
+      if (diagnostic.sheetId) row.dataset.netlistDiagnosticSheet = diagnostic.sheetId;
     }
     const head = document.createElement("span");
     head.className = "netlist-diagnostic-head";

@@ -61,7 +61,9 @@ const TEMPLATE_REF_PREFIXES: Record<ComponentType, string> = {
   differentiator: "DIF",
   delay: "DLY",
   filter: "FLT",
-  annotation: "TXT"
+  annotation: "TXT",
+  sheetPort: "PIN",
+  sheetBlock: "X"
 };
 
 export function fixtureComponent(type: ComponentType, ref: string, x: number, y: number, rotation = 0): ComponentInstance {

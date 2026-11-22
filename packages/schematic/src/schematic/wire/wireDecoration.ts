@@ -60,9 +60,9 @@ export interface WireDigitalDecorationGeometry {
   labelPosition: Point;
 }
 
-export function wireStrokeWidth(wire: Pick<Wire, "appearance">) {
+export function wireStrokeWidth(wire: Pick<Wire, "appearance">, bus = false) {
   const appearance = resolvedWireAppearance(wire);
-  return wireUnitWidth(wire) * (appearance.lineWidth === "2a" ? 2 : 1);
+  return Math.max(bus ? 6 : 0, wireUnitWidth(wire) * (appearance.lineWidth === "2a" ? 2 : 1));
 }
 
 export function wireUnitWidth(wire: Pick<Wire, "appearance">) {

@@ -18,10 +18,12 @@ interface SidebarLibraryEvents {
   onPick: (item: InstancePaletteItem) => void;
   initialTab?: SidebarTab;
   onTabChange?: (tab: SidebarTab) => void;
+  hierarchy?: () => { id: string; name: string; enabled: boolean; preview: () => string }[];
+  onHierarchyPick?: (sheetId: string) => void;
 }
 
 export class SidebarLibrary {
-  private libraryId: DeviceLibraryId = "all";
+  private libraryId: DeviceLibraryId | "hierarchy" = "all";
   private readonly lifecycle = new AbortController();
   private librarySelect: HTMLSelectElement | null = null;
   private cellList: HTMLElement | null = null;
@@ -85,6 +87,11 @@ export class SidebarLibrary {
       return;
     }
     const button = target.closest<HTMLElement>("[data-library-item]");
+    const sheet = target.closest<HTMLButtonElement>("[data-library-sheet]");
+    if (sheet?.dataset.librarySheet && !sheet.disabled) {
+      this.events.onHierarchyPick?.(sheet.dataset.librarySheet);
+      return;
+    }
     const item = button?.dataset.libraryItem as InstancePaletteItem | undefined;
     if (!item) return;
     event.preventDefault();
@@ -115,6 +122,12 @@ export class SidebarLibrary {
       option.textContent = `${t(library.labelKey, library.label)} (${library.items.length})`;
       select.append(option);
     }
+    if (this.events.hierarchy) {
+      const option = select.ownerDocument.createElement("option");
+      option.value = "hierarchy";
+      option.textContent = `${t("right.hierarchy", "Hierarchy")} (${this.events.hierarchy().length})`;
+      select.append(option);
+    }
     select.value = this.libraryId;
   }
 
@@ -122,6 +135,24 @@ export class SidebarLibrary {
     const list = this.cellList;
     if (!list) return;
     list.replaceChildren();
+    if (this.libraryId === "hierarchy") {
+      for (const item of this.events.hierarchy?.() ?? []) {
+        const button = list.ownerDocument.createElement("button");
+        button.type = "button";
+        button.className = "library-cell";
+        button.dataset.librarySheet = item.id;
+        button.disabled = !item.enabled;
+        button.title = item.enabled ? item.name : t("hierarchy.cycle", "This sheet would create a cyclic reference");
+        const preview = list.ownerDocument.createElement("span");
+        preview.className = "library-cell-preview";
+        preview.innerHTML = item.preview();
+        const name = list.ownerDocument.createElement("span");
+        name.textContent = item.name;
+        button.append(preview, name);
+        list.append(button);
+      }
+      return;
+    }
     if (this.libraryId === "all") {
       for (const library of DEVICE_LIBRARIES) {
         if (library.id === "all") continue;
@@ -167,7 +198,8 @@ export class SidebarLibrary {
     return button;
   }
 
-  private readLibraryId(value: string | undefined): DeviceLibraryId {
+  private readLibraryId(value: string | undefined): DeviceLibraryId | "hierarchy" {
+    if (value === "hierarchy" && this.events.hierarchy) return value;
     return DEVICE_LIBRARIES.some(library => library.id === value)
       ? value as DeviceLibraryId
       : "all";

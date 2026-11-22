@@ -48,6 +48,10 @@ export function buildSchematicToolbar<T extends object>(ui: UiBuilder<T>, namesp
     toolbarButton(ui, "instance", "Instance", "i", namespaceSvgIds(instanceIcon, `${namespace}-instance`), "tool"),
     toolbarButton(ui, "wire", "Wire", "w", namespaceSvgIds(wireIcon, `${namespace}-wire`), "tool"),
     toolbarButton(ui, "label", "Net Label", "L", namespaceSvgIds(labelIcon, `${namespace}-label`), "tool"),
+    ui.el("button", {
+      type: "button", "data-command": "pin", "aria-haspopup": "dialog",
+      "aria-label": message("toolbar.pinShortcut", "Pin (P)"), title: message("toolbar.pinShortcut", "Pin (P)")
+    }, ui.toolbarIcon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 5h10l6 7-6 7H3zM19 12h3" fill="none" stroke="currentColor" stroke-width="2"/></svg>')),
     toolbarButton(ui, "note", "Note", "Shift+N", namespaceSvgIds(noteIcon, `${namespace}-note`)),
     toolbarButton(ui, "rotate", "Rotate", "r", namespaceSvgIds(rotateIcon, `${namespace}-rotate`)),
     toolbarButton(ui, "mirror-x", "Mirror X", "Ctrl+R", namespaceSvgIds(upDownMirrorIcon, `${namespace}-mirror-x`)),

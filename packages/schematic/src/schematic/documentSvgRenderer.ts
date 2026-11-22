@@ -74,6 +74,7 @@ export function renderSchematicDocumentSvg(
       inductorCouplings: (document.inductorCouplings ?? []).filter(coupling => displayed(coupling.id)),
       wires,
       wireEndpoints,
+      busWireIds: topology.netResolution.busWireIds,
       junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
       junctionColors,
       netLabels: document.netLabels.filter(label => displayed(label.id)),

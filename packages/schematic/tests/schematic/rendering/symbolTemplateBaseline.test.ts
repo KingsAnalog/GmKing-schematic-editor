@@ -21,7 +21,7 @@ if (process.env.UPDATE_RAZAVI_BASELINE === "1") writeFileSync(fixture, JSON.stri
 const baseline = JSON.parse(readFileSync(fixture, "utf8")) as Record<string, string>;
 
 describe("Razavi visual baseline before symbol-template extraction", () => {
-  it.each(Object.keys(actual))("preserves %s variants, rotations, mirrors, labels and SVG", type => {
+  it.each(Object.keys(baseline))("preserves %s variants, rotations, mirrors, labels and SVG", type => {
     expect(actual[type]).toBe(baseline[type]);
   });
 });

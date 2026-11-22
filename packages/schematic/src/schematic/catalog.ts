@@ -6,6 +6,7 @@ import { DEFAULT_POLYGON_POINTS, polygonPoints } from "./polygonComponentModel";
 import { DEFAULT_POLYLINE_POINTS, polylinePoints, polylineSize } from "./polylineComponentModel";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
 import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
+import { blockGeometry, blockPorts, PORT_TERMINAL, readSheetPort, roleForPort } from "./hierarchyPins";
 import {
   boxedComponentPinPoint,
   boxedComponentSize,
@@ -989,6 +990,15 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     bodyArc: DEFAULT_ARC_POINTS,
     symbol: "arc"
   }),
+  sheetPort: component({
+    type: "sheetPort", label: "Pin", hotLabel: "pin", terminalClass: "dynamic", nameFormat: "literal",
+    size: { width: 160, height: 40 }, pins: [{ id: PORT_TERMINAL, label: "", role: "io", x: 0, y: 0 }],
+    symbol: "sheet-port"
+  }),
+  sheetBlock: component({
+    type: "sheetBlock", label: "Sheet", hotLabel: "sheet", terminalClass: "dynamic",
+    valuePrefix: "X", size: blockGeometry([]).size, pins: [], symbol: "sheet-block"
+  }),
   annotation: component({
     type: "annotation",
     label: "TXT",
@@ -1091,6 +1101,14 @@ export function resolveComponentPinOptions(component: ComponentInstance | Compon
 
 function resolveComponentConfiguration(component: ComponentInstance | ComponentType): ComponentDef {
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
+  if (typeof component !== "string" && component.type === "sheetBlock") {
+    const { size, pins } = blockGeometry(blockPorts(component));
+    return { ...base, size, pins, label: component.values["sheet:name"] || base.label };
+  }
+  if (typeof component !== "string" && component.type === "sheetPort") {
+    const port = readSheetPort(component);
+    return { ...base, pins: [{ id: PORT_TERMINAL, label: port.name, role: roleForPort(port.type), x: 0, y: 0 }] };
+  }
   if (base.type === "circle" && typeof component !== "string") {
     return { ...base, size: circleSize(component) };
   }

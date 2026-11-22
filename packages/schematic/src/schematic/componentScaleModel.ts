@@ -8,6 +8,7 @@ export function componentScale(instance: Pick<ComponentInstance, "scale">): Comp
 }
 
 export function supportsComponentScale(type: ComponentType, scale: unknown): scale is ComponentScale {
+  if (type === "sheetPort" || type === "sheetBlock") return scale === 1;
   return COMPONENT_SCALES.some(value => value === scale)
     && (scale !== 0.5 || !["rectangle", "triangle", "polyline", "arc", "polygon", "spntSwitch"].includes(type));
 }

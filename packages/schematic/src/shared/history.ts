@@ -82,6 +82,15 @@ export class SnapshotHistory<T> {
     this.redoStack = [];
   }
 
+  map<U>(transform: (state: T) => U) {
+    const first = this.undoStack[0];
+    const mapped = new SnapshotHistory(transform(this.cloneState(first.value)), { maxDepth: this.maxDepth });
+    const mapEntry = (entry: HistoryEntry<T>) => mapped.makeEntry(transform(this.cloneState(entry.value)));
+    mapped.undoStack = [mapped.undoStack[0], ...this.undoStack.slice(1).map(mapEntry)];
+    mapped.redoStack = this.redoStack.map(mapEntry);
+    return mapped;
+  }
+
   private makeEntry(state: T): HistoryEntry<T> {
     const value = this.cloneState(state);
     return {

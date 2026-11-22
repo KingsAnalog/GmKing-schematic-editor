@@ -5,13 +5,13 @@ import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 export const SYMBOL_CONTENT_RUN_SLOT_COUNT = 12;
 export const SYMBOL_CONTENT_PATH_SLOT_COUNT = 12;
 
-export function symbolContentMarkup() {
+export function symbolContentMarkup(runCount = SYMBOL_CONTENT_RUN_SLOT_COUNT) {
   return [
     ...Array.from({ length: SYMBOL_CONTENT_PATH_SLOT_COUNT }, (_, index) => ({
       tagName: "path",
       selector: symbolContentPathSelector(index)
     })),
-    ...Array.from({ length: SYMBOL_CONTENT_RUN_SLOT_COUNT }, (_, index) => ({
+    ...Array.from({ length: runCount }, (_, index) => ({
       tagName: "text",
       selector: symbolContentRunSelector(index)
     }))
@@ -57,7 +57,7 @@ export function symbolContentCellAttrs(
         pointerEvents: "none"
       } : hiddenPathAttrs()];
     }),
-    ...Array.from({ length: SYMBOL_CONTENT_RUN_SLOT_COUNT }, (_, index) => {
+    ...Array.from({ length: Math.max(SYMBOL_CONTENT_RUN_SLOT_COUNT, layout?.runs.length ?? 0) }, (_, index) => {
       const run = layout?.runs[index];
       return [symbolContentRunSelector(index), run ? {
         text: run.text,

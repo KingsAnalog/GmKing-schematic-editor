@@ -215,7 +215,7 @@ function labelToolProperties<T extends object>(el: UiBuilder<T>["el"]) {
   return el("div", { class: "property-form", "data-property-label-tool-form": true, hidden: true },
     el("label", { class: "property-row" },
       el("span", {}, message("ui.label", "Label")),
-      el("input", { type: "text", spellcheck: "false", autocomplete: "off", "data-property-label-tool-input": true })
+      el("input", { type: "text", spellcheck: "false", autocomplete: "off", placeholder: "OUT, OUT<7:0>, OUT<3>", "data-property-label-tool-input": true })
     ),
     el("div", { class: "property-error", "data-property-label-tool-error": true, hidden: true })
   );

@@ -29,6 +29,7 @@
     "test:r3:polyline": "npm run build:lib && npm run build:web && node scripts/r3-polyline.mjs",
     "test:r3:layers": "npm run build:lib && node scripts/r3-layers.mjs",
     "test:r3:display": "npm run build:lib && npm run build:web && node scripts/r3-display.mjs",
+    "test:r4": "npm run build:lib && npm run build:web && node scripts/r4-hierarchy.mjs",
     "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"
   },
   "devDependencies": {

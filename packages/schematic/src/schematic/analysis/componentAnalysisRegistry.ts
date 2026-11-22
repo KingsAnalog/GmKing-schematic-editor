@@ -85,7 +85,9 @@ export const COMPONENT_ANALYSIS_REGISTRY = {
   differentiator: { model: "blackBox" },
   delay: { model: "blackBox" },
   filter: { model: "blackBox" },
-  annotation: { model: "annotation" }
+  annotation: { model: "annotation" },
+  sheetPort: { model: "annotation" },
+  sheetBlock: { model: "blackBox" }
 } as const satisfies Record<ComponentType, ComponentAnalysisRegistration>;
 
 export function resolveComponentAnalysisModel(

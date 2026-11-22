@@ -65,7 +65,9 @@ export type ComponentType =
   | "differentiator"
   | "delay"
   | "filter"
-  | "annotation";
+  | "annotation"
+  | "sheetPort"
+  | "sheetBlock";
 
 export type PinRole =
   | "in"

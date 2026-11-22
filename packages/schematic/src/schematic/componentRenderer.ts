@@ -20,7 +20,8 @@ import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
   symbolContentCellAttrs,
   symbolContentDefaultAttrs,
-  symbolContentMarkup
+  symbolContentMarkup,
+  SYMBOL_CONTENT_RUN_SLOT_COUNT
 } from "./symbolContentView";
 
 export { PREVIEW_COMPONENT_ID };
@@ -210,7 +211,8 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
   return {
     ...triangleHandleAttrs,
     root: {
-      "data-layer": isLibraryShapeType(model.def.type) ? "shape" : "component"
+      "data-layer": isLibraryShapeType(model.def.type) ? "shape" : "component",
+      ...(model.def.type === "sheetBlock" ? { "data-sheet-block": "true" } : {})
     },
     frame: {
       x: 0,
@@ -556,6 +558,11 @@ export function makeComponentCell(
     position,
     size: { width: frame.width, height: frame.height },
     attrs: cellAttrs,
+    ...(instance.type === "sheetBlock" ? {
+      markup: [...SymbolElement.prototype.markup,
+        ...symbolContentMarkup(model.symbolContentLayout?.runs.length ?? 0).slice(
+          symbolContentMarkup(SYMBOL_CONTENT_RUN_SLOT_COUNT).length)]
+    } : {}),
     ...(vertexMarkup ? { markup: [
       { tagName: "rect", selector: "frame" },
       { tagName: "path", selector: "symbolBody" },

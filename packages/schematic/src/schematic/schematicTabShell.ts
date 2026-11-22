@@ -162,6 +162,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           ),
           el("div", { class: "schematic-document-export-formats" },
             el("button", { type: "button", "data-schematic-export-format": "json" }, message("export.json", "Schematic JSON")),
+            el("button", { type: "button", "data-schematic-export-format": "project" }, message("hierarchy.projectJson", "Project JSON")),
             el("button", { type: "button", "data-schematic-export-format": "svg" }, "SVG"),
             el("button", { type: "button", "data-schematic-export-format": "png" }, "PNG")
           ),
@@ -287,6 +288,9 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
       "data-right-dock": true
     },
       el("div", { class: "schematic-sidebar-tabs right-dock-tabs", role: "tablist", "aria-label": message("ui.inspectorViews", "Inspector views") },
+        el("button", { type: "button", class: "schematic-sidebar-tab", role: "tab",
+          "data-right-view": "hierarchy", "aria-selected": "false", tabindex: "-1"
+        }, message("right.hierarchy", "Hierarchy")),
         el("button", {
           type: "button",
           class: "schematic-sidebar-tab is-active",
@@ -303,6 +307,7 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
           tabindex: "-1"
         }, message("right.netlist", "Netlist"))
       ),
+      el("section", { class: "right-dock-panel", "data-right-panel": "hierarchy", role: "tabpanel", hidden: true }),
       el("section", { class: "right-dock-panel", "data-right-panel": "analysis", role: "tabpanel" },
         el("p", { class: "analysis-note" }, message("ui.usesComponentValuesFromThePropertyEditor", "Uses component values from the Property Editor.")),
         el("div", { "data-selection-summary": true, class: "selection-summary" }, message("ui.noObjectSelected", "No object selected.")),

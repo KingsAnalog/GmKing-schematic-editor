@@ -43,6 +43,7 @@ export function nearestVoltageNet(document: SchematicDocument, point: Point): Vo
   let bestNet = "";
   let bestDistance = Number.POSITIVE_INFINITY;
   activeWires.forEach((wire) => {
+    if (resolution.busWireIds.has(wire.id)) return;
     const net = resolution.wireNetNames.get(wire.id);
     if (!net) return;
     wireSegments(wire).forEach((segment) => {
@@ -58,10 +59,15 @@ export function nearestVoltageNet(document: SchematicDocument, point: Point): Vo
   }
 
   const wirePointKeys = new Set<string>();
-  activeWires.forEach((wire) => wire.points.forEach((wirePoint) => wirePointKeys.add(pointKey(wirePoint))));
-  workingDocument.junctions.forEach((junction) => wirePointKeys.add(pointKey(junction)));
+  activeWires.forEach((wire) => {
+    if (!resolution.busWireIds.has(wire.id)) wire.points.forEach((point) => wirePointKeys.add(pointKey(point)));
+  });
+  workingDocument.junctions.forEach((junction) => {
+    if (resolution.junctionNetNames.has(pointKey(junction))) wirePointKeys.add(pointKey(junction));
+  });
 
   resolution.nets.forEach((resolvedNet, net) => {
+    if (resolvedNet.wireIds.length && resolvedNet.wireIds.every(id => resolution.busWireIds.has(id))) return;
     const points = resolvedNet.points;
     points.forEach((candidate) => {
       if (!wirePointKeys.has(pointKey(candidate))) return;

@@ -36,8 +36,8 @@ export function createSchematicWorkspacePersistence(
     const value = raw(SCHEMATIC_DOCUMENT_STORAGE_PREFIX + id);
     if (!value) return null;
     try {
-      const document = JSON.parse(value).state?.document;
-      return JSON.stringify(document ?? null);
+      const state = JSON.parse(value).state;
+      return JSON.stringify(state?.project ?? state?.document ?? null);
     }
     catch { return value; }
   };
@@ -92,14 +92,15 @@ export function createSchematicWorkspacePersistence(
     persistDocument(id, snapshot) {
       const captured = structuredClone(snapshot);
       return enqueue(SCHEMATIC_DOCUMENT_STORAGE_PREFIX + id, () => {
-        const { document } = captured;
+        const { document, project, sheetPath } = captured;
         // Derived junctions are absent from the stored content version.
-        const desired = JSON.stringify(document ? contentFromDocument(document) : null);
+        const desired = JSON.stringify(project ?? (document ? contentFromDocument(document) : null));
         const base = bases.get(id) ?? null;
         const current = contentVersion(id);
         if (storage && current !== base && desired !== base && desired !== current) throw new SchematicStorageConflict();
-        if (desired !== base || !storage) {
-          persistSchematicDocumentSnapshot(id, { document }, storage);
+        if (desired !== base || project || !storage) {
+          if (project && storage && current !== base && desired === base && current !== desired) return captured;
+          persistSchematicDocumentSnapshot(id, { document, project, sheetPath }, storage);
           bases.set(id, contentVersion(id));
         }
         return captured;

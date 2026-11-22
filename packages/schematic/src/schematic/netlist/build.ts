@@ -1,5 +1,6 @@
 import { extractNetlist } from "../netlist";
-import { resolveSchematicNets, type NetResolution } from "../netResolution";
+import { netMembersForPin, resolveSchematicNets, type NetResolution } from "../netResolution";
+import { netMembers, parseBusName } from "../busName";
 import { parseEngineeringValue } from "../../shared/engineeringUnits";
 import {
   isVoltageSourceType,
@@ -7,6 +8,7 @@ import {
   voltageSourceType,
   type VoltageSourceType
 } from "../voltageSourceModel";
+import { blockPorts, PORT_TERMINAL, sheetPorts } from "../hierarchyPins";
 import type {
   ComponentInstance,
   ComponentType,
@@ -114,35 +116,55 @@ export function buildStructuralNetlist(
     return fallback;
   };
 
-  const portInfo = collectPorts(document, extracted, resolution);
+  const formalPorts = options.hierarchy ? sheetPorts(document.components) : [];
+  const formalBits = formalPorts.flatMap(port => netMembers(port.name));
+  const bitNames = busNodeNames([...resolution.nets.keys(), ...formalBits]);
+  const nodeName = (name: string) => bitNames.get(name) ?? name;
+  const portInfo = options.hierarchy
+    ? { ports: formalBits.map(nodeName), invalid: [], hasGnd: false, hasVdd: false }
+    : collectPorts(document, extracted, resolution, nodeName);
   portInfo.invalid.forEach((name) => {
     report("INVALID_PORT_NAME", "error", `Port name "${name}" is not a valid SPICE identifier.`);
   });
   for (const { label, status, message } of resolution.labelStates.values()) {
     if (status === "conflict") report("NAME_COLLISION", "error", `Label "${label.name}": ${message}`, undefined, undefined, label.name);
   }
+  for (const { pin, expected, actual } of resolution.widthMismatches) {
+    report("BUS_WIDTH_MISMATCH", "error", `${pin.componentRef}.${pin.pinId} expects ${expected} bit(s), but the connected wire carries ${actual}. Select a single bit with a Net Label such as OUT<3> on a separate wire.`,
+      pin.componentId, pin.pinId);
+  }
   const { names: canonicalNames, nextName } = canonicalNetNames(
     extracted,
     resolution,
     portInfo.ports,
-    portInfo.hasGnd ? "GND" : null,
-    portInfo.hasVdd ? "VDD" : null
+    portInfo.hasGnd ? "GND" : options.hierarchy ? "0" : null,
+    portInfo.hasVdd ? "VDD" : null,
+    nodeName
   );
+  const formalByNet = new Map<string, string>();
+  const aliases: Array<{ portId: string; name: string; net: string }> = [];
+  if (options.hierarchy) {
+    for (const port of formalPorts) {
+      const bits = netMembers(port.name);
+      const internal = netMembersForPin(resolution, port.id, PORT_TERMINAL);
+      if (bits.some((_bit, index) => !isBoundNet(resolution, internal[index]))) {
+        report("PORT_UNCONNECTED", "warning", `Port ${port.name} is not connected inside its sheet.`, port.id);
+      }
+      internal.forEach((net, index) => {
+        const name = nodeName(bits[index]);
+        const alias = net === "0" ? "0" : formalByNet.get(net);
+        if (alias) aliases.push({ portId: port.id, name, net: alias });
+        else formalByNet.set(net, name);
+      });
+    }
+    const formalNames = new Set(portInfo.ports);
+    for (const [internal, emitted] of canonicalNames) {
+      if (formalNames.has(emitted) && !formalByNet.has(internal)) canonicalNames.set(internal, nextName());
+    }
+    formalByNet.forEach((name, internal) => canonicalNames.set(internal, name));
+  }
   const canonical = (netName: string) => canonicalNames.get(netName) ?? netName;
   const syntheticNets = new Map<string, string>();
-  const caseOwners = new Map<string, string>();
-  for (const [internal, emitted] of canonicalNames) {
-    const key = emitted.toLowerCase();
-    const previous = caseOwners.get(key);
-    if (previous !== undefined && previous !== emitted) {
-      const fallback = nextName();
-      report("NAME_COLLISION", "error", `Nets "${previous}" and "${emitted}" differ only in case; using ${fallback} for "${emitted}".`,
-        resolution.nets.get(internal)?.pins[0]?.componentId, undefined, emitted);
-      canonicalNames.set(internal, fallback);
-    } else {
-      caseOwners.set(key, emitted);
-    }
-  }
   const netForPin = (entry: ExtractedNetlist["components"][number], pinId: string) => {
     const internal = entry.pins[pinId] ?? "";
     if (internal) return canonical(internal);
@@ -216,7 +238,7 @@ export function buildStructuralNetlist(
 
   for (const entry of extracted.components) {
     const { instance } = entry;
-    if (instance.temporarilyDeleted || SKIP_TYPES.has(instance.type)) continue;
+    if (instance.temporarilyDeleted || instance.type === "sheetPort" || SKIP_TYPES.has(instance.type)) continue;
     const net = (pinId: string) => netForPin(entry, pinId);
 
     if (!IDENTIFIER.test(instance.ref)) {
@@ -229,6 +251,22 @@ export function buildStructuralNetlist(
       continue;
     }
     refs.add(refKey);
+
+    if (options.hierarchy && instance.type === "sheetBlock") {
+      const ports = blockPorts(instance).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+      const nodes = ports.flatMap(port => {
+        const bits = netMembers(port.name);
+        const internal = netMembersForPin(resolution, instance.id, port.id);
+        const names = bits.map((_bit, index) => internal[index] ? canonical(internal[index]) : nextName());
+        if (bits.some((_bit, index) => !isBoundNet(resolution, internal[index]))) {
+          report("UNBOUND_PORT", "error", `${instance.ref}.${port.name} is unbound; using ${names.join(" ")}.`, instance.id, port.id, names[0]);
+        }
+        return names;
+      });
+      instances.push({ componentId: instance.id, ref: instance.ref, master: instance.values["sheet:name"],
+        kind: "subckt", type: "sheetBlock", nodes, params: {} });
+      continue;
+    }
 
     if (!SUPPORTED_TYPES.has(instance.type)) {
       report(
@@ -453,12 +491,20 @@ export function buildStructuralNetlist(
     report("SINGLE_PIN_NET", "warning", `Net ${netName} has only one pin.`, pin.componentId, pin.pinId, netName);
   });
 
+  for (const [index, alias] of aliases.entries()) {
+    let ref = `Vport_${index + 1}`;
+    while (refs.has(ref.toLowerCase())) ref += "_";
+    refs.add(ref.toLowerCase());
+    instances.push({ componentId: alias.portId, ref, kind: "probe", master: "vsource",
+      type: "iprobe", nodes: [alias.name, alias.net], params: { dc: "0" } });
+  }
   return {
     name: "schematic",
     ports: portInfo.ports,
     parameters,
     instances,
-    diagnostics
+    diagnostics,
+    ...(portInfo.hasGnd ? { groundPort: "GND" } : {})
   };
 }
 
@@ -540,7 +586,26 @@ function sourceParameters(
   return null;
 }
 
-function collectPorts(document: SchematicDocument, extracted: ExtractedNetlist, resolution: NetResolution) {
+function isBoundNet(resolution: NetResolution, name: string | undefined) {
+  const net = name === undefined ? undefined : resolution.nets.get(name);
+  return !!net && (net.pins.length > 1 || net.wireIds.length > 0);
+}
+
+function busNodeNames(names: readonly string[]) {
+  const used = new Set(names.filter(name => !parseBusName(name)));
+  const assigned = new Map<string, string>();
+  for (const name of names) {
+    if (!parseBusName(name) || assigned.has(name)) continue;
+    const base = name.replace(/<(\d+)>$/, "_$1");
+    let candidate = base;
+    for (let suffix = 2; used.has(candidate); suffix++) candidate = `${base}_${suffix}`;
+    assigned.set(name, candidate);
+    used.add(candidate);
+  }
+  return assigned;
+}
+
+function collectPorts(document: SchematicDocument, extracted: ExtractedNetlist, resolution: NetResolution, nodeName: (name: string) => string) {
   const ports: string[] = [];
   const invalid: string[] = [];
   const seen = new Set<string>();
@@ -550,13 +615,13 @@ function collectPorts(document: SchematicDocument, extracted: ExtractedNetlist, 
       invalid.push(name);
       return;
     }
-    const key = name.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
+    if (seen.has(name)) return;
+    seen.add(name);
     ports.push(name);
   };
   document.netLabels.forEach((label) => {
-    if (resolution.labelStates.get(label.id)?.status === "valid") add(label.name ?? "");
+    const state = resolution.labelStates.get(label.id);
+    if (state?.status === "valid") state.netNames?.forEach(name => add(nodeName(name)));
   });
   const hasGnd = extracted.components.some(entry => entry.instance.type === "gnd");
   const hasVdd = extracted.components.some(entry => entry.instance.type === "vdd");
@@ -570,7 +635,8 @@ function canonicalNetNames(
   resolution: NetResolution,
   ports: readonly string[],
   groundPort: string | null,
-  vddPort: string | null
+  vddPort: string | null,
+  nodeName: (name: string) => string
 ) {
   const names = new Map<string, string>();
   const used = new Set(ports.map(name => name.toLowerCase()));
@@ -581,7 +647,7 @@ function canonicalNetNames(
   };
   resolution.nets.forEach((net) => {
     if (groundPort && net.name === "0") assign(net.name, groundPort);
-    else if (net.explicit) assign(net.name, net.name);
+    else if (net.explicit) assign(net.name, nodeName(net.name));
   });
   extracted.components
     .filter(entry => entry.instance.type === "vdd")
