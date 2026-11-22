@@ -184,8 +184,6 @@ export interface SchematicPropertyPanelControllerCallbacks {
   onNetLabelInput?: (value: string) => void;
   onNetLabelCommit?: (value: string) => void;
   onNetLabelCancel?: () => void;
-  onLabelToolInput?: (value: string) => void;
-  onLabelToolSubmit?: (value: string) => void;
 }
 
 type PropertyPanelElements = {
@@ -222,9 +220,6 @@ type PropertyPanelElements = {
   wireDigitalSlashInput: HTMLInputElement | null;
   wireDigitalLabelRow: HTMLElement | null;
   wireDigitalLabelInput: HTMLInputElement | null;
-  labelToolForm: HTMLElement | null;
-  labelToolInput: HTMLInputElement | null;
-  labelToolError: HTMLElement | null;
   cellRow: HTMLElement;
   cellSelect: HTMLSelectElement;
   identityFields: HTMLElement | null;
@@ -390,10 +385,6 @@ export class SchematicPropertyPanelController {
       this.syncNote(elements, input.note);
       return;
     }
-    if (input.labelTool) {
-      this.syncLabelTool(elements, input.labelTool);
-      return;
-    }
     if (input.network) {
       this.syncNetwork(elements, input.network);
       return;
@@ -404,12 +395,6 @@ export class SchematicPropertyPanelController {
       return;
     }
     this.syncEmpty(elements, input.hasSelection);
-  }
-
-  focusLabelToolInput() {
-    const input = this.root.querySelector<HTMLInputElement>("[data-property-label-tool-input]");
-    input?.focus({ preventScroll: true });
-    input?.select();
   }
 
   private elements(): PropertyPanelElements | null {
@@ -446,9 +431,6 @@ export class SchematicPropertyPanelController {
     const wireDigitalSlashInput = this.root.querySelector<HTMLInputElement>("[data-property-wire-digital-slash]");
     const wireDigitalLabelRow = this.root.querySelector<HTMLElement>("[data-property-wire-digital-label-row]");
     const wireDigitalLabelInput = this.root.querySelector<HTMLInputElement>("[data-property-wire-digital-label]");
-    const labelToolForm = this.root.querySelector<HTMLElement>("[data-property-label-tool-form]");
-    const labelToolInput = this.root.querySelector<HTMLInputElement>("[data-property-label-tool-input]");
-    const labelToolError = this.root.querySelector<HTMLElement>("[data-property-label-tool-error]");
     const cellRow = this.root.querySelector<HTMLElement>("[data-property-cell-row]");
     const cellSelect = this.root.querySelector<HTMLSelectElement>("[data-property-cell]");
     const identityFields = this.root.querySelector<HTMLElement>("[data-property-component-identity-fields]");
@@ -580,9 +562,6 @@ export class SchematicPropertyPanelController {
       wireDigitalSlashInput,
       wireDigitalLabelRow,
       wireDigitalLabelInput,
-      labelToolForm,
-      labelToolInput,
-      labelToolError,
       cellRow,
       cellSelect,
       identityFields,
@@ -684,7 +663,6 @@ export class SchematicPropertyPanelController {
     if (elements.wireEndMarkerRow) elements.wireEndMarkerRow.hidden = true;
     if (elements.wireDigitalSlashRow) elements.wireDigitalSlashRow.hidden = true;
     if (elements.wireDigitalLabelRow) elements.wireDigitalLabelRow.hidden = true;
-    if (elements.labelToolForm) elements.labelToolForm.hidden = true;
     elements.cellRow.hidden = true;
     if (elements.valueVisibilityRow) elements.valueVisibilityRow.hidden = true;
     elements.valueRow.hidden = true;
@@ -829,17 +807,6 @@ export class SchematicPropertyPanelController {
         }
       }
     }
-  }
-
-  private syncLabelTool(elements: PropertyPanelElements, labelTool: NonNullable<SchematicPropertyPanelInput["labelTool"]>) {
-    if (!elements.labelToolForm || !elements.labelToolInput || !elements.labelToolError) {
-      this.syncEmpty(elements, false);
-      return;
-    }
-    elements.labelToolForm.hidden = false;
-    if (elements.labelToolInput.value !== labelTool.value) elements.labelToolInput.value = labelTool.value;
-    elements.labelToolError.textContent = localizeSchematicStatus(labelTool.error ?? "");
-    elements.labelToolError.hidden = !labelTool.error;
   }
 
   private syncEmpty(elements: PropertyPanelElements, hasSelection: boolean) {
@@ -1801,8 +1768,6 @@ export class SchematicPropertyPanelController {
     }
     const coefficient = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
     if (coefficient) this.dirtyTextInputs.add(coefficient);
-    const label = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-tool-input]");
-    if (label) this.callbacks.onLabelToolInput?.(label.value);
   };
 
   private readonly handleFocusIn = (event: Event) => {
@@ -2025,11 +1990,10 @@ export class SchematicPropertyPanelController {
   private readonly handleKeydown = (event: Event) => {
     const key = (event as KeyboardEvent).key;
     const edit = this.propertyEditFromEvent(event);
-    const label = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-tool-input]");
     const coefficient = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
-    const input = edit?.input ?? label ?? coefficient;
+    const input = edit?.input ?? coefficient;
     if (!input) return;
-    if (key === "Escape" && !label) {
+    if (key === "Escape") {
       event.preventDefault();
       edit?.binding.cancel?.();
       if (input.type === "color") this.restoreColorInput(input);
@@ -2039,12 +2003,9 @@ export class SchematicPropertyPanelController {
     }
     if (key !== "Enter") return;
     event.preventDefault();
-    if (label) this.callbacks.onLabelToolSubmit?.(label.value);
-    else {
-      if (edit?.binding.kind === "text") this.commitBoundPropertyInput(edit);
-      else if (coefficient) this.commitCouplingCoefficientInput(coefficient);
-      input.blur();
-    }
+    if (edit?.binding.kind === "text") this.commitBoundPropertyInput(edit);
+    else if (coefficient) this.commitCouplingCoefficientInput(coefficient);
+    input.blur();
   };
 
   private closestInRoot<T extends Element>(event: Event, selector: string): T | null {

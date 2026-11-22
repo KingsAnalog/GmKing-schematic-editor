@@ -502,7 +502,6 @@ function createPropertyPanelFixture(callbacks: ConstructorParameters<typeof Sche
   const controller = {
     bind: () => rawController.bind(),
     sync: (input: any) => rawController.sync(normalizePanelInput(input)),
-    focusLabelToolInput: () => rawController.focusLabelToolInput()
   };
 
   return {

@@ -784,7 +784,7 @@ try {
   await pressKey("Escape");
   await clickSelector(page, "[data-command='label']");
   await evaluate(page, () => {
-    const input = document.querySelector("[data-property-label-tool-input]");
+    const input = document.querySelector("[data-net-label-name]");
     input.value = "TEST";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();

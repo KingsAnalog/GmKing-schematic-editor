@@ -41,7 +41,7 @@ describe("schematic wire tool controller", () => {
     expect(start).toEqual({
       kind: "pending",
       previewPoint: { x: 10, y: 10 },
-      status: "Wire start 10, 10. Empty clicks add bends; click a pin or press Enter to finish."
+      status: "Wire start 10, 10. Click to add bends. Double-click or press Enter to finish."
     });
     expect(controller.routePointCount()).toBe(1);
     expect(controller.previewPath({ x: 61, y: 41 })).toEqual([
@@ -54,7 +54,7 @@ describe("schematic wire tool controller", () => {
     expect(bend).toEqual({
       kind: "pending",
       previewPoint: { x: 60, y: 40 },
-      status: "Bend added at 60, 40. Continue routing, click a pin to finish, or press Enter."
+      status: "Bend added at 60, 40. Double-click or press Enter to finish."
     });
     expect(controller.routePointCount()).toBe(3);
     expect(controller.previewPath({ x: 80, y: 40 })).toEqual([
@@ -65,7 +65,7 @@ describe("schematic wire tool controller", () => {
     ]);
   });
 
-  it("returns commit points for pin start and pin finish without mutating a document", () => {
+  it("keeps a second pin click pending and returns commit points on finish", () => {
     const document = createDocument();
     const controller = new SchematicWireToolController();
 
@@ -73,11 +73,12 @@ describe("schematic wire tool controller", () => {
     expect(start).toEqual({
       kind: "pending",
       previewPoint: { x: 40, y: 0 },
-      status: "Wire started from pin. Move to preview, click bends, or click another pin to finish."
+      status: "Wire started from pin. Click to add bends. Double-click or press Enter to finish."
     });
     expect(controller.routePointCount()).toBe(1);
 
-    const finish = controller.applyPinClick({ x: 80, y: 40 });
+    expect(controller.applyPinClick({ x: 80, y: 40 }).kind).toBe("pending");
+    const finish = controller.finish({ x: 80, y: 40 });
     expect(finish).toEqual({
       kind: "commit",
       points: [
@@ -87,17 +88,17 @@ describe("schematic wire tool controller", () => {
       ],
       routeMode: "orthogonal"
     });
-    expect(controller.routePointCount()).toBe(1);
+    expect(controller.routePointCount()).toBe(3);
     expect(document).toEqual(createDocument());
 
     controller.reset();
     expect(controller.routePointCount()).toBe(0);
   });
 
-  it("keeps state on invalid keyboard finish and waits for caller reset after a keyboard commit", () => {
+  it("keeps state on invalid finish and waits for caller reset after a commit", () => {
     const controller = new SchematicWireToolController("wide");
 
-    expect(controller.finishFromKeyboard(null)).toEqual({
+    expect(controller.finish(null)).toEqual({
       kind: "invalid",
       status: "Click a start point before finishing a wire."
     });
@@ -105,14 +106,14 @@ describe("schematic wire tool controller", () => {
     expect(controller.routePointCount()).toBe(0);
 
     controller.applyBlankClick({ x: 0, y: 0 });
-    expect(controller.finishFromKeyboard({ x: 0, y: 0 })).toEqual({
+    expect(controller.finish({ x: 0, y: 0 })).toEqual({
       kind: "invalid",
-      status: "Move to a second point or click a bend before pressing Enter."
+      status: "Wire needs at least two distinct points."
     });
     expect(controller.variant).toBe("wide");
     expect(controller.routePointCount()).toBe(1);
 
-    expect(controller.finishFromKeyboard({ x: 40, y: 40 })).toEqual({
+    expect(controller.finish({ x: 40, y: 40 })).toEqual({
       kind: "commit",
       points: [
         { x: 0, y: 0 },
@@ -135,7 +136,7 @@ describe("schematic wire tool controller", () => {
 
     controller.applyBlankClick({ x: 0, y: 0 });
     controller.applyBlankClick({ x: 40, y: 0 });
-    const result = controller.finishFromKeyboard({ x: 0, y: 0 });
+    const result = controller.finish({ x: 0, y: 0 });
 
     expect(result).toEqual({
       kind: "commit",
@@ -187,7 +188,7 @@ describe("schematic wire tool controller", () => {
       { x: 100, y: 40 },
       { x: 100, y: 80 }
     ]);
-    expect(controller.finishFromKeyboard({ x: 100, y: 80 })).toMatchObject({
+    expect(controller.finish({ x: 100, y: 80 })).toMatchObject({
       kind: "commit",
       routeMode: "freeAngle"
     });
@@ -209,5 +210,19 @@ describe("schematic wire tool controller", () => {
 
     controller.applyBlankClick({ x: 0, y: 0 });
     expect(controller.appearance()).toEqual({ variant: "wide" });
+  });
+
+  it("routes the 45-degree draft and its committed path through the same grid points", () => {
+    const controller = new SchematicWireToolController();
+    controller.setRouteMode("diagonal45");
+    controller.begin("signal");
+    controller.applyBlankClick({ x: 70, y: 40 });
+    expect(controller.previewPath({ x: 20, y: 113 })).toEqual([
+      { x: 70, y: 40 }, { x: 70, y: 60 }, { x: 20, y: 110 }
+    ]);
+    expect(controller.finish({ x: 20, y: 113 })).toEqual({
+      kind: "commit", routeMode: "freeAngle", points: [{ x: 70, y: 40 }, { x: 70, y: 60 }, { x: 20, y: 110 }]
+    });
+    expect(controller.previewPath({ x: 20, y: 90 })).toEqual([{ x: 70, y: 40 }, { x: 20, y: 90 }]);
   });
 });

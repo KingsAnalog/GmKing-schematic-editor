@@ -19,7 +19,7 @@
         </section>
         <section>
           <h2>Connect and label nets</h2>
-          <p>Press <kbd>W</kbd> and click a pin, wire end, or grid point to start a wire. Click to add bends. Click a pin or press <kbd>Enter</kbd> to finish. Press <kbd>L</kbd>, enter a net name, and click the wire or junction to place the label.</p>
+          <p>Press <kbd>W</kbd> and click a pin, wire, or grid point to start a wire. The preview shows the snap point and the route. Click to add bends, then double-click or press <kbd>Enter</kbd> at the endpoint to finish. Press <kbd>L</kbd>, enter a net name, and confirm. Click near a wire or junction when the snap marker appears to place the label. Press <kbd>Esc</kbd> to cancel.</p>
           <p>Net Labels are case-sensitive. Wires on the same sheet with identical labels are electrically connected. Use <code>OUT&lt;7:0&gt;</code> for a bus. To use one bit, draw a separate wire and label it <code>OUT&lt;3&gt;</code>.</p>
         </section>
         <section>
@@ -41,6 +41,7 @@
           <h2>Editor options</h2>
           <p>Use <strong>Language</strong> to switch between English and Simplified Chinese. <strong>Color mode</strong> can follow your system or stay in Light or Dark mode. Both settings are saved in this browser and also apply to this manual.</p>
           <p>The gear opens <strong>Options</strong>, which also contains the current schematic's symbol template. Choose <strong>Wire crossings → Plain</strong> for straight crossings or <strong>Hop</strong> to show a bridge where wires cross without joining. Dots mark actual connections in either mode.</p>
+          <p><strong>Wire angle</strong> sets the drawing mode to <strong>Orthogonal</strong>, <strong>45 Degree</strong>, or <strong>Free</strong>. The preference is saved in this browser.</p>
           <p><strong>Default text font</strong> sets the font for the current schematic's notes and net labels. Select an individual note or net label and choose <strong>Properties → Font</strong> to override it or return to <strong>Document default</strong>. These settings are included in schematic JSON and used for image export.</p>
           <p><strong>Options → Process</strong> sets the default device models for this schematic. Select a transistor, resistor, capacitor or inductor and use <strong>Properties → Device model</strong> to override its model. Choose <strong>Custom</strong> as the process to enter model names directly. A blank custom field uses the process default. The process and overrides are stored in the schematic JSON and used for SPICE and Spectre output.</p>
         </section>
@@ -54,7 +55,7 @@
         </section>
         <section>
           <h2>连接导线并命名网络</h2>
-          <p>按 <kbd>W</kbd>，点击引脚、导线端点或网格点开始绘制。点击画布添加拐点，点击引脚或按 <kbd>Enter</kbd> 结束。按 <kbd>L</kbd> 输入网络名，再点击导线或连接点放置标签。</p>
+          <p>按 <kbd>W</kbd>，点击引脚、导线或网格点开始绘制。预览会显示吸附点和预计路径。单击添加拐点，在终点双击或按 <kbd>Enter</kbd> 完成。按 <kbd>L</kbd> 打开网络标签窗口，输入并确认网络名。导线或连接点附近出现吸附标记时，点击放置标签。按 <kbd>Esc</kbd> 取消。</p>
           <p>网络标签严格区分大小写。同一张原理图内，标签名称完全相同的导线会电气相连。将标签设为 <code>OUT&lt;7:0&gt;</code> 可定义总线。需要使用某一位时，另画一段导线并标成 <code>OUT&lt;3&gt;</code>。</p>
         </section>
         <section>
@@ -76,6 +77,7 @@
           <h2>编辑器选项</h2>
           <p>通过 <strong>Language</strong> 在英文和简体中文之间切换。<strong>颜色模式</strong>可跟随系统，也可固定使用亮色或暗色。两项设置均保存在当前浏览器，并应用于本说明。</p>
           <p>点击齿轮打开<strong>选项</strong>，可设置当前电路的符号模板。在 <strong>Wire crossings</strong> 中选择直线交叉（Plain）或跨线桥（Hop）。两种模式都用圆点表示真实连接。</p>
+          <p>在<strong>导线角度</strong>中选择正交、45 度或自由布线。此偏好保存在当前浏览器。</p>
           <p>通过 <strong>Default text font</strong> 选择当前图纸的注释和网络标签默认字体。在<strong>属性 → 字体</strong>中可覆盖单个对象的字体，或恢复为文档默认值。这些设置随电路 JSON 保存，并用于图像导出。</p>
           <p><strong>选项 → 工艺</strong>决定当前原理图的默认器件模型。选中晶体管、电阻、电容或电感后，可在<strong>属性 → 器件模型</strong>中单独指定。工艺选择<strong>自定义</strong>时可直接输入模型名称，留空则采用工艺默认值。工艺和单个器件的模型设置随原理图 JSON 保存，并用于生成 SPICE 和 Spectre 网表。</p>
         </section>

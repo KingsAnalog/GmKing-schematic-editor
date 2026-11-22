@@ -1,8 +1,9 @@
 import { refreshSchematicMessages, type SchematicLanguage } from "./schematicI18n";
+import { parseWireAngle, type WireAngle } from "./wire/wireAngle";
 
 type ColorMode = "system" | "light" | "dark";
 
-export function bindSchematicWebOptions(root: HTMLElement, onLanguageChange: () => void) {
+export function bindSchematicWebOptions(root: HTMLElement, onLanguageChange: () => void, onWireAngleChange: (angle: WireAngle) => void) {
   const { ownerDocument } = root;
   const view = ownerDocument.defaultView;
   const dialog = root.querySelector<HTMLDialogElement>("[data-schematic-options-dialog]");
@@ -13,8 +14,10 @@ export function bindSchematicWebOptions(root: HTMLElement, onLanguageChange: () 
   const colorPreference = view.matchMedia?.("(prefers-color-scheme: dark)");
   const languageSelect = dialog.querySelector<HTMLSelectElement>("[data-schematic-language-select]");
   const themeSelect = dialog.querySelector<HTMLSelectElement>("[data-schematic-theme-select]");
+  const wireAngleSelect = dialog.querySelector<HTMLSelectElement>("[data-schematic-wire-angle]");
   const languageKey = "at-lang";
   const themeKey = "at-theme";
+  const wireAngleKey = "at-schematic-wire-angle";
   let mode: ColorMode = "system";
 
   const read = (key: string) => {
@@ -47,8 +50,13 @@ export function bindSchematicWebOptions(root: HTMLElement, onLanguageChange: () 
     mode = stored === "dark" || stored === "light" ? stored : "system";
     applyTheme();
   };
+  const applyWireAngle = (angle: WireAngle) => {
+    if (wireAngleSelect) wireAngleSelect.value = angle;
+    onWireAngleChange(angle);
+  };
   setLanguage(read(languageKey) === "zh" ? "zh" : "en", false);
   readTheme();
+  applyWireAngle(parseWireAngle(read(wireAngleKey)));
   languageSelect?.addEventListener("change", () => {
     const language = languageSelect.value === "zh" ? "zh" : "en";
     store(languageKey, language);
@@ -60,10 +68,16 @@ export function bindSchematicWebOptions(root: HTMLElement, onLanguageChange: () 
     store(themeKey, mode === "system" ? null : mode);
     applyTheme();
   }, { signal });
+  wireAngleSelect?.addEventListener("change", () => {
+    const angle = parseWireAngle(wireAngleSelect.value);
+    store(wireAngleKey, angle);
+    applyWireAngle(angle);
+  }, { signal });
   colorPreference?.addEventListener("change", applyTheme, { signal });
   view.addEventListener("storage", event => {
     if (!event.key || event.key === languageKey) setLanguage(read(languageKey) === "zh" ? "zh" : "en", true);
     if (!event.key || event.key === themeKey) readTheme();
+    if (!event.key || event.key === wireAngleKey) applyWireAngle(parseWireAngle(read(wireAngleKey)));
   }, { signal });
 
   root.querySelector("[data-schematic-open-options]")?.addEventListener("click", () => {

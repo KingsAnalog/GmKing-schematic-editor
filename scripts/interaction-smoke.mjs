@@ -142,14 +142,18 @@ try {
     await page.send("Input.dispatchKeyEvent", { type:"keyDown", key, code, windowsVirtualKeyCode:virtualCode });
     await page.send("Input.dispatchKeyEvent", { type:"keyUp", key, code, windowsVirtualKeyCode:virtualCode });
   }
-  async function clickWorld(x, y) {
-    const p = await evaluate(page, (x,y) => {
+  async function moveToWorld(x, y) {
+    const point = await evaluate(page, (x,y) => {
       const matrix=document.querySelector('[model-id="horizontal"] [joint-selector="line"]').getScreenCTM();
       const p=new DOMPoint(x,y).matrixTransform(matrix); return {x:p.x,y:p.y};
     }, x,y);
-    await page.send("Input.dispatchMouseEvent", {type:"mouseMoved",...p,button:"none"});
-    await page.send("Input.dispatchMouseEvent", {type:"mousePressed",...p,button:"left",buttons:1,clickCount:1});
-    await page.send("Input.dispatchMouseEvent", {type:"mouseReleased",...p,button:"left",buttons:0,clickCount:1});
+    await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, button: "none" });
+    return point;
+  }
+  async function clickWorld(x, y, clickCount = 1) {
+    const point = await moveToWorld(x, y);
+    await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", buttons: 1, clickCount });
+    await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", buttons: 0, clickCount });
   }
   await clickSelector(page, '[model-id="junction-300-200"]');
   await key("Delete","Delete",46);
@@ -158,7 +162,7 @@ try {
   await clickWire("stem"); await key("Delete","Delete",46);
   const deleted = await content(); assert.equal(deleted.wires.length,1);
   await key("w","KeyW",87);
-  await clickWorld(300,200); await clickWorld(300,300); await key("Enter","Enter",13); await key("Escape","Escape",27);
+  await clickWorld(300,200); await moveToWorld(300,300); await key("Enter","Enter",13); await key("Escape","Escape",27);
   const redrawn = await content(); assert.equal(redrawn.wires.length,3);
   assert.equal(await evaluate(page, () => !!document.querySelector('[model-id="junction-300-200"]')),true);
   assert(!JSON.stringify(redrawn).includes("noConnect"));
@@ -169,6 +173,23 @@ try {
   await waitFor(page, () => !!window.interactionEditor && !!document.querySelector('[model-id="junction-300-200"]'), "Redrawn junction did not survive reload");
   assert.deepEqual(await content(),redrawn);
   console.log("[connections] delete junction, delete branch, redraw, Undo/Redo and reload passed with real mouse and keyboard events");
+
+  await clickWorld(350, 250);
+  await key("w", "KeyW", 87);
+  await clickWorld(350, 250);
+  await clickWorld(350, 250, 2);
+  assert.deepEqual(await content(), redrawn, "Double-clicking the start must not create a zero-length wire");
+  await clickWorld(350, 200);
+  assert.deepEqual(await content(), redrawn, "A single click on an existing wire must keep the route pending");
+  await clickWorld(350, 200, 2);
+  const joined = await content();
+  assert.equal(joined.wires.length, redrawn.wires.length + 2, "Finishing at an existing wire must split it and add the new branch");
+  assert(joined.wires.some(wire => wire.points.every(point => point.x === 350) &&
+    wire.points.some(point => point.y === 200) && wire.points.some(point => point.y === 250)));
+  await key("Escape", "Escape", 27);
+  await clickSelector(page, '[data-command="undo"]');
+  assert.deepEqual(await content(), redrawn, "One Undo must remove the double-click route and its junction");
+  console.log("[wire-finish] Enter at the preview endpoint and double-click at a wire junction passed");
   if (failures.length) throw new AggregateError(failures, "Interaction regressions failed");
 } finally {
   if (page) await evaluate(page, () => window.interactionEditor?.destroy()).catch(()=>{});

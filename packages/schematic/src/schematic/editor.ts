@@ -58,8 +58,12 @@ import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator"
 import { resolveSchematicNets, type NetResolution } from "./netResolution";
 import {
   bindStandaloneNetLabelsAtPoint,
+  nearestWireAttachment,
   netLabelPosition
 } from "./netLabelModel";
+import { SchematicNetLabelDialog } from "./netLabelDialog";
+import type { WireAngle } from "./wire/wireAngle";
+import { wireRouteModeForPath } from "./wire/wireGeometry";
 import { SchematicNetLabelToolController } from "./netLabelToolController";
 import {
   SchematicNetLabelCommitCoordinator,
@@ -324,6 +328,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private libraryShapeDraw: { kind: LibraryShapeType; points: Point[] } | null = null;
   private libraryShapeDragStart: Point | null = null;
   private shapeDraftOverlay: SVGSVGElement | null = null;
+  private routingSnapMarker: SVGCircleElement | null = null;
   private shapeFinishButton: HTMLButtonElement | null = null;
   private placementPointerStart: { x: number; y: number; blank: boolean; maxDistance: number } | null = null;
   private hierarchyPlacement: ComponentInstance | null = null;
@@ -337,6 +342,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly placementCommitCoordinator: SchematicPlacementCommitCoordinator;
   private presentationMode = false;
   private lastPointerPoint: Point | null = null;
+  private routingPointer: { point: Point; wireId?: string } | null = null;
   private readonly wireToolController = new SchematicWireToolController();
   private readonly wireCommitCoordinator: SchematicWireCommitCoordinator;
   private readonly previewRenderer: SchematicPreviewRenderer<any>;
@@ -352,6 +358,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly junctionRenderCoordinator: SchematicJunctionRenderCoordinator<any>;
   private wireSegmentMove: WireSegmentMoveTransaction | null = null;
   private readonly netLabelToolController = new SchematicNetLabelToolController();
+  private readonly netLabelDialog: SchematicNetLabelDialog;
   private readonly netLabelCommitCoordinator: SchematicNetLabelCommitCoordinator;
   private netResolutionCache: NetResolution | undefined;
   private activeHostedDocumentId = "";
@@ -480,7 +487,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly handleCanvasMouseMove = (event: MouseEvent) => {
     if (this.viewportController.isMousePanActive() || this.selectionBoxController.isActive()) return;
     if (this.isDeleteToolMode()) this.setDeleteHoverFromEvent(event);
-    this.handlePointerMove(this.pointFromClientEvent(event));
+    const point = this.localPointFromClient(event.clientX, event.clientY);
+    this.routingPointer = { point, wireId: this.wireIdAt(event.target) };
+    this.handlePointerMove(point);
   };
 
   private readonly handleGlobalNotePointerMove = (event: PointerEvent) => {
@@ -565,6 +574,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       throw new Error("Schematic editor host services must belong to the mount root document.");
     }
     this.lifecycleController = host.createAbortController();
+    this.netLabelDialog = new SchematicNetLabelDialog(options.shellEl);
     this.analysisController = hostBridge.analysis ?? createNoopAnalysisBridge();
     this.contextMenuController = hostBridge.contextMenu ?? createNoopContextMenuBridge();
     this.deleteCommitCoordinator = new SchematicDeleteCommitCoordinator(this.document);
@@ -736,9 +746,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       onNoteWidthInput: (value) => this.setSelectedNoteWidth(value, { commit: false }),
       onNoteWidthCommit: (value) => this.setSelectedNoteWidth(value, { commit: true }),
       onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit(),
-      onNoteWidthCancel: () => this.cancelNoteWidthPropertyEdit(),
-      onLabelToolInput: (value) => this.netLabelToolController.updateDraft(value),
-      onLabelToolSubmit: (value) => this.armLabelPlacement(value)
+      onNoteWidthCancel: () => this.cancelNoteWidthPropertyEdit()
     }));
     this.junctionRenderCoordinator = new SchematicJunctionRenderCoordinator({
       document: this.document,
@@ -912,6 +920,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.netlistPanel?.destroy();
     this.toolbarController?.destroy();
     this.propertyPanelController.destroy();
+    this.netLabelDialog.close();
+    this.routingSnapMarker?.parentElement?.remove();
     this.activeRenderRuntime.surface.destroy();
     this.activeRenderRuntime.host.remove();
     this.destroyResult = this.noteLayer.destroy().catch((error) => {
@@ -2345,7 +2355,19 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.focusCanvas();
       if (isViewportPanMouseEvent(event)) this.viewportController.startMousePan(event);
     }, { signal });
+    this.options.paperEl.addEventListener("dblclick", (event) => {
+      if (event.button !== 0 || this.transientToolSession.mode !== "wire") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.finishWire(this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target));
+    }, { capture: true, signal });
     this.options.paperEl.addEventListener("mousemove", this.handleCanvasMouseMove, { signal });
+    this.options.paperEl.addEventListener("pointerleave", () => {
+      this.routingPointer = null;
+      if (this.transientToolSession.mode === "wire" || this.transientToolSession.mode === "label") {
+        this.transientToolSession.projectActivePreview(null);
+      }
+    }, { signal });
     this.options.paperEl.addEventListener("scroll", () => this.updateNoteLayerTransform(), { signal });
     this.options.paperEl.addEventListener("auxclick", (event) => {
       if (isViewportPanMouseEvent(event)) event.preventDefault();
@@ -2473,6 +2495,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private handleElementPointerClick(view: any, event: MouseEvent) {
     if (event.button !== 0) return;
+    if (this.transientToolSession.mode === "wire" && (event.target as Element | null)?.closest?.("[port]")) return;
     event.stopPropagation();
     const clickPoint = this.pointFromClientEvent(event);
     const target = projectElementPointerClickTarget({
@@ -2522,6 +2545,15 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.inductorInteractions.applyInductorCouplingPartnerPick(target);
       return;
     }
+    if (this.transientToolSession.mode === "label") {
+      const attachment = this.routingWireAttachment(
+        this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target)
+      );
+      if (attachment) {
+        this.placeNetLabel(attachment.point, attachment.wireId);
+        return;
+      }
+    }
     this.applyPointerClickIntent(
       decideSchematicPointerClick({
         mode: this.transientToolSession.mode,
@@ -2556,13 +2588,13 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.placeActiveItem(intent.point);
         return;
       case "wire-blank-click":
-        this.handleWireBlankClick(intent.point);
+        this.applyWireTarget(this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target));
         return;
       case "wire-pin-click":
         this.handleWirePinClick(intent.point);
         return;
       case "place-label":
-        this.placeNetLabel(intent.point, intent.wireId);
+        this.setStatus("Net labels can only be placed on an active wire or junction.");
         return;
       case "begin-copy":
         this.beginCopyFromTargets([...intent.ids], [], intent.point);
@@ -2592,9 +2624,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
-    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open]")) return;
+    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
+    if (key === "escape" && this.transientToolSession.mode === "label") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelTool();
+      return;
+    }
     if (key === "escape" && this.hierarchyPlacement) {
       event.preventDefault();
       this.cancelHierarchyPlacement();
@@ -2694,7 +2732,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.redo();
         return;
       case "finish-wire":
-        this.finishWireFromKeyboard();
+        this.finishWire(this.routingPointer?.point ?? this.lastPointerPoint, this.routingPointer?.wireId);
         return;
       case "delete-selected-or-begin-tool":
         this.deleteSelectedOrBeginTool();
@@ -3243,8 +3281,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (this.transientToolSession.mode !== "wire") return false;
     if (routeMode === "toggle") this.wireToolController.toggleRouteMode();
     else this.wireToolController.setRouteMode(routeMode);
-    this.updateWirePreview(this.lastPointerPoint);
+    this.updateWirePreview(this.routingPointer?.point ?? this.lastPointerPoint);
     return true;
+  }
+
+  hostSetWireAngle(angle: WireAngle) {
+    this.wireToolController.setRouteMode(angle);
+    if (this.transientToolSession.mode === "wire") {
+      this.updateWirePreview(this.routingPointer?.point ?? this.lastPointerPoint);
+    }
   }
 
   private toggleLabelTool() {
@@ -3258,23 +3303,18 @@ export class SchematicEditor implements SchematicHostedEditor {
   private beginLabelTool() {
     this.transientToolSession.transition("label", "enter-tool");
     this.instanceSelector.closePanel();
-    this.netLabelToolController.begin();
+    const { draft } = this.netLabelToolController.begin();
     this.setSelection([], false);
     this.syncToolUi();
-    this.renderPropertyEditor();
-    this.requestOwnedFrame(() => this.propertyPanelController.focusLabelToolInput());
-    this.setStatus("Label mode: enter a net name, press Enter, then click wires or junctions. Esc cancels.");
+    this.netLabelDialog.open(draft, name => this.armLabelPlacement(name), () => this.cancelTool());
   }
 
   private armLabelPlacement(value: string) {
     const result = this.netLabelToolController.arm(value);
-    this.renderPropertyEditor();
-    if (result.kind === "invalid") {
-      this.propertyPanelController.focusLabelToolInput();
-      return;
-    }
+    if (result.kind === "invalid") return result.message;
+    this.netLabelDialog.close();
     this.focusCanvas();
-    this.updateNetLabelPreview(this.lastPointerPoint);
+    this.updateNetLabelPreview(this.routingPointer?.point ?? this.lastPointerPoint);
     this.setStatus(`Label ${result.name}: click a wire or junction to place; Esc cancels.`);
   }
 
@@ -3289,9 +3329,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   private applyNetLabelCommitOutcome(outcome: SchematicNetLabelCommitOutcome) {
     if (outcome.kind === "status") {
       this.setStatus(outcome.status);
-      if (outcome.focusInput) this.propertyPanelController.focusLabelToolInput();
       return;
     }
+    this.transientToolSession.transition("select", "selection");
     this.setSelection([], false);
     this.renderDocument();
     this.consumeHistoryIntent(outcome.result);
@@ -3446,9 +3486,10 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handlePointerMove(point: Point) {
-    this.lastPointerPoint = point;
+    this.lastPointerPoint = snapPoint(point);
     if (this.transientToolSession.mode === "copy") this.copyPreviewNeedsPointer = false;
-    this.transientToolSession.projectActivePreview(point);
+    const mode = this.transientToolSession.mode;
+    this.transientToolSession.projectActivePreview(mode === "wire" || mode === "label" ? point : this.lastPointerPoint);
   }
 
   private setDeleteHover(ids: string[], noteIds: string[] = []) {
@@ -3500,9 +3541,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.applyWireCommitOutcome(this.wireCommitCoordinator.applyPinClick(point));
   }
 
-  private finishWireFromKeyboard() {
+  private finishWire(point: Point | null, preferredWireId?: string) {
     if (!this.editablePlacementLayer()) return;
-    this.applyWireCommitOutcome(this.wireCommitCoordinator.finishFromKeyboard(this.lastPointerPoint));
+    const target = point && this.wireTargetAt(point, preferredWireId);
+    this.applyWireCommitOutcome(this.wireCommitCoordinator.finish(target?.point ?? null));
   }
 
   private applyWireCommitOutcome(outcome: SchematicWireCommitOutcome) {
@@ -3876,6 +3918,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
 
     this.lastPointerPoint = null;
+    this.routingPointer = null;
     this.copyPreviewNeedsPointer = preserveCopy;
     this.activeHostedDocumentId = input.id;
     this.noteLayer.activateDocument(input.id);
@@ -4339,14 +4382,72 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private updateNetLabelPreview(point: Point | null) {
-    if (this.transientToolSession.mode !== "label") {
-      this.previewRenderer.clearLabel();
-      return;
-    }
-    const preview = this.netLabelToolController.buildPreview(this.document, point);
+    const attachment = this.transientToolSession.mode === "label" && point
+      ? this.routingWireAttachment(point, this.routingPointer?.wireId)
+      : null;
+    const preview = attachment && this.netLabelToolController.buildPreview(this.document, attachment.point, attachment.wireId);
+    this.showRoutingSnap(preview ? preview.attachment.point : null);
     this.previewRenderer.renderLabel(preview
       ? { id: PREVIEW_NET_LABEL_ID, name: preview.name, attachment: preview.attachment }
       : null);
+  }
+
+  private wireIdAt(target: EventTarget | null) {
+    const id = (target as Element | null)?.closest?.("[model-id]")?.getAttribute("model-id");
+    const wireId = id ? this.graphAdapter.getCell(id)?.get("wireId") : undefined;
+    return typeof wireId === "string" ? wireId : undefined;
+  }
+
+  private routingWireAttachment(point: Point, preferredWireId?: string) {
+    const { selectable } = resolveLayerObjects(this.document);
+    return nearestWireAttachment(this.document.wires, point, 10 / this.zoom, selectable, preferredWireId);
+  }
+
+  private wireTargetAt(point: Point, preferredWireId?: string) {
+    const { selectable } = resolveLayerObjects(this.document);
+    const radius = 10 / this.zoom;
+    let pinPoint: Point | undefined;
+    let pinDistance = radius;
+    for (const pin of this.netResolutionCache?.connectivity.pins ?? []) {
+      if (!selectable(pin.componentId)) continue;
+      const distance = Math.hypot(pin.point.x - point.x, pin.point.y - point.y);
+      if (distance <= pinDistance) {
+        pinPoint = pin.point;
+        pinDistance = distance;
+      }
+    }
+    if (pinPoint) return { point: pinPoint, pin: true };
+    const attachment = nearestWireAttachment(this.document.wires, point, radius, selectable, preferredWireId);
+    return { point: attachment?.point ?? snapPoint(point), pin: false };
+  }
+
+  private applyWireTarget(point: Point, preferredWireId?: string) {
+    const target = this.wireTargetAt(point, preferredWireId);
+    if (target.pin) this.handleWirePinClick(target.point);
+    else this.handleWireBlankClick(target.point);
+  }
+
+  private showRoutingSnap(point: Point | null) {
+    if (!point) {
+      this.routingSnapMarker?.parentElement?.setAttribute("hidden", "");
+      return;
+    }
+    if (!this.routingSnapMarker) {
+      const ns = "http://www.w3.org/2000/svg";
+      const overlay = this.host.ownerDocument.createElementNS(ns, "svg");
+      overlay.setAttribute("class", "schematic-shape-draft");
+      overlay.setAttribute("aria-hidden", "true");
+      this.routingSnapMarker = this.host.ownerDocument.createElementNS(ns, "circle");
+      this.routingSnapMarker.setAttribute("class", "schematic-shape-draft-grid-point");
+      this.routingSnapMarker.setAttribute("data-routing-snap", "");
+      this.routingSnapMarker.setAttribute("r", "4");
+      overlay.append(this.routingSnapMarker);
+      this.options.paperEl.append(overlay);
+    }
+    const screen = this.worldToScreenPoint(point);
+    this.routingSnapMarker.setAttribute("cx", String(screen.x));
+    this.routingSnapMarker.setAttribute("cy", String(screen.y));
+    this.routingSnapMarker.parentElement?.removeAttribute("hidden");
   }
 
   private commitNetLabelGeometry(cell: any) {
@@ -4390,14 +4491,16 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private updateWirePreview(point: Point | null) {
     if (this.transientToolSession.mode !== "wire") {
-      this.previewRenderer.clearWire();
+      this.removeWirePreview();
       return;
     }
-    const points = this.wireToolController.previewPath(point);
+    const snapped = point ? this.wireTargetAt(point, this.routingPointer?.wireId).point : null;
+    this.showRoutingSnap(snapped);
+    const points = this.wireToolController.previewPath(snapped);
     this.previewRenderer.renderWire(
       points,
       this.wireToolController.appearance(),
-      this.wireToolController.routeMode
+      points ? wireRouteModeForPath(points) : undefined
     );
   }
 
@@ -4419,12 +4522,15 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private removeWirePreview() {
     this.previewRenderer.clearWire();
+    this.showRoutingSnap(null);
   }
 
   private clearNetLabelTransientState() {
     const draggedLabelId = this.netLabelToolController.snapshot().drag?.id;
     this.netLabelToolController.cancel();
+    this.netLabelDialog.close();
     this.previewRenderer.clearLabel();
+    this.showRoutingSnap(null);
     if (!draggedLabelId) return;
     const label = (this.document.netLabels ?? []).find((candidate) => candidate.id === draggedLabelId);
     const cell = this.graphAdapter.getCell(draggedLabelId);
@@ -5148,7 +5254,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     const propertyResolution = needsResolution
       ? resolution ?? this.netResolutionCache ?? resolveSchematicNets(this.document)
       : undefined;
-    const labelToolState = this.netLabelToolController.snapshot();
     return buildSchematicSelectionUiProjection({
       mode: this.transientToolSession.mode,
       selection: this.currentSelectionContents(),
@@ -5156,9 +5261,6 @@ export class SchematicEditor implements SchematicHostedEditor {
         document: this.document,
         targets,
         resolution: propertyResolution,
-        labelTool: this.transientToolSession.mode === "label"
-          ? { value: labelToolState.draft, error: labelToolState.error || undefined }
-          : undefined,
         hasSelection: this.selectionSession.hasAny(),
         couplingPickSourceId: this.inductorInteractions.pendingSourceId
       },

@@ -1,7 +1,8 @@
 import type { Point, WireAppearance, WireRouteMode, WireVariant } from "../types";
+import type { WireAngle } from "./wireAngle";
 import {
   createEmptyWireRouteSession,
-  finishWireRouteFromKeyboard,
+  finishWireRoute,
   handleWireBlankRouteClick,
   handleWirePinRouteClick,
   wireRouteAppearance,
@@ -29,7 +30,7 @@ export type SchematicWireRouteResult =
 
 export class SchematicWireToolController {
   private sessionValue: WireRouteSession;
-  private routeModeValue: WireRouteMode = "orthogonal";
+  private routeModeValue: WireAngle = "orthogonal";
 
   constructor(variant: WireVariant = "signal") {
     this.sessionValue = createEmptyWireRouteSession(variant, this.routeModeValue);
@@ -39,7 +40,7 @@ export class SchematicWireToolController {
     return this.sessionValue.variant;
   }
 
-  get routeMode(): WireRouteMode {
+  get routeMode(): WireAngle {
     return this.routeModeValue;
   }
 
@@ -51,7 +52,7 @@ export class SchematicWireToolController {
     this.sessionValue = createEmptyWireRouteSession(this.sessionValue.variant, this.routeModeValue);
   }
 
-  setRouteMode(routeMode: WireRouteMode) {
+  setRouteMode(routeMode: WireAngle) {
     this.routeModeValue = routeMode;
     this.sessionValue = { ...this.sessionValue, routeMode };
     return this.routeModeValue;
@@ -75,8 +76,8 @@ export class SchematicWireToolController {
     return this.applyRouteIntent(handleWirePinRouteClick(this.sessionValue, point));
   }
 
-  finishFromKeyboard(point: Point | null): SchematicWireRouteResult {
-    return this.applyRouteIntent(finishWireRouteFromKeyboard(this.sessionValue, point));
+  finish(point: Point | null): SchematicWireRouteResult {
+    return this.applyRouteIntent(finishWireRoute(this.sessionValue, point));
   }
 
   previewPath(point: Point | null) {

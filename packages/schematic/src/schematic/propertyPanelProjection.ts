@@ -104,7 +104,6 @@ export interface BuildSchematicPropertyPanelInputArgs {
   targets: SchematicPropertySelectionTargets;
   hasSelection: boolean;
   resolution?: NetResolution;
-  labelTool?: SchematicPropertyPanelInput["labelTool"];
   couplingPickSourceId?: string | null;
 }
 
@@ -113,11 +112,8 @@ export function buildSchematicPropertyPanelInput({
   targets,
   hasSelection,
   resolution,
-  labelTool,
   couplingPickSourceId
 }: BuildSchematicPropertyPanelInputArgs): SchematicPropertyPanelInput {
-  if (labelTool) return { hasSelection, labelTool };
-
   const count = targetCount(targets);
   if (count === 0) return { hasSelection };
 

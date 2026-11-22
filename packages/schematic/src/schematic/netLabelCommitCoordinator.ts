@@ -9,7 +9,6 @@ export type SchematicNetLabelCommitOutcome =
   | {
       kind: "status";
       status: string;
-      focusInput: boolean;
     }
   | {
       kind: "commit";
@@ -33,15 +32,13 @@ export class SchematicNetLabelCommitCoordinator {
     if (placement.kind === "unarmed") {
       return {
         kind: "status",
-        status: "Enter a valid label name in the Property Editor and press Enter first.",
-        focusInput: true
+        status: "Open Net Label and enter a valid net name first."
       };
     }
     if (placement.kind === "invalid-target") {
       return {
         kind: "status",
-        status: "Net labels can only be placed on an active wire or junction.",
-        focusInput: false
+        status: "Net labels can only be placed on an active wire or junction."
       };
     }
     return {

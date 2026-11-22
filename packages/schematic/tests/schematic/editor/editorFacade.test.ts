@@ -452,7 +452,7 @@ describe("schematic editor public facade", () => {
     expect(clearCellGeometry).toContain("this.cellGeometryInteractionCoordinator.cancelActiveInteraction();");
     expect(clearCellGeometry).toContain("this.selectionSession.remapJunctions(canceled.restoredJunctionIds);");
     expect(clearCellGeometry).toContain("this.renderDocument();");
-    expect(pointerMove).toContain("this.transientToolSession.projectActivePreview(point);");
+    expect(pointerMove).toContain("this.transientToolSession.projectActivePreview(");
     expect(pointerMove).not.toContain("this.updatePlacementPreview(");
     expect(pointerMove).not.toContain("this.updateWirePreview(");
     expect(pointerMove).not.toContain("this.updateCopyPreview(");

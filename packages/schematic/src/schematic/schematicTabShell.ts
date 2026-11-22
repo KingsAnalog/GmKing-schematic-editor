@@ -76,6 +76,14 @@ function buildTabShell<T extends object>(ui: UiBuilder<T>) {
             el("option", { value: "plain" }, message("options.crossingPlain", "Plain")),
             el("option", { value: "hop" }, message("options.crossingHop", "Hop"))
           )
+        ),
+        el("label", {},
+          el("span", {}, message("options.wireAngle", "Wire angle")),
+          el("select", { "data-schematic-wire-angle": true },
+            el("option", { value: "orthogonal" }, message("options.wireAngleOrthogonal", "Orthogonal")),
+            el("option", { value: "diagonal45" }, message("options.wireAngle45", "45 Degree")),
+            el("option", { value: "freeAngle" }, message("options.wireAngleFree", "Free"))
+          )
         )
       ),
       el("button", { type: "button", "data-schematic-options-close": true }, message("options.close", "Close"))

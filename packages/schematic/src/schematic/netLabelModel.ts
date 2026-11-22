@@ -37,6 +37,30 @@ export function wireAttachmentAtPoint(document: SchematicDocument, point: Point,
   return wire ? { wireId: wire.id, point: snapped } : null;
 }
 
+export function nearestWireAttachment(
+  wires: readonly Wire[],
+  point: Point,
+  radius: number,
+  selectable: (id: string) => boolean,
+  preferredWireId?: string | null
+) {
+  let best: { wireId: string; point: Point } | null = null;
+  let bestDistance = radius;
+  for (const wire of wires) {
+    if (wire.temporarilyDeleted || !selectable(wire.id)) continue;
+    for (const segment of wireSegments(wire)) {
+      const fraction = segmentFraction(point, segment);
+      const x = segment.start.x + (segment.end.x - segment.start.x) * fraction;
+      const y = segment.start.y + (segment.end.y - segment.start.y) * fraction;
+      const distance = Math.hypot(point.x - x, point.y - y);
+      if (distance > bestDistance || (distance === bestDistance && best && wire.id !== preferredWireId)) continue;
+      bestDistance = distance;
+      best = { wireId: wire.id, point: gridPointAtSegmentFraction(segment.start, segment.end, fraction) };
+    }
+  }
+  return best;
+}
+
 export function bindStandaloneNetLabelsAtPoint(
   document: SchematicDocument,
   labels: readonly NetLabel[],

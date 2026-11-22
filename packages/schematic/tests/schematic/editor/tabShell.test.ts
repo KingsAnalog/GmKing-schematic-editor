@@ -234,7 +234,7 @@ describe("renderSchematicTabShell", () => {
     expect(options).toContain(`id="${optionsId}"`);
     expect([...options!.matchAll(/<select[^>]*? (data-schematic-[\w-]+|data-netlist-process|data-symbol-template)(?=[ >])/g)].map(match => match[1])).toEqual([
       "data-schematic-language-select", "data-schematic-theme-select", "data-schematic-text-font",
-      "data-netlist-process", "data-symbol-template", "data-schematic-wire-crossings"
+      "data-netlist-process", "data-symbol-template", "data-schematic-wire-crossings", "data-schematic-wire-angle"
     ]);
     expect(shell).toContain('class="schematic-sidebar-heading">Schematic Editor</h2>');
     expect(shell.match(/<select[^>]+data-symbol-template/g)).toHaveLength(1);

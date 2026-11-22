@@ -67,7 +67,7 @@ try {
   await clickSelector(page, "[data-schematic-open-options]");
   assert.deepEqual(await evaluate(page, () =>
     [...document.querySelectorAll("[data-schematic-options-dialog] select")].map(select => select.closest("label").firstElementChild.textContent)
-  ), ["Language", "Color mode", "Default text font", "Process", "Symbol template", "Wire crossings"]);
+  ), ["Language", "Color mode", "Default text font", "Process", "Symbol template", "Wire crossings", "Wire angle"]);
   await change("[data-netlist-process]", "custom");
   await clickSelector(page, "[data-schematic-options-close]");
 

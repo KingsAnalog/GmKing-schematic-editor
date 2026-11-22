@@ -42,8 +42,8 @@ export class SchematicWireCommitCoordinator {
     return this.applyRouteResult(this.wireTool.applyPinClick(point));
   }
 
-  finishFromKeyboard(point: Point | null): SchematicWireCommitOutcome {
-    return this.applyRouteResult(this.wireTool.finishFromKeyboard(point));
+  finish(point: Point | null): SchematicWireCommitOutcome {
+    return this.applyRouteResult(this.wireTool.finish(point));
   }
 
   private applyRouteResult(result: SchematicWireRouteResult): SchematicWireCommitOutcome {

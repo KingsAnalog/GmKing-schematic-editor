@@ -67,7 +67,6 @@ function project(
     document?: SchematicDocument;
     hasSelection?: boolean;
     resolution?: NetResolution;
-    labelTool?: { value: string; error?: string };
     couplingPickSourceId?: string | null;
   } = {}
 ) {
@@ -76,7 +75,6 @@ function project(
     targets: selection,
     hasSelection: options.hasSelection ?? true,
     resolution: options.resolution,
-    labelTool: options.labelTool,
     couplingPickSourceId: options.couplingPickSourceId
   });
 }
@@ -111,15 +109,6 @@ describe("schematic property panel projection", () => {
       notes: [note("note-1")]
     }))).toEqual({
       hasSelection: true
-    });
-  });
-
-  it("prioritizes the active label tool over selection properties", () => {
-    expect(project(targets({ components: [component()] }), {
-      labelTool: { value: "CLK", error: "invalid" }
-    })).toEqual({
-      hasSelection: true,
-      labelTool: { value: "CLK", error: "invalid" }
     });
   });
 

@@ -23,7 +23,6 @@ export interface SchematicSelectionUiProjectionInput {
     targets: SchematicPropertySelectionTargets;
     hasSelection: boolean;
     resolution?: NetResolution;
-    labelTool?: SchematicPropertyPanelInput["labelTool"];
     couplingPickSourceId?: string | null;
   };
   activePlacementItem: PlacementProjectionItem | null;
@@ -51,7 +50,6 @@ export function buildSchematicSelectionUiProjection(input: SchematicSelectionUiP
     targets: input.propertyPanel.targets,
     hasSelection: input.propertyPanel.hasSelection,
     resolution: input.propertyPanel.resolution,
-    labelTool: input.propertyPanel.labelTool,
     couplingPickSourceId: input.propertyPanel.couplingPickSourceId
   });
 

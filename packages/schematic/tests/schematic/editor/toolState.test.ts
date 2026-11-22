@@ -328,7 +328,7 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       wireVariant: "signal",
       focusTarget: "canvas",
-      status: "Wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+      status: "Wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
     });
   });
 
@@ -338,7 +338,7 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       wireVariant: "wide",
       focusTarget: "canvas",
-      status: "Wide wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+      status: "Wide wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
     });
   });
 

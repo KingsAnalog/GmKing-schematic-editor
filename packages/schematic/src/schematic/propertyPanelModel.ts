@@ -177,7 +177,6 @@ export interface SchematicPropertyPanelInput {
   inductorCoupling?: SchematicPropertyPanelInductorCouplingInput | null;
   note?: SchematicPropertyPanelNoteInput | null;
   network?: SchematicPropertyPanelNetworkInput | null;
-  labelTool?: { value: string; error?: string } | null;
 }
 
 export function aggregateValues<T>(

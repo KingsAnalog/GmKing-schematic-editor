@@ -203,8 +203,8 @@ const DELETE_TOOL_ENTRY_STATUS: Record<DeleteToolMode, string> = {
   "temp-delete": "Temporary Delete mode: click a component or wire to toggle it, drag a box to toggle enclosed components and wires, Esc cancels."
 };
 const WIRE_TOOL_ENTRY_STATUS: Record<WireToolVariant, string> = {
-  signal: "Wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates.",
-  wide: "Wide wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+  signal: "Wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish.",
+  wide: "Wide wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
 };
 const MOVE_BEHAVIOR_TOOL_ENTRY_STATUS: Record<MoveBehaviorToolEntryBehavior, string> = {
   stretch: "Stretch move active: moved components pull attached wire endpoints. Shift+M switches to move-only.",

@@ -214,7 +214,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
     this.unbindOptions = bindSchematicWebOptions(mounts.shellEl, () => {
       editor.hostRefreshLanguage();
       this.hierarchy.refresh();
-    });
+    }, angle => editor.hostSetWireAngle(angle));
   }
 
   init() {

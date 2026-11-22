@@ -75,13 +75,6 @@ export class SchematicNetLabelToolController {
     return this.snapshot();
   }
 
-  updateDraft(value: string) {
-    this.draft = value;
-    this.error = "";
-    if (this.armedName !== value.trim()) this.armedName = null;
-    return this.snapshot();
-  }
-
   arm(value: string): NetLabelToolArmResult {
     this.draft = value;
     const validation = validateNetLabelName(value);
@@ -97,9 +90,9 @@ export class SchematicNetLabelToolController {
     return { kind: "armed", name: validation.name, snapshot: this.snapshot() };
   }
 
-  buildPreview(document: SchematicDocument, point: Point | null): NetLabelPreviewProjection | null {
+  buildPreview(document: SchematicDocument, point: Point | null, preferredWireId?: string): NetLabelPreviewProjection | null {
     if (!this.armedName || !point) return null;
-    const attachment = wireAttachmentAtPoint(document, point);
+    const attachment = wireAttachmentAtPoint(document, point, preferredWireId);
     return attachment
       ? { name: this.armedName, attachment: cloneAttachment(attachment) }
       : null;

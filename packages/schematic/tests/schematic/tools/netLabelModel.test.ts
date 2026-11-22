@@ -6,6 +6,7 @@ import { applyNormalizedDocumentWires } from "../../../src/schematic/document/do
 import { restoreSchematicDocument } from "../../../src/schematic/document/documentModel";
 import {
   bindStandaloneNetLabelsAtPoint,
+  nearestWireAttachment,
   netLabelPosition,
   remapNetLabelsAfterWirePathChange,
   snapshotNetLabelWires,
@@ -60,6 +61,16 @@ describe("schematic net label attachment lifecycle", () => {
     applyNormalizedDocumentWires(doc);
 
     expect(doc.netLabels?.[0].attachment).toEqual({ wireId: "main-segment-1", point: { x: 60, y: 0 } });
+  });
+
+  it("snaps an off-grid pointer to an actual grid point on a diagonal wire", () => {
+    const diagonal = { ...wire("diagonal", [{ x: 0, y: 0 }, { x: 80, y: 40 }]), routeMode: "freeAngle" as const };
+    const point = { x: 35, y: 18 };
+    expect(nearestWireAttachment([diagonal], point, 8, () => true)).toEqual({
+      wireId: "diagonal", point: { x: 40, y: 20 }
+    });
+    expect(nearestWireAttachment([diagonal], point, 8, () => false)).toBeNull();
+    expect(nearestWireAttachment([diagonal], { x: 35, y: 36 }, 8, () => true)).toBeNull();
   });
 
   it("follows uniform wire movement and projects onto a stretched path", () => {
