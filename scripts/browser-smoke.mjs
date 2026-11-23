@@ -143,12 +143,17 @@ function ensureBrowserSmokeRuntime() {
   }
 }
 
-async function serveDist(distDir) {
+async function serveDist(distDir, { base = "/", intercept } = {}) {
   const port = await freePort();
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
-      const decodedPath = decodeURIComponent(url.pathname);
+      if (!url.pathname.startsWith(base)) {
+        response.writeHead(404).end();
+        return;
+      }
+      const decodedPath = decodeURIComponent(url.pathname.slice(base.length));
+      if (await intercept?.(decodedPath, response)) return;
       const normalizedPath = path.normalize(decodedPath).replace(/^(\.\.[/\\])+/, "");
       let filePath = path.join(distDir, normalizedPath);
       const stat = await fs.stat(filePath).catch(() => null);
@@ -172,7 +177,7 @@ async function serveDist(distDir) {
   });
 
   return {
-    url: `http://127.0.0.1:${port}/`,
+    url: `http://127.0.0.1:${port}${base}`,
     close: () => new Promise((resolve) => server.close(resolve))
   };
 }
@@ -352,6 +357,7 @@ async function main() {
     await navigate(page,server.url);
     await waitFor(page,()=>Boolean(document.querySelector("[model-id='inv']")),"Standalone saved document did not restore");
     await clickSelector(page,"[data-command='fit']");
+    await checkSelectionBoxAndZoom(page);
     await clickSelector(page,"[model-id='inv']");
     await waitFor(page,()=>Boolean(document.querySelector("[data-property-pin-visibility-id='vdd']")),"Supply pin controls missing");
     await clickSelector(page,"[data-property-pin-visibility-id='vdd']");
@@ -388,7 +394,9 @@ async function main() {
       }
     });
     await clickSelector(page,"[data-analysis='compute']");
-    await waitFor(page,()=>document.querySelector("[data-analysis-progress]")?.hidden && Boolean(document.querySelector("[data-analysis-transfer]")?.innerHTML),"Analysis Worker did not return a transfer function");
+    await waitFor(page,()=>document.querySelector("[data-analysis-progress]")?.hidden &&
+      ["transfer", "zin", "zout"].every(output => document.querySelector(`[data-analysis-${output}] mjx-container svg`)),
+    "First Analysis Worker result did not typeset");
     await checkBlankCanvasPaste(page);
     await checkVoltageSourceConfiguration(page, server.url);
     await checkNoteAppearance(page, server.url);
@@ -411,6 +419,32 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 }
 
 export { launchBrowser, openPage, navigate, evaluate, clickSelector, waitFor, serveDist };
+
+async function checkSelectionBoxAndZoom(page) {
+  const bounds = await evaluate(page, () => {
+    const canvas = document.querySelector("[data-schematic-paper]").getBoundingClientRect();
+    const cells = [...document.querySelectorAll("[model-id='R1'], [model-id='inv']")].map(cell => cell.getBoundingClientRect());
+    return {
+      start: { x: Math.max(canvas.left + 2, Math.min(...cells.map(cell => cell.left)) - 16),
+        y: Math.max(canvas.top + 2, Math.min(...cells.map(cell => cell.top)) - 16) },
+      end: { x: Math.min(canvas.right - 2, Math.max(...cells.map(cell => cell.right)) + 16),
+        y: Math.min(canvas.bottom - 2, Math.max(...cells.map(cell => cell.bottom)) + 16) },
+      zoom: document.querySelector("[model-id='R1']").getScreenCTM().a
+    };
+  });
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...bounds.start, button: "left", buttons: 1, clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...bounds.end, button: "left", buttons: 1 });
+  await waitFor(page, () => !!document.querySelector('[model-id="selection-box"]'), "JointJS selection rectangle did not render");
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...bounds.end, button: "left", buttons: 0, clickCount: 1 });
+  await waitFor(page, () => {
+    const summary = document.querySelector("[data-selection-summary]").textContent;
+    return summary.includes("R1") && summary.includes("X1");
+  }, "The selection rectangle did not select both symbols");
+  await page.send("Input.dispatchMouseEvent", { type: "mouseWheel", ...bounds.end, deltaX: 0, deltaY: 120 });
+  await waitFor(page, zoom => document.querySelector("[model-id='R1']").getScreenCTM().a < zoom,
+    "Wheel zoom did not update the JointJS viewport", { args: [bounds.zoom] });
+  await clickSelector(page, "[data-command='fit']");
+}
 
 async function checkDisabledPins(page, url) {
   const { getComponentDef } = await import("../packages/schematic/dist/schematic/catalog.js");
@@ -725,7 +759,7 @@ async function checkNoteAppearance(page, url) {
   if (restored.color !== "rgb(255, 0, 0)" || restored.background !== "rgba(0, 0, 0, 0)") {
     throw new SmokeError("Note appearance did not survive reload", restored);
   }
-  const palette = await evaluate(page, () => [...document.querySelectorAll("[data-note-background-swatch]")].map(button => {
+  const palette = await evaluate(page, () => [...document.querySelectorAll("[data-schematic-property-editor] [data-note-background-swatch]")].map(button => {
     const rect = button.getBoundingClientRect();
     return { width: rect.width, top: rect.top };
   }));

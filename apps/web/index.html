@@ -6,27 +6,6 @@
     <meta name="color-scheme" content="light dark">
     <title>Schematic Editor</title>
     <script vite-ignore src="./editor-preferences.js"></script>
-    <script>
-      window.MathJax = {
-        loader: { paths: { fonts: "./vendor" } },
-        output: { font: "mathjax-tex" },
-        tex: {
-          packages: { "[-]": ["autoload", "require"] },
-          inlineMath: [["\\(", "\\)"]],
-          displayMath: [["\\[", "\\]"]]
-        },
-        svg: { fontCache: "none" },
-        options: {
-          enableMenu: false,
-          enableEnrichment: false,
-          enableSpeech: false,
-          enableBraille: false,
-          a11y: { speech: false, braille: false }
-        },
-        startup: { typeset: false }
-      };
-    </script>
-    <script async vite-ignore src="./vendor/mathjax/tex-mml-svg-mathjax-tex.js" onload="window.dispatchEvent(new Event('mathjax-ready'))"></script>
   </head>
   <body>
     <div id="app"></div>

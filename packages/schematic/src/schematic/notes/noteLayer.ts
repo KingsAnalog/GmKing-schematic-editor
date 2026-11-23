@@ -26,11 +26,17 @@ export class SchematicNoteLayer {
   private readonly views = new Map<string, NoteView>();
   private state?: NoteLayerViewState;
   private documentId?: string;
+  private readonly retryUnrenderedMath = () => {
+    for (const view of this.views.values()) {
+      if (view.signature === undefined && hasNoteMath(view.note.text)) this.refresh(view.note);
+    }
+  };
 
   constructor(paper: HTMLElement, private readonly options: { defaultTextFont?: () => SchematicTextFont | undefined } = {}) {
     this.element = paper.ownerDocument.createElement("div");
     this.element.className = "schematic-note-layer";
     paper.append(this.element);
+    paper.ownerDocument.defaultView?.addEventListener("mathjax-ready", this.retryUnrenderedMath);
   }
 
   activateDocument(id: string) {
@@ -71,6 +77,7 @@ export class SchematicNoteLayer {
   }
 
   async destroy() {
+    this.element.ownerDocument.defaultView?.removeEventListener("mathjax-ready", this.retryUnrenderedMath);
     this.reset();
     this.element.remove();
   }
@@ -124,6 +131,8 @@ export class SchematicNoteLayer {
         void typesetNote(note, ownerDocument, font, abort.signal).then(graphic => {
           if (abort.signal.aborted || view.signature !== signature) return;
           this.applyGraphic(view, graphic);
+          // Keep TeX visible if loading failed and retry after the runtime recovers.
+          if (!ownerDocument.defaultView?.MathJax?.typesetPromise) view.signature = undefined;
         }).catch(() => {});
       }
     } else if (view.graphic) {

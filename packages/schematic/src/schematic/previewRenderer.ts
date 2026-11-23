@@ -268,6 +268,9 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
         this.noteGraphics.set(signature, pending);
       }
       void pending.then(graphic => {
+        if (!element.ownerDocument.defaultView?.MathJax?.typesetPromise && this.noteGraphics.get(signature) === pending) {
+          this.noteGraphics.delete(signature);
+        }
         if (!element.isConnected) return;
         const sized = buildCopyPreviewNoteView({ ...note, width: graphic.width, height: graphic.height }, {
           screenPoint: this.options.worldToScreenPoint(note), zoom: this.options.zoom()

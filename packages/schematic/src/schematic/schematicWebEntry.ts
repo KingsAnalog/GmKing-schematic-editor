@@ -1,4 +1,5 @@
 export { mountSchematicTab } from "./schematicTabShell";
+export { registerMathJaxLoader } from "../shared/mathjax";
 import { renderSchematicTabShell } from "./schematicTabShell";
 import { SchematicWebEditorHostController } from "./schematicWebEditorHostController";
 import { mountSchematicWebHost, createSchematicWebHostServices, type SchematicWebHostOptions } from "./schematicWebHost";

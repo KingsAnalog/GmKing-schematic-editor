@@ -1,30 +1,5 @@
-// @ts-expect-error Vite provides raw text imports at test runtime.
-import indexHtml from "../../../../apps/web/index.html?raw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderMathTexInto } from "../../src/shared/mathjax";
-
-interface MathJaxPageConfig {
-  loader: {
-    load: string[];
-    paths: Record<string, string>;
-  };
-  tex: { packages: Record<string, string[]> };
-  output: { font: string };
-  svg: { fontCache: string };
-  options: { enableMenu: boolean; enableSpeech: boolean; enableBraille: boolean };
-}
-
-function readMathJaxPageConfig() {
-  const source = indexHtml.match(/<script>\s*(window\.MathJax\s*=[\s\S]*?;)\s*<\/script>/)?.[1];
-  if (!source) throw new Error("MathJax page configuration was not found");
-
-  const target: { MathJax?: unknown } = {};
-  new Function("window", source)(target);
-  return {
-    config: target.MathJax as MathJaxPageConfig,
-    html: indexHtml
-  };
-}
 
 describe("MathJax render lifecycle", () => {
   afterEach(() => {
@@ -159,22 +134,5 @@ describe("MathJax render lifecycle", () => {
     expect(replaceChildren).toHaveBeenCalledOnce();
     expect(replaceChildren).toHaveBeenCalledWith(newerNode);
     expect(typesetClear).toHaveBeenCalledWith([target]);
-  });
-});
-
-describe("MathJax page configuration", () => {
-  it("uses the bundled local SVG renderer and self-contained glyph paths", () => {
-    const { html, config } = readMathJaxPageConfig();
-    expect(html).toContain("./vendor/mathjax/tex-mml-svg-mathjax-tex.js");
-    expect(html).not.toContain("cdn.jsdelivr.net");
-    expect(config.loader.paths.fonts).toBe("./vendor");
-    expect(config.output.font).toBe("mathjax-tex");
-    expect(config.svg.fontCache).toBe("none");
-  });
-
-  it("keeps dynamic TeX loads and speech services disabled", () => {
-    const { config } = readMathJaxPageConfig();
-    expect(config.tex.packages["[-]"]).toEqual(["autoload", "require"]);
-    expect(config.options).toMatchObject({ enableMenu: false, enableSpeech: false, enableBraille: false });
   });
 });

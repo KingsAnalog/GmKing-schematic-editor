@@ -33,6 +33,7 @@
     "test:r4": "npm run build:lib && npm run build:web && node scripts/r4-hierarchy.mjs",
     "test:r5": "npm run build:lib && npm run build:web && node scripts/r5-agent.mjs",
     "test:note": "npm run build:lib && npm run build:web && node scripts/note-tex-smoke.mjs",
+    "test:web-performance": "npm run build:lib && npm run build:web && node scripts/web-chunk-smoke.mjs && node scripts/web-mathjax-smoke.mjs",
     "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"
   },
   "devDependencies": {

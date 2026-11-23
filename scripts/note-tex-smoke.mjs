@@ -179,8 +179,8 @@ try {
   assert.equal(await evaluate(page, draft => !!document.querySelector(draft), draft), false);
   await clickAt(await canvasPoint(200, 185));
   for (const [shortcut, code, virtualCode, modifiers, summary] of [
-    ["M", "KeyM", 77, 8, /仅移动.*点击对象/],
-    ["c", "KeyC", 67, 0, /复制.*点击对象/]
+    ["M", "KeyM", 77, 8, /仅移动.*点选或框选对象/],
+    ["c", "KeyC", 67, 0, /复制.*点选或框选对象/]
   ]) {
     await key(shortcut, code, virtualCode, modifiers);
     assert.match(await evaluate(page, () => document.querySelector("[data-selection-summary]").textContent), summary);

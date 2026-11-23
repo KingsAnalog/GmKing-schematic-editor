@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderMathTexInto, typesetMath } from "../../src/shared/mathjax";
+import { registerMathJaxLoader, renderMathTexInto, typesetMath } from "../../src/shared/mathjax";
+import { createWebMathJaxLoader } from "../../../../apps/web/mathjax";
 
 function frame() {
   const iframe = document.createElement("iframe");
   document.body.appendChild(iframe);
-  const ownerWindow = iframe.contentWindow!;
+  const ownerWindow = iframe.contentWindow! as Window & typeof globalThis;
   const target = ownerWindow.document.createElement("div");
   ownerWindow.document.body.appendChild(target);
   return { ownerWindow, target };
@@ -33,6 +34,60 @@ afterEach(() => {
 });
 
 describe("MathJax window ownership", () => {
+  it("requests the local runtime only on demand, coalesces loads and retries on network or startup failure", async () => {
+    const { ownerWindow, target } = frame();
+    const doc = target.ownerDocument;
+    const base = doc.createElement("base");
+    base.href = "https://example.test/tools/schematic/";
+    doc.head.append(base);
+    const load = createWebMathJaxLoader(ownerWindow);
+    const script = () => doc.head.querySelector<HTMLScriptElement>("script")!;
+    expect(script()).toBeNull();
+    const first = load();
+    expect(load()).toBe(first);
+    expect(script().src).toBe("https://example.test/tools/schematic/vendor/mathjax/tex-mml-svg-mathjax-tex.js");
+    expect(ownerWindow.MathJax).toMatchObject({
+      loader: { paths: { fonts: "./vendor" } },
+      output: { font: "mathjax-tex" },
+      svg: { fontCache: "none" },
+      tex: { packages: { "[-]": ["autoload", "require"] } },
+      options: { enableMenu: false, enableSpeech: false, enableBraille: false },
+      startup: { typeset: false }
+    });
+    script().dispatchEvent(new Event("error"));
+    await expect(first).resolves.toBe(false);
+    expect(script()).toBeNull();
+    const retry = load();
+    ownerWindow.MathJax!.startup!.promise = Promise.reject(new Error("Startup failed"));
+    script().dispatchEvent(new Event("load"));
+    await expect(retry).resolves.toBe(false);
+    expect(script()).toBeNull();
+    const working = load();
+    mathRuntime(ownerWindow);
+    ownerWindow.MathJax!.startup = { promise: Promise.resolve() };
+    script().dispatchEvent(new Event("load"));
+    await expect(working).resolves.toBe(true);
+    expect(load()).toBe(working);
+  });
+
+  it("waits for the first analysis result and skips old output cleared while loading", async () => {
+    const { ownerWindow, target } = frame();
+    const stale = ownerWindow.document.createElement("output");
+    ownerWindow.document.body.append(stale);
+    const load = createWebMathJaxLoader(ownerWindow);
+    registerMathJaxLoader(ownerWindow, load);
+    target.textContent = "\\[x\\]";
+    stale.textContent = "\\[y\\]";
+    typesetMath([target, stale]);
+    expect(target.ownerDocument.querySelectorAll("script")).toHaveLength(1);
+    stale.textContent = "";
+    const runtime = mathRuntime(ownerWindow);
+    ownerWindow.MathJax!.startup = { promise: Promise.resolve() };
+    target.ownerDocument.head.querySelector("script")!.dispatchEvent(new Event("load"));
+    await vi.waitFor(() => expect(runtime.typesetPromise).toHaveBeenCalledWith([target]));
+    expect(stale.firstChild).toBeNull();
+  });
+
   it("uses each target's window for typesetting, staging and cleanup", async () => {
     const first = frame();
     const second = frame();

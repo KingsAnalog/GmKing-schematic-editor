@@ -127,6 +127,7 @@ try {
   await clickSelector(page, "[data-log-close]");
   const rectangle = await evaluate(page, () => {
     const cell = document.querySelector("[model-id]");
+    const properties = document.querySelector("[data-schematic-property-editor]");
     const visiblePaths = [...(cell?.querySelectorAll("path") ?? [])].filter((path) => {
       const style = getComputedStyle(path);
       return path.getAttribute("d") && style.display !== "none" && style.stroke !== "none" && Number(style.opacity) > 0;
@@ -137,12 +138,12 @@ try {
       visiblePaths: visiblePaths.length,
       pathData: visiblePaths.map((path) => [path.getAttribute("d"), getComputedStyle(path).stroke]),
       ports: cell?.querySelectorAll(".joint-port").length,
-      properties: Boolean(document.querySelector("[data-property-component-form]")),
-      nameHidden: document.querySelector("[data-property-ref]") === null,
-      labelHidden: document.querySelector("[data-property-label-visible]") === null,
-      rectangleInputs: document.querySelectorAll("[data-property-rectangle]").length,
-      pinInputs: document.querySelectorAll("[data-property-triangle-pins]").length,
-      shapeForm: Boolean(document.querySelector("[data-property-shape-form]"))
+      properties: Boolean(properties.querySelector("[data-property-component-form]")),
+      nameHidden: properties.querySelector("[data-property-ref]") === null,
+      labelHidden: properties.querySelector("[data-property-label-visible]") === null,
+      rectangleInputs: properties.querySelectorAll("[data-property-rectangle]").length,
+      pinInputs: properties.querySelectorAll("[data-property-triangle-pins]").length,
+      shapeForm: Boolean(properties.querySelector("[data-property-shape-form]"))
     };
   });
   const expectedRectanglePath = "M 0 0 L 30 0 L 30 40 L 0 40 Z";
@@ -270,8 +271,8 @@ try {
       strokeWidth: path?.getAttribute("stroke-width"),
       dash: path?.getAttribute("stroke-dasharray"),
       fillColorDisabled: document.querySelector("[data-property-library-shape-fill-color]")?.disabled,
-      nameAbsent: document.querySelector("[data-property-ref]") === null,
-      labelAbsent: document.querySelector("[data-property-label-visible]") === null
+      nameAbsent: document.querySelector("[data-schematic-property-editor] [data-property-ref]") === null,
+      labelAbsent: document.querySelector("[data-schematic-property-editor] [data-property-label-visible]") === null
     };
   });
   if (styledRectangle.fill !== "#123abc" || styledRectangle.fillOpacity !== "0.35"
@@ -367,9 +368,9 @@ try {
       texts: cell?.querySelectorAll("text").length,
       visiblePaths: visiblePaths.length,
       ports: cell?.querySelectorAll(".joint-port").length,
-      nameHidden: document.querySelector("[data-property-ref]") === null,
-      labelHidden: document.querySelector("[data-property-label-visible]") === null,
-      pinInputs: document.querySelectorAll("[data-property-triangle-pins]").length
+      nameHidden: document.querySelector("[data-schematic-property-editor] [data-property-ref]") === null,
+      labelHidden: document.querySelector("[data-schematic-property-editor] [data-property-label-visible]") === null,
+      pinInputs: document.querySelectorAll("[data-schematic-property-editor] [data-property-triangle-pins]").length
     };
   });
   if (triangle.type !== "eda.LibraryShape" || triangle.texts !== 0 || triangle.visiblePaths !== 1 || triangle.ports !== 0 || !triangle.nameHidden || !triangle.labelHidden || triangle.pinInputs !== 0) {
@@ -515,8 +516,8 @@ try {
   const mobilePanel = await evaluate(page, () => {
     const panel = document.querySelector("[data-schematic-property-editor]");
     const bounds = panel?.getBoundingClientRect();
-    const color = document.querySelector("[data-property-library-shape-fill-color]");
-    const fillSwatches = [...document.querySelectorAll("[data-library-shape-fill-color-swatch]"), color];
+    const color = panel.querySelector("[data-property-library-shape-fill-color]");
+    const fillSwatches = [...panel.querySelectorAll("[data-library-shape-fill-color-swatch]"), color];
     const fillPaletteFits = fillSwatches.length > 1 && fillSwatches.every(swatch => {
       const rect = swatch.getBoundingClientRect();
       return rect.width > 0 && rect.left >= bounds.left && rect.right <= bounds.right;
@@ -528,7 +529,7 @@ try {
       panelWidth: bounds?.width,
       fillColorDisabled: color?.disabled,
       fillPaletteFits,
-      cornerHidden: document.querySelector("[data-property-library-shape-corner-radius-row]")?.hidden
+      cornerHidden: panel.querySelector("[data-property-library-shape-corner-radius-row]")?.hidden
     };
   });
   if (mobilePanel.viewport !== 375 || mobilePanel.documentWidth > 375
