@@ -4,7 +4,7 @@ import {
   buildPlacementCommit,
   buildPlacementPreviewFragment,
   type PlacementCommit,
-  type PlacementComponentProperties,
+  type PlacementProperties,
   type PlacementIdFactory,
   type PlacementRefFactory
 } from "./placementModel";
@@ -24,7 +24,7 @@ export class SchematicPlacementToolController {
   private selectedPlacementItemValue: InstancePaletteItem;
   private activePlacementItemValue: InstancePaletteItem | null;
   private poseValue: PlacementToolPose = { rotation: 0, mirrored: false };
-  private properties?: PlacementComponentProperties;
+  private properties?: PlacementProperties;
 
   constructor(defaultItem: InstancePaletteItem = "resistor", options: { activeItem?: InstancePaletteItem | null } = {}) {
     this.selectedPlacementItemValue = defaultItem;
@@ -43,7 +43,7 @@ export class SchematicPlacementToolController {
     return { ...this.poseValue };
   }
 
-  setItem(item: InstancePaletteItem, properties?: PlacementComponentProperties) {
+  setItem(item: InstancePaletteItem, properties?: PlacementProperties) {
     if (item !== this.selectedPlacementItemValue) {
       this.resetPose();
     }

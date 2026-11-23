@@ -968,6 +968,7 @@ try {
   }, "split Undo did not restore the original wire", { args: [pasted.id] });
   await clickSelector(page, "[data-command='redo']");
   await waitFor(page, splitPersisted, "split Redo did not restore the wires", splitArgs);
+  await waitFor(page, () => window.layersSmoke.editor.getState().saveState === "saved", "Redo snapshot did not finish saving");
   await navigate(page, server.url);
   await waitFor(page, splitPersisted, "split layer state did not survive reload", splitArgs);
 

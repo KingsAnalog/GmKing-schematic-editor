@@ -34,7 +34,7 @@ export function createWebMathJaxLoader(ownerWindow: MathJaxWindow) {
 
     const { document } = ownerWindow;
     const script = document.createElement("script");
-    script.src = new URL("./vendor/mathjax/tex-mml-svg-mathjax-tex.js", document.baseURI).href;
+    script.src = new URL("./vendor/mathjax/tex-svg-mathjax-tex-4.1.3-4869dec38fd2.js", document.baseURI).href;
     script.async = true;
     Object.assign(ownerWindow, { MathJax: mathJaxConfig() });
     pending = new Promise<void>((resolve, reject) => {

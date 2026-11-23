@@ -8,6 +8,11 @@ import type { ComponentInstance, ComponentType, Point, SchematicDocument } from 
 export type PlacementIdFactory = (kind: "component" | "wire", index: number) => string;
 export type PlacementRefFactory = (type: ComponentType) => string;
 export type PlacementComponentProperties = Pick<ComponentInstance, "type" | "variantId" | "scale" | "values" | "appearance">;
+export interface PlacementTemplateProperties {
+  type: SchematicTemplateId;
+  components: readonly PlacementComponentProperties[];
+}
+export type PlacementProperties = PlacementComponentProperties | PlacementTemplateProperties;
 
 export interface BuildPlacedComponentOptions {
   id: string;
@@ -19,7 +24,7 @@ export interface BuildPlacedComponentOptions {
 export interface BuildPlacementPreviewOptions {
   rotation: number;
   mirrored: boolean;
-  properties?: PlacementComponentProperties;
+  properties?: PlacementProperties;
 }
 
 export interface BuildTemplatePlacementOptions {
@@ -76,7 +81,7 @@ function buildPlacementPreviewComponent(type: ComponentType, point: Point, optio
   };
 }
 
-function applyPlacementProperties(component: ComponentInstance, properties?: PlacementComponentProperties): ComponentInstance {
+export function applyPlacementProperties(component: ComponentInstance, properties?: PlacementProperties): ComponentInstance {
   if (properties?.type !== component.type) return component;
   const values = { ...properties.values };
   const def = getComponentDef(component.type);
@@ -92,10 +97,17 @@ function applyPlacementProperties(component: ComponentInstance, properties?: Pla
   };
 }
 
-export function buildTemplatePlacement(templateId: SchematicTemplateId, point: Point, options: BuildTemplatePlacementOptions): SchematicDocument {
+export function buildTemplatePlacement(
+  templateId: SchematicTemplateId,
+  point: Point,
+  options: BuildTemplatePlacementOptions,
+  properties?: PlacementProperties
+): SchematicDocument {
   return instantiateSchematicTemplate(templateId, point, {
-    createId: options.createId,
-    nextRef: options.nextRef
+    ...options,
+    configureComponent: properties?.type === templateId
+      ? (component, index) => applyPlacementProperties(component, properties.components[index])
+      : undefined
   });
 }
 
@@ -104,7 +116,7 @@ export function buildPlacementCommit(item: ComponentType | SchematicTemplateId, 
     const fragment = buildTemplatePlacement(item, point, {
       createId: options.createId,
       nextRef: options.nextRef
-    });
+    }, options.properties);
     return {
       fragment,
       selectedIds: [...fragment.components.map((component) => component.id), ...fragment.wires.map((wire) => wire.id)],
@@ -127,15 +139,13 @@ export function buildPlacementCommit(item: ComponentType | SchematicTemplateId, 
   };
 }
 
-function buildTemplatePlacementPreviewFragment(templateId: SchematicTemplateId, point: Point): SchematicDocument {
-  return instantiateSchematicTemplate(templateId, point, {
-    createId: (kind, index) => `preview-template-${kind}-${index}`,
-    nextRef: (type) => getComponentDef(type).hotLabel
-  });
-}
-
 export function buildPlacementPreviewFragment(item: ComponentType | SchematicTemplateId, point: Point, options: BuildPlacementPreviewOptions): SchematicDocument {
-  if (isSchematicTemplateId(item)) return buildTemplatePlacementPreviewFragment(item, point);
+  if (isSchematicTemplateId(item)) {
+    return buildTemplatePlacement(item, point, {
+      createId: (kind, index) => `preview-template-${kind}-${index}`,
+      nextRef: (type) => getComponentDef(type).hotLabel
+    }, options.properties);
+  }
   return createSchematicDocument({
     components: [applyPlacementProperties(buildPlacementPreviewComponent(item, point, options), options.properties)],
   });

@@ -120,6 +120,7 @@ export function instantiateSchematicTemplate(
   options: {
     createId: (kind: "component" | "wire", index: number) => string;
     nextRef: (type: ComponentType) => string;
+    configureComponent?: (component: ComponentInstance, index: number) => ComponentInstance;
   }
 ): SchematicDocument {
   const template = getSchematicTemplateDef(id);
@@ -132,7 +133,7 @@ export function instantiateSchematicTemplate(
     const ref = options.nextRef(component.type);
     const values = { ...(def.defaultValues ?? {}) };
     if (def.valueKey === "main") values.main = ref;
-    return {
+    const instance: ComponentInstance = {
       id: options.createId("component", index),
       type: component.type,
       variantId: component.variantId ?? def.defaultVariantId,
@@ -143,6 +144,7 @@ export function instantiateSchematicTemplate(
       mirrored: component.mirrored ?? false,
       values
     };
+    return options.configureComponent?.(instance, index) ?? instance;
   });
   const wires = template.wires.map((wire, index): Wire => ({
     id: options.createId("wire", index),

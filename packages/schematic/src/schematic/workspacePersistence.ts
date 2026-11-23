@@ -20,6 +20,14 @@ export class SchematicStorageConflict extends Error {
   }
 }
 
+function contentFingerprint(content: unknown) {
+  return JSON.stringify(content, (_key, value: unknown) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map(key => [key, record[key]]));
+  });
+}
+
 /** Each mounted workspace has its own read versions and serial write queue.
  * The browser supplies Web Locks so checking and writing a version is atomic
  * with respect to other mounted workspaces in the same origin.
@@ -37,7 +45,7 @@ export function createSchematicWorkspacePersistence(
     if (!value) return null;
     try {
       const state = JSON.parse(value).state;
-      return JSON.stringify(state?.project ?? state?.document ?? null);
+      return contentFingerprint(state?.project ?? state?.document ?? null);
     }
     catch { return value; }
   };
@@ -93,8 +101,8 @@ export function createSchematicWorkspacePersistence(
       const captured = structuredClone(snapshot);
       return enqueue(SCHEMATIC_DOCUMENT_STORAGE_PREFIX + id, () => {
         const { document, project, sheetPath } = captured;
-        // Derived junctions are absent from the stored content version.
-        const desired = JSON.stringify(project ?? (document ? contentFromDocument(document) : null));
+        // Restoring content can reorder its object keys. Array order still matters.
+        const desired = contentFingerprint(project ?? (document ? contentFromDocument(document) : null));
         const base = bases.get(id) ?? null;
         const current = contentVersion(id);
         if (storage && current !== base && desired !== base && desired !== current) throw new SchematicStorageConflict();

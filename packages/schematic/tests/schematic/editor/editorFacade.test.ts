@@ -403,7 +403,8 @@ describe("schematic editor public facade", () => {
     expect(activateHostedDocument.indexOf("this.transientToolSession.prepareDocumentSwitch(preserveCopy);")).toBeLessThan(
       activateHostedDocument.indexOf("this.restoreDocumentState(input.document);")
     );
-    expect(activateHostedDocument).toContain("&& this.copyController.hasSource;");
+    expect(activateHostedDocument).toContain("&& this.copyController.hasSource");
+    expect(activateHostedDocument).toContain("&& (!this.copyController.hasSheetBlocks || input.id === this.activeHostedDocumentId);");
     expect(activateHostedDocument).not.toContain("this.copyController.awaitingReference");
     expect(activateHostedDocument).toContain(
       "input.analysisSelection ?? { inputP: \"\", inputN: \"\", outputP: \"\", outputN: \"\" }"
@@ -564,10 +565,15 @@ describe("schematic editor public facade", () => {
 
     const blankPointerDownModeButtonGuard = indexOfRequired(
       blankPointerDown,
-      'if ((this.transientToolSession.mode !== "select" && !this.isDeleteToolMode()) || event.button !== 0) return;'
+      "if (event.button !== 0) return;"
+    );
+    const blankPointerDownPickupGuard = indexOfRequired(
+      blankPointerDown,
+      'if (mode === "select" || this.isDeleteToolMode() || pickingTargets) {'
     );
     const blankPointerDownSelection = indexOfRequired(blankPointerDown, "this.startDragSelection(event, snapPoint({ x, y }));");
-    expect(blankPointerDownModeButtonGuard).toBeLessThan(blankPointerDownSelection);
+    expect(blankPointerDownModeButtonGuard).toBeLessThan(blankPointerDownPickupGuard);
+    expect(blankPointerDownPickupGuard).toBeLessThan(blankPointerDownSelection);
 
     const blankMoveDeleteHover = indexOfRequired(blankPointerMove, "if (this.isDeleteToolMode()) this.setDeleteHover([]);");
     const blankMovePointerMove = indexOfRequired(blankPointerMove, "this.handlePointerMove(snapPoint({ x, y }));");

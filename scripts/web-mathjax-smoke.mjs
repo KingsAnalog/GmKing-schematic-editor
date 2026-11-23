@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createSchematicDocument } from "../packages/schematic/dist/schematic/document/documentModel.js";
 import { serializeSchematicContent } from "../packages/schematic/dist/schematic/schematicDocumentCodec.js";
@@ -7,8 +8,11 @@ import { clickSelector, evaluate, launchBrowser, navigate, openPage, serveDist, 
 let requests = 0;
 let allowFirstSuccess;
 const firstSuccess = new Promise(resolve => { allowFirstSuccess = resolve; });
-const mathJaxPath = "vendor/mathjax/tex-mml-svg-mathjax-tex.js";
-const server = await serveDist(fileURLToPath(new URL("../apps/web/dist", import.meta.url)), {
+const dist = new URL("../apps/web/dist/", import.meta.url);
+const mathJaxFiles = (await readdir(new URL("vendor/mathjax/", dist))).filter(name => name.endsWith(".js"));
+assert.equal(mathJaxFiles.length, 1);
+const mathJaxPath = "vendor/mathjax/" + mathJaxFiles[0];
+const server = await serveDist(fileURLToPath(dist), {
   base: "/tools/schematic/",
   async intercept(path, response) {
     if (path !== mathJaxPath) return false;
@@ -30,6 +34,19 @@ try {
   await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await navigate(page, server.url);
   await waitFor(page, () => !!document.querySelector("[data-schematic-paper] svg"), "Initial render did not complete");
+  await assertNotRequested();
+
+  await clickSelector(page, "[data-sidebar-tab='library']");
+  await clickSelector(page, "[data-library-item='resistor']");
+  await clickCanvas(700, 400);
+  await key("Escape", "Escape", 27);
+  await waitFor(page, () => document.querySelectorAll("[model-id]").length === 1, "Resistor placement did not settle");
+  await key("w", "KeyW", 87);
+  await clickCanvas(850, 450);
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1000, y: 450, button: "none" });
+  await key("Enter", "Enter", 13);
+  await key("Escape", "Escape", 27);
+  await waitFor(page, () => document.querySelectorAll("[model-id]").length === 2, "Wire placement did not finish");
   await assertNotRequested();
 
   const plainCircuit = createSchematicDocument({
@@ -92,7 +109,7 @@ try {
   });
   await waitFor(page, () => !!document.querySelector("[data-note-id='plain'] svg path"), "Editing a plain Note into a formula did not load MathJax");
   assert.equal(requests, 4);
-  console.log("Web MathJax passed: cold blank and plain circuit, one concurrent load, retry, document switch/restore, first edit and full/selection SVG/PNG.");
+  console.log("Web MathJax passed: cold blank, component and wire placement, plain circuit, one concurrent load, retry, document switch/restore, first edit and full/selection SVG/PNG.");
 } finally {
   allowFirstSuccess();
   page?.close();
@@ -112,6 +129,18 @@ async function activeTabSelector() {
 async function assertNotRequested() {
   assert.equal(requests, 0);
   assert.equal(await evaluate(page, () => !!window.MathJax || !!document.querySelector("script[src*='mathjax/']")), false);
+}
+
+async function clickCanvas(x, y) {
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" });
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+}
+
+async function key(key, code, windowsVirtualKeyCode) {
+  for (const type of ["keyDown", "keyUp"]) {
+    await page.send("Input.dispatchKeyEvent", { type, key, code, windowsVirtualKeyCode });
+  }
 }
 
 async function importDocument(content, name) {

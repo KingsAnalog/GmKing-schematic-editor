@@ -1,6 +1,6 @@
 import { NOTE_ANCHORS } from "./types";
 import { NOTE_ANCHOR_LABELS } from "./notes/noteDialog";
-import { markupUi, type UiBuilder } from "./schematicUiElements";
+import { domUi, markupUi, type UiBuilder } from "./schematicUiElements";
 import { message, parameterMessage } from "./schematicI18n";
 import { MAX_NETLIST_MODEL_LENGTH } from "./netlist/profiles";
 import { DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
@@ -31,8 +31,8 @@ export function renderSchematicEditorSidebarProjection() {
   return buildSchematicEditorSidebar(markupUi.el).html;
 }
 
-export function renderPlacementPropertyEditor() {
-  return buildPropertyEditor(markupUi.el, true).html;
+export function createPlacementPropertyEditor(doc: Document) {
+  return buildPropertyEditor(domUi(doc).el, true);
 }
 
 function buildPropertyEditor<T extends object>(el: UiBuilder<T>["el"], placement = false) {
@@ -43,6 +43,10 @@ function buildPropertyEditor<T extends object>(el: UiBuilder<T>["el"], placement
     [placement ? "data-browser-property-editor" : "data-schematic-property-editor"]: true
   },
     el("h2", {}, heading),
+    ...(placement ? [el("label", { class: "property-row", hidden: true },
+      el("span", {}, message("browser.templateComponent", "Template component")),
+      el("select", { "data-browser-template-component": true })
+    )] : []),
     el("div", { class: "property-empty", "data-property-empty": true }, message("properties.empty", "No object selected.")),
     el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
       el("span", {}, message("layer.field", "Layer")),

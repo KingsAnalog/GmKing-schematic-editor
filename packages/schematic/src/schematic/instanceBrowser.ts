@@ -1,6 +1,7 @@
 import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
+import { createSchematicSvgElement } from "./schematicSvgDom";
 import { InstanceBrowserProperties } from "./instanceBrowserProperties";
-import type { PlacementComponentProperties } from "./placementModel";
+import type { PlacementProperties } from "./placementModel";
 import type { SchematicDocument } from "./types";
 import {
   DEFAULT_DEVICE_ITEM,
@@ -18,7 +19,7 @@ import type { SymbolTemplateId } from "./symbolTemplateModel";
 interface InstanceBrowserEvents {
   symbolTemplate: () => SymbolTemplateId | undefined;
   netlistProcess: () => SchematicDocument["netlistProcess"];
-  onPick: (item: InstancePaletteItem, properties?: PlacementComponentProperties) => void;
+  onPick: (item: InstancePaletteItem, properties?: PlacementProperties) => void;
   onClose?: () => void;
 }
 
@@ -41,7 +42,6 @@ export class InstanceBrowser {
   private cellInput: HTMLInputElement | null = null;
   private libraryList: HTMLElement | null = null;
   private cellList: HTMLElement | null = null;
-  private symbolPreview: HTMLElement | null = null;
   private symbolName: HTMLElement | null = null;
   private symbolMeta: HTMLElement | null = null;
   private properties: InstanceBrowserProperties | null = null;
@@ -144,7 +144,6 @@ export class InstanceBrowser {
     this.cellInput = cellInput;
     this.libraryList = libraryList;
     this.cellList = cellList;
-    this.symbolPreview = symbolPreview;
     this.symbolName = symbolName;
     this.symbolMeta = symbolMeta;
     this.countLabel = count;
@@ -332,7 +331,7 @@ export class InstanceBrowser {
         button.setAttribute("aria-selected", String(index === this.cellIndex));
         button.classList.toggle("is-active", index === this.cellIndex);
         const preview = element(doc, "span", "browser-cell-preview");
-        preview.innerHTML = paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate() });
+        preview.append(createSchematicSvgElement(doc, paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate() })));
         const copy = element(doc, "span", "browser-cell-copy");
         copy.append(element(doc, "span", "browser-option-name", deviceItemName(item)));
         const badge = element(doc, "span", "browser-cell-badge", deviceItemLabel(item));
@@ -352,11 +351,7 @@ export class InstanceBrowser {
 
   private renderSymbol(item: InstancePaletteItem | undefined) {
     const symbolTemplate = this.events.symbolTemplate();
-    if (!this.properties?.show(item, symbolTemplate) && this.symbolPreview) {
-      this.symbolPreview.innerHTML = item
-        ? paletteItemPreview(item, { symbolTemplate })
-        : "";
-    }
+    this.properties?.show(item, symbolTemplate);
     if (this.symbolName) this.symbolName.textContent = item ? deviceItemName(item) : "";
     if (this.symbolMeta) {
       if (!item) {

@@ -225,6 +225,7 @@ const ZH: Record<string, string> = {
   "browser.searchCell": "搜索器件",
   "browser.empty": "没有匹配的器件",
   "browser.place": "放置",
+  "browser.templateComponent": "模板器件",
   "browser.hint": "Enter 放置 · Esc 关闭",
   "browser.template": "模板",
   "browser.count": "{count} 个器件",

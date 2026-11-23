@@ -83,6 +83,16 @@ describe("workspace persistence across windows", () => {
     expect(first.readDocument("doc")!.document!.notes[0].text).toBe("B");
   });
 
+  it("recognizes saved content after a restore reorders object keys", async () => {
+    const { first, a, storage } = fixture();
+    vi.mocked(storage.setItem).mockClear();
+    const note = a.document!.notes[0];
+    const { id, ...rest } = note;
+    a.document!.notes[0] = { ...rest, id };
+    await first.persistDocument("doc", a);
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
   it("does not resurrect a document deleted in another window", async () => {
     const { first, second, b } = fixture();
     await first.removeDocument("doc");

@@ -14,7 +14,7 @@ import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
 import { InstanceBrowser } from "./instanceBrowser";
 import { applyTranslatedWireAnchors } from "./wire/wireMoveTopology";
 import { syncDeviceModelFields, syncMosParameterFields } from "./componentNetlistFields";
-import type { PlacementComponentProperties } from "./placementModel";
+import { applyPlacementProperties, type PlacementProperties } from "./placementModel";
 import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog, type LogEntry } from "./eventLog";
@@ -336,7 +336,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private toolCursorFeedback?: { cursor: ToolCursorFeedback; timer: number };
   private activeLayerId = "layer-1";
   private readonly collapsedLayerTreeNodes = new Set<string>();
-  private libraryShapeDraw: { kind: LibraryShapeType; points: Point[] } | null = null;
+  private libraryShapeDraw: { kind: LibraryShapeType; points: Point[]; properties?: PlacementProperties } | null = null;
   private libraryShapeDragStart: Point | null = null;
   private shapeDraftOverlay: SVGSVGElement | null = null;
   private routingSnapMarker: SVGCircleElement | null = null;
@@ -1384,7 +1384,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }, { signal });
   }
 
-  private beginLibraryShapeDraw(kind: LibraryShapeType) {
+  private beginLibraryShapeDraw(kind: LibraryShapeType, properties?: PlacementProperties) {
     if (!this.editablePlacementLayer()) return;
     this.transientToolSession.transition("select", "enter-tool");
     this.syncToolUi();
@@ -1392,7 +1392,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.instanceSelector.closeDropdown();
     this.instanceSelector.closeOptions();
     this.instanceBrowser.close();
-    this.libraryShapeDraw = { kind, points: [] };
+    this.libraryShapeDraw = { kind, points: [], properties };
     this.libraryShapeDragStart = null;
     this.ensureShapeDraftOverlay();
     if (this.shapeDraftOverlay) this.shapeDraftOverlay.removeAttribute("hidden");
@@ -1694,11 +1694,18 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus("Shape needs a non-zero grid size.");
       return;
     }
-    const def = getComponentDef(kind);
-    const values: Record<string, string> = {
-      ...(def.defaultValues ?? {}),
-      "layer:id": layer.id
-    };
+    const component = applyPlacementProperties({
+      id: this.host.idFactory(),
+      type: kind,
+      ref: this.nextComponentRef(kind),
+      x: center.x,
+      y: center.y,
+      rotation: 0,
+      mirrored: false,
+      values: { ...getComponentDef(kind).defaultValues }
+    }, draft.properties);
+    const { values } = component;
+    values["layer:id"] = layer.id;
     if (kind === "rectangle") {
       values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
       values[RECTANGLE_HEIGHT_VALUE_KEY] = String(height / SYMBOL_GRID_SIZE);
@@ -1711,16 +1718,6 @@ export class SchematicEditor implements SchematicHostedEditor {
         values[triangleVertexKey(vertex, "y")] = String(local[index].y);
       });
     }
-    const component: ComponentInstance = {
-      id: this.host.idFactory(),
-      type: kind,
-      ref: this.nextComponentRef(kind),
-      x: center.x,
-      y: center.y,
-      rotation: 0,
-      mirrored: false,
-      values
-    };
     this.transact((draftDocument) => { draftDocument.components.push(component); }, {
       origin: "editor",
       reason: `draw-${kind}`
@@ -3067,16 +3064,16 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginPlacement(item: InstancePaletteItem, options: {
-    armPaletteKeyboard?: boolean; prefillQuery?: boolean; properties?: PlacementComponentProperties;
+    armPaletteKeyboard?: boolean; prefillQuery?: boolean; properties?: PlacementProperties;
   } = {}) {
     if (isLibraryShapeType(item)) {
-      this.beginLibraryShapeDraw(item);
+      this.beginLibraryShapeDraw(item, options.properties);
       return;
     }
     this.applyPlacementToolEntryIntent(buildPlacementToolEntryIntent(item, options), options.properties);
   }
 
-  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>, properties?: PlacementComponentProperties) {
+  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>, properties?: PlacementProperties) {
     this.placementToolController.setItem(intent.placementItem, properties);
     this.transientToolSession.transition(intent.nextMode, "enter-tool");
     this.instanceSelector.beginPlacement(intent.placementItem, intent.instanceSelectorBeginPlacementOptions);

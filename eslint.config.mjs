@@ -32,7 +32,7 @@ const reviewConfig = obsidianmd.configs.recommended.map(config => ({
 
 export default defineConfig([
   globalIgnores([
-    "**/node_modules/**", "**/dist/**", ".codex-run/**", ".chrome-profile/**",
+    "**/node_modules/**", "**/dist/**", "tmp/**", ".codex-run/**", ".chrome-profile/**", "apps/web/public/vendor/**",
     "**/tests/**", "**/*.test.*", "**/*.spec.*", "**/scripts/**",
     "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts",
     "**/vite.config.*", "**/vitest.config.*"
