@@ -1,6 +1,6 @@
 import type { WireVariant } from "./types";
 
-export const TOOL_MODES = ["select", "place", "wire", "label", "delete", "temp-delete", "copy"] as const;
+export const TOOL_MODES = ["select", "place", "wire", "label", "delete", "temp-delete", "move", "copy", "rotate"] as const;
 
 export type ToolMode = (typeof TOOL_MODES)[number];
 export type ToolFocusTarget = "canvas" | "palette" | "none";
@@ -55,8 +55,6 @@ export type SchematicEscapeKeyProjectionInput = {
   dropdownOpen: boolean;
   optionsOpen: boolean;
   editable: boolean;
-  noteEditorTarget: boolean;
-  noteEditingActive: boolean;
 };
 
 type SchematicEscapeKeyIntentBase = {
@@ -80,7 +78,6 @@ export type SchematicEscapeKeyIntent =
       stopPropagation: true;
       focusCanvas: false;
     })
-  | (SchematicEscapeKeyIntentBase & { kind: "finish-note-edit"; preventDefault: true; stopPropagation: true; focusCanvas: true })
   | (SchematicEscapeKeyIntentBase & { kind: "cancel-tool"; preventDefault: true; stopPropagation: true; focusCanvas: false });
 
 export type CancelToolIntent = {
@@ -128,7 +125,7 @@ export type MoveBehaviorToolEntryBehavior = "stretch" | "moveOnly";
 
 export type MoveBehaviorToolEntryIntent = {
   moveBehavior: MoveBehaviorToolEntryBehavior;
-  nextMode: Extract<ToolMode, "select">;
+  nextMode: Extract<ToolMode, "move">;
   closeInstancePanel: true;
   syncToolUi: true;
   focusTarget: Extract<ToolFocusTarget, "canvas">;
@@ -147,23 +144,15 @@ type CopyToolEntryIntentBase = {
 
 export type CopyToolNoSourceEntryIntent = CopyToolEntryIntentBase & {
   hasSource: false;
-  awaitingReference: false;
 };
 
 export type CopyToolSourceEntryIntent = CopyToolEntryIntentBase & {
   hasSource: true;
-  awaitingReference: false;
   sourceCount: number;
   updateCopyPreview: true;
 };
 
-export type CopyToolReferenceEntryIntent = CopyToolEntryIntentBase & {
-  hasSource: false;
-  awaitingReference: true;
-  sourceCount: number;
-};
-
-export type CopyToolEntryIntent = CopyToolNoSourceEntryIntent | CopyToolSourceEntryIntent | CopyToolReferenceEntryIntent;
+export type CopyToolEntryIntent = CopyToolNoSourceEntryIntent | CopyToolSourceEntryIntent;
 
 export type ToolbarProjectionInput = {
   mode: ToolMode;
@@ -207,12 +196,17 @@ const WIRE_TOOL_ENTRY_STATUS: Record<WireToolVariant, string> = {
   wide: "Wide wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
 };
 const MOVE_BEHAVIOR_TOOL_ENTRY_STATUS: Record<MoveBehaviorToolEntryBehavior, string> = {
-  stretch: "Stretch move active: moved components pull attached wire endpoints. Shift+M switches to move-only.",
-  moveOnly: "Move-only active: moved components do not pull attached wires. M switches back to stretch move."
+  stretch: "Stretch move: click an object or drag a box to move with connections. Esc cancels.",
+  moveOnly: "Move only: click an object or drag a box to move without pulling attached wires. Esc cancels."
 };
+export const COPY_PICK_STATUS = "Copy mode: click an object or drag a box to copy. Esc cancels.";
 
 export function isToolMode(value: string): value is ToolMode {
   return TOOL_MODE_SET.has(value);
+}
+
+export function isMoveOrRotateMode(mode: ToolMode) {
+  return mode === "move" || mode === "rotate";
 }
 
 export function isDeleteToolMode(mode: ToolMode): mode is DeleteToolMode {
@@ -320,10 +314,6 @@ export function projectSchematicEscapeKeyIntent(input: SchematicEscapeKeyProject
     return { kind: "close-instance-options", preventDefault: true, stopPropagation: true, focusCanvas: false };
   }
 
-  if (input.editable && input.noteEditorTarget && input.noteEditingActive) {
-    return { kind: "finish-note-edit", preventDefault: true, stopPropagation: true, focusCanvas: true };
-  }
-
   if (input.editable) {
     return { kind: "none", preventDefault: false, stopPropagation: false, focusCanvas: false };
   }
@@ -427,7 +417,7 @@ export function buildPlacementToolEntryIntent<TItem>(
 export function buildMoveBehaviorToolEntryIntent(behavior: MoveBehaviorToolEntryBehavior): MoveBehaviorToolEntryIntent {
   return {
     moveBehavior: behavior,
-    nextMode: "select",
+    nextMode: "move",
     closeInstancePanel: true,
     syncToolUi: true,
     focusTarget: "canvas",
@@ -441,24 +431,9 @@ export function buildCopyToolNoSourceEntryIntent(): CopyToolNoSourceEntryIntent 
     closeInstancePanel: true,
     suppressNextBlankClick: false,
     hasSource: false,
-    awaitingReference: false,
     syncToolUi: true,
     focusTarget: "canvas",
-    status: "Copy mode: click an object to copy, or Esc cancels."
-  };
-}
-
-export function buildCopyToolReferenceEntryIntent(sourceCount: number): CopyToolReferenceEntryIntent {
-  return {
-    nextMode: "copy",
-    closeInstancePanel: true,
-    suppressNextBlankClick: false,
-    hasSource: false,
-    awaitingReference: true,
-    sourceCount,
-    syncToolUi: true,
-    focusTarget: "canvas",
-    status: `Copy mode: ${sourceCount} object${sourceCount === 1 ? "" : "s"} selected. Click a reference point; Esc cancels.`
+    status: COPY_PICK_STATUS
   };
 }
 
@@ -468,7 +443,6 @@ export function buildCopyToolSourceEntryIntent(sourceCount: number): CopyToolSou
     closeInstancePanel: true,
     suppressNextBlankClick: false,
     hasSource: true,
-    awaitingReference: false,
     sourceCount,
     updateCopyPreview: true,
     syncToolUi: true,
@@ -488,6 +462,7 @@ export function projectSchematicToolbarCommand(
     (button.command === "delete" && input.mode === "delete") ||
     (button.command === "temp-delete" && input.mode === "temp-delete") ||
     (button.command === "copy" && input.mode === "copy") ||
+    (button.command === "rotate" && input.mode === "rotate") ||
     (button.command === "presentation" && input.presentationMode);
   const projection: ToolbarCommandProjection = {
     active,

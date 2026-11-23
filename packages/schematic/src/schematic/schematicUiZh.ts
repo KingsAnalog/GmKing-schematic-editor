@@ -73,7 +73,6 @@ export const SCHEMATIC_UI_ZH: Record<string, string> = {
   "ui.none": "无",
   "ui.nonInverting": "同相",
   "ui.noObjectSelected": "未选中对象。",
-  "ui.noteFormat": "注释格式",
   "ui.off": "关闭",
   "ui.on": "开",
   "ui.openSchematics": "打开的原理图",

@@ -88,3 +88,4 @@ function requiredElement(root: HTMLElement, selector: string) {
   if (!element) throw new Error(`Missing schematic editor mount: ${selector}`);
   return element;
 }
+export { hasNoteMath, typesetNotesForExport } from "./notes/noteTypeset";

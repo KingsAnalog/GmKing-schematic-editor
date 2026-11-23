@@ -32,7 +32,7 @@ describe("schematic selection SVG export", () => {
         y: 0,
         width: 120,
         height: 40,
-        format: "plain" as const,
+        anchor: "upperLeft" as const,
         text: "namespace"
       }]
     });
@@ -54,7 +54,7 @@ describe("schematic selection SVG export", () => {
       y: 70,
       width: 120,
       height: 50,
-      format: "plain" as const,
+      anchor: "upperLeft" as const,
       text: "gain < 1\nok & done"
     };
     const input = fixtureDocument({
@@ -79,9 +79,9 @@ describe("schematic selection SVG export", () => {
     expect(exported?.svg).toContain('data-wire-id="wcopy"');
     expect(exported?.svg).toContain('data-junction="180,120"');
     expect(exported?.svg).toContain('data-note-id="note-copy"');
-    expect(exported?.svg).toContain("<foreignObject");
-    expect(exported?.svg).toContain("border:0px solid transparent");
-    expect(exported?.svg).toContain("white-space:pre");
+    expect(exported?.svg).not.toContain("<foreignObject");
+    expect(exported?.svg).toContain('<text x="5"');
+    expect(exported?.svg).toContain('xml:space="preserve"');
     expect(exported?.svg).toContain("gain &lt; 1");
     expect(exported?.svg).toContain("ok &amp; done");
   });
@@ -592,85 +592,6 @@ describe("schematic selection SVG export", () => {
     expect(rotatedCell.attr("refLabel/transform")).toBe(`rotate(-90 ${expectedX} ${expectedY})`);
   });
 
-  it("exports rendered Markdown notes as XHTML foreignObject content", () => {
-    const note = {
-      id: "note-markdown",
-      x: 40,
-      y: 60,
-      width: 320,
-      height: 120,
-      format: "markdown" as const,
-      text: "# Gain\n\n$A_v$"
-    };
-    const exported = buildSchematicSelectionSvg(fixtureDocument({
-      netLabels: [],
-      components: [],
-      wires: [],
-      junctionPoints: [],
-      notes: [note],
-      renderedNoteHtml: {
-        [note.id]: '<div class="milkdown"><h1 style="font-size:24px">Gain</h1><span class="schematic-markdown-math"><svg xmlns="http://www.w3.org/2000/svg"><defs><path id="MJX-TEX-A" d="M0 0"/></defs></svg></span></div>'
-      },
-      renderedNoteText: {
-        [note.id]: "Gain\n$A_v$"
-      }
-    }));
-
-    expect(exported?.svg).toContain("<switch>");
-    expect(exported?.svg).toContain("<foreignObject");
-    expect(exported?.svg).toContain('requiredExtensions="http://www.w3.org/1999/xhtml"');
-    expect(exported?.svg).toContain('xmlns="http://www.w3.org/1999/xhtml"');
-    expect(exported?.svg).toContain('data-markdown-note-fallback="note-markdown"');
-    expect(exported?.svg).toContain("border:1px solid transparent");
-    expect(exported?.svg).toContain("<h1");
-    expect(exported?.svg).toContain("<defs>");
-    expect(exported?.svg).not.toContain("# Gain");
-  });
-
-  it("keeps a native visible fallback for no-fill Markdown SVG exports", () => {
-    const note = {
-      id: "note-markdown-no-fill",
-      x: 740,
-      y: 160,
-      width: 160,
-      height: 40,
-      format: "markdown" as const,
-      text: "**(Q) Noise**\n",
-      backgroundColor: null,
-      fontSizePx: 28
-    };
-    const exported = buildSchematicSelectionSvg(fixtureDocument({
-      netLabels: [],
-      components: [],
-      wires: [],
-      junctionPoints: [],
-      notes: [note],
-      renderedNoteHtml: {
-        [note.id]: '<div class="milkdown"><p><strong>(Q) Noise</strong></p></div>'
-      },
-      renderedNoteText: {
-        [note.id]: "(Q) Noise"
-      },
-      renderedNoteTextStyles: {
-        [note.id]: { fontWeight: 700 }
-      }
-    }));
-
-    expect(exported?.svg).toContain('fill="none"');
-    expect(exported?.svg).toContain("<switch>");
-    expect(exported?.svg).toContain('data-markdown-note-fallback="note-markdown-no-fill"');
-    expect(exported?.svg).toContain(">(Q) Noise</tspan>");
-    expect(exported?.svg).not.toContain(">**(Q) Noise**</tspan>");
-    expect(exported?.clipboardSvg).toContain('fill="none"');
-    expect(exported?.clipboardSvg).toContain('data-markdown-note-fallback="note-markdown-no-fill"');
-    expect(exported?.clipboardSvg).toContain('font-size="28"');
-    expect(exported?.clipboardSvg).toContain('font-weight="700"');
-    expect(exported?.clipboardSvg).toContain(">(Q) Noise</tspan>");
-    expect(exported?.clipboardSvg).not.toContain("<switch>");
-    expect(exported?.clipboardSvg).not.toContain("<foreignObject");
-    expect(exported?.clipboardSvg).not.toContain("**(Q) Noise**");
-  });
-
   it("exports no-fill notes without a background rectangle fill", () => {
     const exported = buildSchematicSelectionSvg(fixtureDocument({
       netLabels: [],
@@ -683,7 +604,7 @@ describe("schematic selection SVG export", () => {
         y: 60,
         width: 160,
         height: 60,
-        format: "plain",
+        anchor: "upperLeft" as const,
         text: "Transparent note",
         backgroundColor: null
       }]

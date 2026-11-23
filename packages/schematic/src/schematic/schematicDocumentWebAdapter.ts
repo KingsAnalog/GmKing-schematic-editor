@@ -1,3 +1,4 @@
+import { typesetNotesForExport } from "./notes/noteTypeset";
 import { downloadBlob } from "../shared/download";
 import { renderSchematicDocumentSvg, type SchematicDocumentSvgOptions } from "./documentSvgRenderer";
 import { rasterizeSchematicSvg } from "./imageExport";
@@ -47,7 +48,8 @@ export async function downloadSchematicDocumentImage(
   options: Pick<SchematicDocumentSvgOptions, "includeHidden" | "presentationMode">,
   ownerDocument: Document
 ) {
-  const image = renderSchematicDocumentSvg(document, { ...options, namespace: "schematic-export" });
+  const noteGraphics = await typesetNotesForExport(document.notes, ownerDocument, document.display?.textFont);
+  const image = renderSchematicDocumentSvg(document, { ...options, noteGraphics, namespace: "schematic-export" });
   const blob = format === "svg"
     ? new Blob([image.svg], { type: "image/svg+xml" })
     : await rasterizeSchematicSvg(image, ownerDocument);

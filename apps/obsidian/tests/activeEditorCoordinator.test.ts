@@ -36,7 +36,7 @@ function schematicFenceWithNote(text: string) {
     y: 0,
     width: 120,
     height: 40,
-    format: "plain",
+    anchor: "upperLeft",
     text
   });
   return `\`\`\`json\n${serializeSchematicContent(content)}\`\`\``;
@@ -172,7 +172,7 @@ describe("active editor coordinator", () => {
     log.length = 0;
     try {
       const content = createEmptySchematicContent();
-      content.notes.push({ id: "small", x: 0, y: 0, width: 40, height: 20, format: "plain", text: "R1" });
+      content.notes.push({ id: "small", x: 0, y: 0, width: 40, height: 20, anchor: "upperLeft", text: "R1" });
       captures[0].host.commit(content, { origin: "editor", reason: "edit", revision: 1 });
       expect(root.clientHeight).toBeLessThan(600);
       expect(log).not.toContain("fit");
@@ -675,7 +675,7 @@ describe("active editor coordinator", () => {
       y: 0,
       width: 120,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: ""
     });
 
@@ -744,7 +744,7 @@ describe("active editor coordinator", () => {
       y: 0,
       width: 120,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "self echo"
     } as const;
     editorContent.notes.push(firstNote);
@@ -819,7 +819,7 @@ describe("active editor coordinator", () => {
       y: 0,
       width: 120,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "pending"
     });
 
@@ -857,7 +857,7 @@ describe("active editor coordinator", () => {
       y: 0,
       width: 120,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "external"
     });
     const externalProjection = parseSchematicFence(
@@ -919,7 +919,7 @@ describe("active editor coordinator", () => {
               y: 0,
               width: 120,
               height: 40,
-              format: "plain",
+              anchor: "upperLeft",
               text: "must not overwrite invalid source"
             });
             const accepted = options.host.commit(pendingContent, {
@@ -1049,7 +1049,7 @@ describe("active editor coordinator", () => {
         y: 0,
         width: 120,
         height: 40,
-        format: "plain",
+        anchor: "upperLeft",
         text: "committed"
       });
     }, { origin: "editor", reason: "note-edit", revision: 1 });
@@ -1120,7 +1120,7 @@ describe("blank canvas paste", () => {
     const f = fixture();
     try {
       const content = createEmptySchematicContent();
-      content.notes.push({ id: "copied", x: 0, y: 0, width: 120, height: 40, text: "Clipboard", format: "plain" });
+      content.notes.push({ id: "copied", x: 0, y: 0, width: 120, height: 40, text: "Clipboard", anchor: "upperLeft" });
       const execute = vi.spyOn(f.coordinator.activeEditor()!, "execute");
       f.clipboard(async () => serializeSchematicContent(content));
       expect(f.menus[0].onPaste).toBeTypeOf("function");
@@ -1224,7 +1224,7 @@ describe("Note focus during host commits", () => {
     textarea.focus();
     textarea.setSelectionRange(2, 2);
     const content = createEmptySchematicContent();
-    content.notes.push({ id: "note", x: 0, y: 0, width: 120, height: 40, format: "plain", text: "first second" });
+    content.notes.push({ id: "note", x: 0, y: 0, width: 120, height: 40, anchor: "upperLeft", text: "first second" });
     try {
       captures[0].host.commit(content, { origin: "editor", reason: "edit", revision: 1 });
       await Promise.resolve();

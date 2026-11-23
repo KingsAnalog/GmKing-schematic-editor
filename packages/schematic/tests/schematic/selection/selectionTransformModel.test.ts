@@ -69,6 +69,7 @@ describe("schematic selection transform model", () => {
     const previousComponentCenter = rectCenter(componentVisualBounds(component));
     const previousWirePoints = wire.points.map((point) => ({ ...point }));
     const previousNoteBox = noteVisualBounds(note);
+    const anchor = { x: note.x, y: note.y };
 
     const result = transformSelectionDocumentGeometry({ document, selection, kind: "mirror-x" });
 
@@ -76,7 +77,7 @@ describe("schematic selection transform model", () => {
     expect(component).toMatchObject({ rotation: 270, mirrored: true });
     expect(rectCenter(componentVisualBounds(component))).toEqual(transform(previousComponentCenter));
     expect(wire.points).toEqual(normalizeWirePath(previousWirePoints.map(transform)));
-    expect(rectCenter(noteVisualBounds(note))).toEqual(transform(rectCenter(previousNoteBox)));
+    expect({ x: note.x, y: note.y }).toEqual(transform(anchor));
     expect(note).toMatchObject({ width: previousNoteBox.width, height: previousNoteBox.height });
 
     const transformedSelectedJunction = transform({ x: 280, y: 200 });
@@ -99,6 +100,7 @@ describe("schematic selection transform model", () => {
     const previousComponentCenter = rectCenter(componentVisualBounds(component));
     const previousWirePoints = wire.points.map((point) => ({ ...point }));
     const previousNoteBox = noteVisualBounds(note);
+    const anchor = { x: note.x, y: note.y };
 
     const result = transformSelectionDocumentGeometry({ document, selection, kind: "mirror-y" });
 
@@ -106,7 +108,7 @@ describe("schematic selection transform model", () => {
     expect(component).toMatchObject({ rotation: 180, mirrored: true });
     expect(rectCenter(componentVisualBounds(component))).toEqual(transform(previousComponentCenter));
     expect(wire.points).toEqual(normalizeWirePath(previousWirePoints.map(transform)));
-    expect(rectCenter(noteVisualBounds(note))).toEqual(transform(rectCenter(previousNoteBox)));
+    expect({ x: note.x, y: note.y }).toEqual(transform(anchor));
     expect(note).toMatchObject({ width: previousNoteBox.width, height: previousNoteBox.height });
 
     const transformedSelectedJunction = transform({ x: 280, y: 200 });

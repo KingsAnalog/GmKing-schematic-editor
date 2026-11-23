@@ -20,10 +20,6 @@ import {
   junctionCustomColor,
   wireCustomColor
 } from "../../../src/schematic/networkColorModel";
-import {
-  noteFontSizePx,
-  noteWidthPx
-} from "../../../src/schematic/notes/noteSizing";
 import { resolvedWireAppearance } from "../../../src/schematic/wire/wireDecoration";
 import type {
   ComponentInstance,
@@ -844,52 +840,6 @@ describe("executeSchematicPropertyBatchCommand", () => {
     });
     expect(renamed.status).toContain("may merge networks");
     expect(labels.map((label) => label.name)).toEqual(["SHARED", "SHARED"]);
-  });
-
-  it("applies Note format, fill, size, and Markdown width to the complete group", () => {
-    const first = fixtureNote("note-1");
-    const second = { ...fixtureNote("note-2"), backgroundColor: null, fontSizePx: 20 };
-    const document = documentWith({ notes: [first, second] });
-
-    const unavailableWidth = executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-width", value: 400 }
-    );
-    expect(unavailableWidth).toMatchObject({
-      kind: "rejected",
-      rejectionReason: "incompatible-selection"
-    });
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(second.id, first.id),
-      { kind: "note-format", format: "markdown" }
-    )).toMatchObject({
-      kind: "changed",
-      changedNoteIds: [first.id, second.id]
-    });
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-width", value: "333" }
-    ).kind).toBe("changed");
-    expect(document.notes.map(noteWidthPx)).toEqual([340, 340]);
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-font-size", value: "18" }
-    ).kind).toBe("changed");
-    expect(document.notes.map(noteFontSizePx)).toEqual([18, 18]);
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-background", color: null }
-    ).kind).toBe("changed");
-    expect(document.notes.map((note) => note.backgroundColor)).toEqual([null, null]);
-    expect(document.notes.map((note) => note.text)).toEqual(["rewrite note", "rewrite note"]);
   });
 
   it("updates common Pin fields and preserves temporarily deleted object participation", () => {

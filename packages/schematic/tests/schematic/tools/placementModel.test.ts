@@ -11,6 +11,25 @@ import {
 import type { ComponentType, SchematicDocument } from "../../../src/schematic/types";
 
 describe("schematic placement model", () => {
+  it("applies the configured device properties to preview and placement with an allocated reference", () => {
+    const properties = {
+      type: "resistor" as const,
+      variantId: "variable" as const,
+      scale: 2 as const,
+      values: { main: "6.8k" },
+      appearance: { color: "#ff0000" }
+    };
+    const pose = { rotation: 90, mirrored: false, properties };
+    const point = { x: 120, y: 80 };
+    const preview = buildPlacementPreviewFragment("resistor", point, pose);
+    const { fragment } = buildPlacementCommit("resistor", point, {
+      ...pose, createId: () => "placed", nextRef: () => "R7"
+    });
+    expect(preview.components[0]).toMatchObject({ ...properties, ...point, rotation: 90, id: PREVIEW_COMPONENT_ID });
+    expect(fragment.components[0]).toMatchObject({ ...properties, ...point, rotation: 90, id: "placed", ref: "R7" });
+    expect(fragment.components[0].values).not.toBe(properties.values);
+  });
+
   it("builds a placed component from the supplied id, ref, pose, and catalog defaults", () => {
     const placed = buildPlacedComponent("resistor", { x: 120, y: 80 }, {
       id: "component-1",
@@ -166,7 +185,7 @@ describe("schematic placement model", () => {
       x: 20,
       y: 40,
       width: 180,
-      format: "plain" as const,
+      anchor: "upperLeft" as const,
       text: "keep me"
     }];
     const existingComponent = {
@@ -343,7 +362,7 @@ describe("schematic placement model", () => {
       x: 80,
       y: 100,
       width: 220,
-      format: "plain" as const,
+      anchor: "upperLeft" as const,
       text: "existing note"
     }];
     const existingComponent = {
@@ -387,7 +406,7 @@ describe("schematic placement model", () => {
           x: 120,
           y: 140,
           width: 220,
-          format: "plain" as const,
+          anchor: "upperLeft" as const,
           text: "do not apply"
         }]
       }

@@ -117,7 +117,7 @@ describe("SchematicPlacementCommitCoordinator", () => {
 
     expect(coordinator.commitCopy({ x: 200, y: 220 })).toEqual({
       kind: "status",
-      status: "Copy mode: click an object to copy, or Esc cancels."
+      status: "Copy mode: click an object or drag a box to copy. Esc cancels."
     });
     expect(document.components).toEqual([]);
   });

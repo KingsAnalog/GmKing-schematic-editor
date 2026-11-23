@@ -27,7 +27,7 @@ describe("Obsidian schematic export menu", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: { writeText } });
     const content = createEmptySchematicContent();
-    content.notes.push({ id: "hidden-note", x: 0, y: 0, width: 140, format: "plain", text: "Hidden note" });
+    content.notes.push({ id: "hidden-note", x: 0, y: 0, width: 140, anchor: "upperLeft", text: "Hidden note" });
     content.layerObjectStates = { "hidden-note": { visible: false } };
     showSchematicExportMenu({ content, namespace: "hidden-export" }, { x: 0, y: 0 }, document);
     const actions = obsidianMockState.menus[0].items;
@@ -109,7 +109,7 @@ describe("Obsidian image export in the owning window", () => {
   it.each([false, true])("copies a proportional transparent PNG (selection: %s)", async (selection) => {
     const runtime = host();
     const content = createEmptySchematicContent();
-    content.notes.push({ id: "large-note", x: 0, y: 0, width: 6000, height: 1000, format: "plain", text: "Wide schematic" });
+    content.wires.push({ id: "wide", routeMode: "orthogonal", points: [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 1000 }] });
     const exported = renderSchematicDocumentSvg(content, { namespace: "dimensions" });
     const editor = selection ? {
       hasExportableSelection: () => true,

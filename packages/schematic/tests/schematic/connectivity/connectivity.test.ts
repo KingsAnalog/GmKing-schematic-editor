@@ -400,7 +400,7 @@ describe("schematic net extraction", () => {
           y: 20,
           width: 240,
           height: 80,
-          format: "plain",
+          anchor: "upperLeft",
           text: "R1 is intentionally floating"
         }
       ]

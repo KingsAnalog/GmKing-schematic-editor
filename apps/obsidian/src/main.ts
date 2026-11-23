@@ -1,7 +1,7 @@
-import { createSchematicSvgElement } from "@edahelper/schematic/viewer";
 import {
   Modal,
   Plugin,
+  loadMathJax,
   type App,
   type Editor,
   type MarkdownFileInfo,
@@ -14,7 +14,7 @@ import {
 } from "@edahelper/schematic/core";
 import { SchematicActiveEditorCoordinator } from "./activeEditorCoordinator";
 import { SchematicBlockWidget } from "./blockWidget";
-import { renderSchematicBlockSvg, updateSchematicBlockHeight } from "./blockSizing";
+import { renderSchematicBlockPreview } from "./blockSizing";
 import { showSchematicExportMenu } from "./exports";
 import { parseSchematicFence } from "./fence";
 import { insertSchematicFenceAtSelection } from "./insertCommand";
@@ -29,6 +29,7 @@ export default class SchematicEditorPlugin extends Plugin {
   private nextReadingId = 1;
 
   async onload() {
+    void loadMathJax().then(() => window.dispatchEvent(new Event("mathjax-ready"))).catch(() => {});
     const sessionField = createSchematicSessionField({
       createId: () => `schematic-block-${this.nextSessionId++}`,
       createWidget: (session) => new SchematicBlockWidget(
@@ -150,10 +151,7 @@ export default class SchematicEditorPlugin extends Plugin {
         const namespace = `schematic-reading-${this.nextReadingId++}`;
         const container = pre.ownerDocument.createElement("div");
         container.className = "schematic-static-svg";
-        const rendering = renderSchematicBlockSvg(projection.content, namespace);
-        updateSchematicBlockHeight(root, rendering);
-        container.replaceChildren(createSchematicSvgElement(container.ownerDocument, rendering.svg));
-        root.appendChild(container);
+        renderSchematicBlockPreview(root, container, projection.content, namespace);
         root.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           showSchematicExportMenu(

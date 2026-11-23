@@ -32,6 +32,7 @@
     "test:r3:display": "npm run build:lib && npm run build:web && node scripts/r3-display.mjs",
     "test:r4": "npm run build:lib && npm run build:web && node scripts/r4-hierarchy.mjs",
     "test:r5": "npm run build:lib && npm run build:web && node scripts/r5-agent.mjs",
+    "test:note": "npm run build:lib && npm run build:web && node scripts/note-tex-smoke.mjs",
     "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"
   },
   "devDependencies": {

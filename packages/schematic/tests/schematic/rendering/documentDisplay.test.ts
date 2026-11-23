@@ -38,8 +38,8 @@ describe("schematic display", () => {
       display: { wireCrossings: "hop", textFont: "serif" },
       netLabels: [{ id: "label", name: "输出", attachment: { wireId: "horizontal", point: { x: 0, y: 50 } }, fontFamily: "mono" }],
       notes: [
-        { id: "note", x: 10, y: 120, width: 100, height: 44, format: "plain", text: "注释" },
-        { id: "overridden", x: 10, y: 180, width: 100, height: 44, format: "plain", text: "Text", fontFamily: "sans" }
+        { id: "note", x: 10, y: 120, width: 100, height: 44, anchor: "upperLeft", text: "注释" },
+        { id: "overridden", x: 10, y: 180, width: 100, height: 44, anchor: "upperLeft", text: "Text", fontFamily: "sans" }
       ]
     });
     const serialized = serializeSchematicDocumentFile(document);

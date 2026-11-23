@@ -1,3 +1,5 @@
+import { hasNoteMath, typesetNote } from "./notes/noteTypeset";
+import type { NoteGraphic } from "./notes/noteSizing";
 import { buildCopyPreviewNoteView } from "./notes/noteModel";
 import { componentCellAttrs, PREVIEW_WIRE_ID, type WireCellRenderOptions } from "./renderer";
 import type { ComponentInstance, NetLabel, Point, SchematicDocument, SchematicNote, Wire, WireAppearance, WireRouteMode } from "./types";
@@ -123,7 +125,6 @@ export interface SchematicPreviewRendererOptions<Cell extends SchematicPreviewCe
   zoom: () => number;
   lifecycle?: SchematicPreviewLifecycle<Cell>;
   createNoteElement?: () => HTMLElement;
-  cloneRenderedNoteContent?: (note: SchematicNote) => HTMLElement | null;
 }
 
 type PreviewWireContext = Pick<SchematicDocument, "components" | "wires">
@@ -132,6 +133,7 @@ type PreviewDocument = Pick<SchematicDocument, "components" | "wires" | "netLabe
   & Partial<Pick<SchematicDocument, "connections">>;
 
 export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = SchematicPreviewCell> {
+  private readonly noteGraphics = new Map<string, Promise<NoteGraphic>>();
   private readonly lifecycle: SchematicPreviewLifecycle<Cell>;
 
   constructor(private readonly options: SchematicPreviewRendererOptions<Cell>) {
@@ -148,14 +150,14 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     this.options.graphAdapter.addCells(cells);
   }
 
-  renderCopy(preview: PreviewDocument | null, displayed = (_id: string) => true) {
+  renderCopy(preview: PreviewDocument | null, displayed = (_id: string) => true, idPrefix = "") {
     if (!preview) {
       this.clearCopy();
       return;
     }
-    const cells = this.previewCellsFromDocument(preview, displayed);
+    const cells = this.previewCellsFromDocument(preview, displayed, idPrefix);
     const noteElements = (preview.notes ?? []).filter(note => displayed(note.id))
-      .map(note => this.makeCopyPreviewNoteElement(note));
+      .map(note => this.makeCopyPreviewNoteElement(idPrefix ? { ...note, id: idPrefix + note.id } : note));
     this.lifecycle.replaceCopy(cells, noteElements);
     this.options.graphAdapter.addCells(cells);
   }
@@ -188,6 +190,7 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
   }
 
   clearCopy() {
+    this.noteGraphics.clear();
     this.lifecycle.clearCopyPreview();
   }
 
@@ -210,11 +213,16 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     this.lifecycle.clearCopyPreview();
   }
 
-  private previewCellsFromDocument(preview: PreviewWireContext & Partial<Pick<SchematicDocument, "netLabels">>, displayed = (_id: string) => true) {
+  private previewCellsFromDocument(preview: PreviewWireContext & Partial<Pick<SchematicDocument, "netLabels">>, displayed = (_id: string) => true, idPrefix = "") {
+    const identify = (cell: Cell, id: string) => {
+      if (idPrefix) cell.set("id", idPrefix + id);
+      return cell;
+    };
     return [
-      ...preview.components.filter(component => displayed(component.id)).map((component) => this.makePreviewComponentCell(component)),
-      ...preview.wires.filter(wire => displayed(wire.id)).map((wire) => this.makePreviewWireCell(wire, preview)),
-      ...(preview.netLabels ?? []).filter(label => displayed(label.id)).flatMap((label) => this.options.makeNetLabelCell ? [this.options.makeNetLabelCell(label, { preview: true })] : [])
+      ...preview.components.filter(component => displayed(component.id)).map(component => identify(this.makePreviewComponentCell(component), component.id)),
+      ...preview.wires.filter(wire => displayed(wire.id)).map(wire => identify(this.makePreviewWireCell(wire, preview), wire.id)),
+      ...(preview.netLabels ?? []).filter(label => displayed(label.id)).flatMap(label => this.options.makeNetLabelCell
+        ? [identify(this.options.makeNetLabelCell(label, { preview: true }), label.id)] : [])
     ];
   }
 
@@ -250,11 +258,30 @@ export class SchematicPreviewRenderer<Cell extends SchematicPreviewCell = Schema
     element.dataset.noteId = view.noteId;
     content.className = "schematic-note-content";
     content.dataset.noteContent = "";
-    const renderedContent = note.format === "markdown" ? this.options.cloneRenderedNoteContent?.(note) : null;
-    if (renderedContent) content.replaceChildren(renderedContent);
-    else if (note.format !== "markdown") content.textContent = view.textContent;
-    else element.setAttribute("aria-busy", "true");
+    content.textContent = view.textContent;
+    const font = this.options.defaultTextFont?.();
+    if (hasNoteMath(note.text)) {
+      const signature = JSON.stringify([note.text, note.fontFamily, note.fontSizePx, font]);
+      let pending = this.noteGraphics.get(signature);
+      if (!pending) {
+        pending = typesetNote(note, element.ownerDocument, font);
+        this.noteGraphics.set(signature, pending);
+      }
+      void pending.then(graphic => {
+        if (!element.isConnected) return;
+        const sized = buildCopyPreviewNoteView({ ...note, width: graphic.width, height: graphic.height }, {
+          screenPoint: this.options.worldToScreenPoint(note), zoom: this.options.zoom()
+        });
+        const svg = element.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("width", String(graphic.width));
+        svg.setAttribute("height", String(graphic.height));
+        svg.innerHTML = graphic.markup;
+        content.replaceChildren(svg);
+        Object.assign(element.style, sized.style);
+      }).catch(() => {});
+    }
     element.replaceChildren(content);
+    element.style.color = view.style.color;
     element.style.width = view.style.width;
     element.style.height = view.style.height;
     element.style.backgroundColor = view.style.backgroundColor;

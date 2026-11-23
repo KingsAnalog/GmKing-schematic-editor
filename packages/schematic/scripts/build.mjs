@@ -31,6 +31,6 @@ if(types.status!==0)process.exit(types.status??1);
 await mkdir(resolve(out,"styles"),{recursive:true});
 await copyFile(resolve(root,"src/schematic/schematicCore.css"),resolve(out,"styles/editor.css"));
 const webCss=(await readFile(resolve(root,"src/schematic/schematic.css"),"utf8")).replace('./schematicCore.css','./editor.css');
-await writeFile(resolve(out,"styles/web.css"),'@import "@milkdown/kit/prose/view/style/prosemirror.css";\n@import "@milkdown/kit/prose/tables/style/tables.css";\n'+webCss);
+await writeFile(resolve(out,"styles/web.css"),webCss);
 await writeDependencyNotices(out);
 console.log("Built independent ESM modules, declarations, styles, analysis Worker and licenses.");

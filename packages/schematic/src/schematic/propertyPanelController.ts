@@ -1,3 +1,4 @@
+import { NOTE_ANCHORS } from "./types";
 import { COMPONENT_SCALES, type ComponentScale } from "./componentScaleModel";
 import { componentName, messageText, parameterLabel, schematicLanguage, uiFormat } from "./schematicI18n";
 import { localizeSchematicStatus } from "./schematicUiText";
@@ -11,7 +12,7 @@ import type {
   ComponentType,
   GainPolarity,
   OperatorPinMode,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   WireEndpointMarker,
   WireLineWidth
 } from "./types";
@@ -170,15 +171,17 @@ export interface SchematicPropertyPanelControllerCallbacks {
   onNoteBackgroundInput?: (value: string) => void;
   onNoteBackgroundCommit?: (value: string) => void;
   onNoteBackgroundCancel?: () => void;
+  onNoteFillEnabledChange?: (enabled: boolean) => void;
+  onNoteFillOpacityEditStart?: () => void;
+  onNoteFillOpacityInput?: (value: string) => void;
+  onNoteFillOpacityCommit?: (value: string) => void;
+  onNoteFillOpacityCancel?: () => void;
+  onNoteAnchorChange?: (value: SchematicNoteAnchor) => void;
+  onNoteTextChange?: (value: string) => void;
   onNoteFontSizeEditStart?: () => void;
   onNoteFontSizeInput?: (value: string) => void;
   onNoteFontSizeCommit?: (value: string) => void;
-  onNoteFormatChange?: (value: SchematicNoteFormat) => void;
-  onNoteWidthEditStart?: () => void;
-  onNoteWidthInput?: (value: string) => void;
-  onNoteWidthCommit?: (value: string) => void;
   onNoteFontSizeCancel?: () => void;
-  onNoteWidthCancel?: () => void;
   onNetLabelChange?: (value: string) => void;
   onNetLabelEditStart?: () => void;
   onNetLabelInput?: (value: string) => void;
@@ -293,13 +296,14 @@ type PropertyPanelElements = {
   noteTextColorSwatches: NodeListOf<HTMLButtonElement>;
   noteBackgroundRow: HTMLElement;
   noteBackgroundInput: HTMLInputElement;
+  noteFillEnabledInput: HTMLInputElement;
+  noteFillOpacityInput: HTMLInputElement;
   noteFontSizeRow: HTMLElement;
   noteFontSizeInput: HTMLInputElement;
-  noteFormatRow: HTMLElement;
-  noteFormatSelect: HTMLSelectElement;
-  noteFormatSegmented: HTMLElement;
-  noteWidthRow: HTMLElement;
-  noteWidthInput: HTMLInputElement;
+  noteAnchor: HTMLSelectElement;
+  noteTextRow: HTMLElement;
+  noteTextDivider: HTMLElement;
+  noteText: HTMLTextAreaElement;
   noteSwatches: NodeListOf<HTMLButtonElement>;
   componentColorSwatches: NodeListOf<HTMLButtonElement>;
 };
@@ -322,12 +326,12 @@ const PROPERTY_EDIT_SELECTOR = [
   "[data-property-ref]",
   "[data-property-value]",
   "[data-property-note-font-size]",
-  "[data-property-note-width]",
   "[data-property-net-label]",
   "[data-property-wire-digital-label]",
   "[data-property-component-color]",
   "[data-property-network-color]",
   "[data-property-note-background]",
+  "[data-property-note-fill-opacity]",
   "[data-property-note-text-color]",
   "[data-property-rectangle]",
   "[data-property-triangle-pins]",
@@ -510,17 +514,18 @@ export class SchematicPropertyPanelController {
     const noteTextColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-note-text-color-swatch]");
     const noteBackgroundRow = this.root.querySelector<HTMLElement>("[data-property-note-background-row]");
     const noteBackgroundInput = this.root.querySelector<HTMLInputElement>("[data-property-note-background]");
+    const noteFillEnabledInput = this.root.querySelector<HTMLInputElement>("[data-property-note-fill-enabled]");
+    const noteFillOpacityInput = this.root.querySelector<HTMLInputElement>("[data-property-note-fill-opacity]");
     const noteFontSizeRow = this.root.querySelector<HTMLElement>("[data-property-note-font-size-row]");
     const noteFontSizeInput = this.root.querySelector<HTMLInputElement>("[data-property-note-font-size]");
-    const noteFormatRow = this.root.querySelector<HTMLElement>("[data-property-note-format-row]");
-    const noteFormatSelect = this.root.querySelector<HTMLSelectElement>("[data-property-note-format]");
-    const noteFormatSegmented = this.root.querySelector<HTMLElement>("[data-property-note-format-segmented]");
-    const noteWidthRow = this.root.querySelector<HTMLElement>("[data-property-note-width-row]");
-    const noteWidthInput = this.root.querySelector<HTMLInputElement>("[data-property-note-width]");
+    const noteAnchor = this.root.querySelector<HTMLSelectElement>("[data-property-note-anchor]");
+    const noteTextRow = this.root.querySelector<HTMLElement>("[data-property-note-text-row]");
+    const noteTextDivider = this.root.querySelector<HTMLElement>("[data-property-note-text-divider]");
+    const noteText = this.root.querySelector<HTMLTextAreaElement>("[data-property-note-text]");
     const noteSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-note-background-swatch]");
     const componentColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-component-color-swatch]");
     if (!mosThickGateRow || !mosThickGateInput) return null;
-    if (!empty || !componentForm || !couplingForm || !couplingPair || !couplingExistingFields || !couplingCoefficientInput || !couplingLabelModeControl || !couplingShowLabelInput || !couplingShowArcInput || !couplingShowCoreInput || !couplingColorInput || !couplingCreateButton || !noteForm || !cellRow || !cellSelect || !refInput || !labelVisibilityInput || !componentColorRow || !componentColorInput || !gainPolarityRow || !gainPolarityControl || gainPolarityButtons.length !== 3 || !valueRow || !valueLabel || !valueInput || !valueUnit || !inductorFields || !inductorTapControl || !inductorDotControl || !inductorCouplingList || !inductorAddCouplingButton || !timeDomainRow || !timeDomainControl || timeDomainButtons.length !== 2 || !variantRow || !variantLabel || !variantSelect || !variantSegmented || !clockRow || !clockSelect || !clockSegmented || dffRows.length !== 5 || !filterKindRow || !filterKindSelect || !mosPinsRow || !mosPinsSegmented || !mosGateStyleRow || !mosGateStyleInput || !mosArrowRow || !mosArrowSegmented || !transistorCircleRow || !transistorCircleControl || transistorCircleButtons.length !== 2 || !pinVisibilityRow || !noteBackgroundRow || !noteBackgroundInput || !noteFontSizeRow || !noteFontSizeInput || !noteFormatRow || !noteFormatSelect || !noteFormatSegmented || !noteWidthRow || !noteWidthInput) {
+    if (!empty || !componentForm || !couplingForm || !couplingPair || !couplingExistingFields || !couplingCoefficientInput || !couplingLabelModeControl || !couplingShowLabelInput || !couplingShowArcInput || !couplingShowCoreInput || !couplingColorInput || !couplingCreateButton || !noteForm || !cellRow || !cellSelect || !refInput || !labelVisibilityInput || !componentColorRow || !componentColorInput || !gainPolarityRow || !gainPolarityControl || gainPolarityButtons.length !== 3 || !valueRow || !valueLabel || !valueInput || !valueUnit || !inductorFields || !inductorTapControl || !inductorDotControl || !inductorCouplingList || !inductorAddCouplingButton || !timeDomainRow || !timeDomainControl || timeDomainButtons.length !== 2 || !variantRow || !variantLabel || !variantSelect || !variantSegmented || !clockRow || !clockSelect || !clockSegmented || dffRows.length !== 5 || !filterKindRow || !filterKindSelect || !mosPinsRow || !mosPinsSegmented || !mosGateStyleRow || !mosGateStyleInput || !mosArrowRow || !mosArrowSegmented || !transistorCircleRow || !transistorCircleControl || transistorCircleButtons.length !== 2 || !pinVisibilityRow || !noteBackgroundRow || !noteBackgroundInput || !noteFontSizeRow || !noteFontSizeInput || !noteAnchor || !noteTextRow || !noteText) {
       return null;
     }
     const refRow = refInput.closest<HTMLElement>(".property-row");
@@ -528,6 +533,7 @@ export class SchematicPropertyPanelController {
     if (identityFields && refRow && labelRow) {
       this.componentIdentity = { container: identityFields, refRow, labelRow, refInput, labelVisibilityInput };
     }
+    if (!noteFillEnabledInput || !noteFillOpacityInput || !noteTextDivider) return null;
     return {
       empty,
       componentForm,
@@ -635,13 +641,14 @@ export class SchematicPropertyPanelController {
       noteTextColorSwatches,
       noteBackgroundRow,
       noteBackgroundInput,
+      noteFillEnabledInput,
+      noteFillOpacityInput,
       noteFontSizeRow,
       noteFontSizeInput,
-      noteFormatRow,
-      noteFormatSelect,
-      noteFormatSegmented,
-      noteWidthRow,
-      noteWidthInput,
+      noteAnchor,
+      noteTextRow,
+      noteTextDivider,
+      noteText,
       noteSwatches,
       componentColorSwatches
     };
@@ -701,8 +708,6 @@ export class SchematicPropertyPanelController {
     elements.noteBackgroundRow.hidden = true;
     if (elements.noteTextColorRow) elements.noteTextColorRow.hidden = true;
     elements.noteFontSizeRow.hidden = true;
-    elements.noteFormatRow.hidden = true;
-    elements.noteWidthRow.hidden = true;
     elements.cellSelect.replaceChildren();
     elements.variantSelect.replaceChildren();
     elements.variantSelect.hidden = false;
@@ -822,29 +827,19 @@ export class SchematicPropertyPanelController {
       DEFAULT_NOTE_TEXT_COLOR, "noteTextColorSwatch", "default"
     );
     elements.noteBackgroundRow.hidden = false;
-    this.syncColorAggregate(
-      elements.noteBackgroundInput,
-      elements.noteSwatches,
-      note.backgroundColor,
-      "#ffffe8",
-      "noteBackgroundSwatch",
-      "none"
-    );
+    this.syncFillControls({
+      enabled: elements.noteFillEnabledInput,
+      color: elements.noteBackgroundInput,
+      opacity: elements.noteFillOpacityInput,
+      swatches: elements.noteSwatches,
+      swatchKey: "noteBackgroundSwatch"
+    }, note.backgroundEnabled, note.backgroundColor, note.backgroundOpacity);
     elements.noteFontSizeRow.hidden = false;
     this.syncTextAggregate(elements.noteFontSizeInput, note.fontSizePx, String);
-    elements.noteFormatRow.hidden = false;
-    elements.noteFormatSelect.hidden = true;
-    this.syncSegmentedButtons(
-      elements.noteFormatSegmented,
-      [
-        { value: "plain", label: "Plain" },
-        { value: "markdown", label: "Markdown" }
-      ],
-      note.format,
-      "propertyNoteFormatValue"
-    );
-    elements.noteWidthRow.hidden = !note.widthPx;
-    if (note.widthPx) this.syncTextAggregate(elements.noteWidthInput, note.widthPx, String);
+    elements.noteAnchor.value = note.anchor.state === "uniform" ? note.anchor.value : "";
+    elements.noteTextRow.hidden = note.text === undefined;
+    elements.noteTextDivider.hidden = elements.noteTextRow.hidden;
+    if (elements.noteText !== this.root.ownerDocument.activeElement) elements.noteText.value = note.text ?? "";
   }
 
   private syncVoltageSourceFields(container: HTMLElement | null, fields: SchematicPropertyPanelComponentInput["sourceFields"]) {
@@ -1083,7 +1078,7 @@ export class SchematicPropertyPanelController {
     const fillColor = elements.libraryShapeFillColorInput;
     const fillOpacity = elements.libraryShapeFillOpacityInput;
     if (!strokeFields || !strokeWidth || !lineStyle || !fillFields || !fillEnabled || !fillColor || !fillOpacity) return;
-    strokeFields.hidden = !style;
+    strokeFields.hidden = !style?.strokeWidth;
     fillFields.hidden = !style?.fillEnabled;
     elements.libraryShapeArrowSelects.forEach(select => {
       const field = select.dataset.propertyLibraryShapeArrow;
@@ -1103,11 +1098,13 @@ export class SchematicPropertyPanelController {
     });
     if (!style) return;
 
-    this.syncTextAggregate(strokeWidth, style.strokeWidth, String);
-    lineStyle.replaceChildren(...LIBRARY_SHAPE_LINE_STYLE_OPTIONS.map(option =>
-      this.createOption(option.value, option.label)
-    ));
-    this.syncSelectAggregate(lineStyle, style.lineStyle);
+    if (style.strokeWidth && style.lineStyle) {
+      this.syncTextAggregate(strokeWidth, style.strokeWidth, String);
+      lineStyle.replaceChildren(...LIBRARY_SHAPE_LINE_STYLE_OPTIONS.map(option =>
+        this.createOption(option.value, option.label)
+      ));
+      this.syncSelectAggregate(lineStyle, style.lineStyle);
+    }
     if (elements.libraryShapeCornerRadiusRow) {
       elements.libraryShapeCornerRadiusRow.hidden = !style.cornerRadius;
     }
@@ -1115,21 +1112,42 @@ export class SchematicPropertyPanelController {
       this.syncTextAggregate(elements.libraryShapeCornerRadiusInput, style.cornerRadius, String);
     }
     if (!style.fillEnabled || !style.fillColor || !style.fillOpacity) return;
-    this.syncCheckboxAggregate(fillEnabled, style.fillEnabled);
+    this.syncFillControls({
+      enabled: fillEnabled,
+      color: fillColor,
+      opacity: fillOpacity,
+      swatches: elements.libraryShapeFillColorSwatches,
+      swatchKey: "libraryShapeFillColorSwatch"
+    }, style.fillEnabled, style.fillColor, style.fillOpacity);
+  }
+
+  private syncFillControls(
+    controls: {
+      enabled: HTMLInputElement;
+      color: HTMLInputElement;
+      opacity: HTMLInputElement;
+      swatches: NodeListOf<HTMLButtonElement>;
+      swatchKey: "noteBackgroundSwatch" | "libraryShapeFillColorSwatch";
+    },
+    enabled: AggregateValue<boolean>,
+    color: AggregateValue<string | null>,
+    opacity: AggregateValue<number>
+  ) {
+    this.syncCheckboxAggregate(controls.enabled, enabled);
     this.syncColorAggregate(
-      fillColor,
-      elements.libraryShapeFillColorSwatches,
-      style.fillColor.state === "uniform" && style.fillColor.value === DEFAULT_LIBRARY_SHAPE_STYLE.fillColor
-        ? { state: "uniform", value: null } : style.fillColor,
+      controls.color,
+      controls.swatches,
+      color.state === "uniform" && color.value === DEFAULT_LIBRARY_SHAPE_STYLE.fillColor
+        ? { state: "uniform", value: null } : color,
       DEFAULT_LIBRARY_SHAPE_STYLE.fillColor,
-      "libraryShapeFillColorSwatch",
+      controls.swatchKey,
       "default"
     );
-    this.syncTextAggregate(fillOpacity, style.fillOpacity, String);
-    const fillDisabled = style.fillEnabled.state === "uniform" && !style.fillEnabled.value;
-    fillColor.disabled = fillDisabled;
-    elements.libraryShapeFillColorSwatches.forEach(swatch => { swatch.disabled = fillDisabled; });
-    fillOpacity.disabled = fillDisabled;
+    this.syncTextAggregate(controls.opacity, opacity, String);
+    const disabled = enabled.state === "uniform" && !enabled.value;
+    controls.color.disabled = disabled;
+    controls.swatches.forEach(swatch => { swatch.disabled = disabled; });
+    controls.opacity.disabled = disabled;
   }
 
   private syncInductor(
@@ -1567,13 +1585,6 @@ export class SchematicPropertyPanelController {
         commit: callbacks.onNoteFontSizeCommit,
         cancel: callbacks.onNoteFontSizeCancel
       },
-      "data-property-note-width": {
-        kind: "text",
-        start: callbacks.onNoteWidthEditStart,
-        input: callbacks.onNoteWidthInput,
-        commit: callbacks.onNoteWidthCommit,
-        cancel: callbacks.onNoteWidthCancel
-      },
       "data-property-net-label": {
         kind: "text",
         start: callbacks.onNetLabelEditStart,
@@ -1615,6 +1626,13 @@ export class SchematicPropertyPanelController {
         input: callbacks.onNoteBackgroundInput,
         commit: callbacks.onNoteBackgroundCommit ?? callbacks.onNoteBackgroundChange,
         cancel: callbacks.onNoteBackgroundCancel
+      },
+      "data-property-note-fill-opacity": {
+        kind: "text",
+        start: callbacks.onNoteFillOpacityEditStart,
+        input: callbacks.onNoteFillOpacityInput,
+        commit: callbacks.onNoteFillOpacityCommit,
+        cancel: callbacks.onNoteFillOpacityCancel
       },
       "data-property-triangle-pins": {
         kind: "text",
@@ -1666,6 +1684,7 @@ export class SchematicPropertyPanelController {
     const libraryShapeLineStyle = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-line-style]");
     const arrow = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-arrow]");
     const libraryShapeFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-library-shape-fill-enabled]");
+    const noteFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-note-fill-enabled]");
     const labelVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-visible]");
     const valueVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-value-visible]");
     const differentialOutputsInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-differential-outputs-same]");
@@ -1678,7 +1697,8 @@ export class SchematicPropertyPanelController {
     const pinVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-pin-visibility-id]");
     const pinModeSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-pin-mode-id]");
     const pinSymbolVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-pin-symbol-visibility-id]");
-    const noteFormatSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-note-format]");
+    const noteAnchor = this.closestInRoot<HTMLSelectElement>(event, "[data-property-note-anchor]");
+    const noteText = this.closestInRoot<HTMLTextAreaElement>(event, "[data-property-note-text]");
     const couplingCoefficientInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
     const couplingShowLabelInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-label]");
     const couplingShowArcInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-arc]");
@@ -1697,6 +1717,10 @@ export class SchematicPropertyPanelController {
     }
     if (libraryShapeFillEnabled) {
       this.callbacks.onLibraryShapeStyleChange?.("fillEnabled", this.checkboxValue(libraryShapeFillEnabled));
+    }
+    if (noteFillEnabled) {
+      this.callbacks.onNoteFillEnabledChange?.(this.checkboxValue(noteFillEnabled));
+      return;
     }
     if (cellSelect && cellSelect.value) this.callbacks.onComponentCellChange?.(cellSelect.value as ComponentType);
     if (labelVisibilityInput) this.callbacks.onComponentLabelVisibilityChange?.(this.checkboxValue(labelVisibilityInput));
@@ -1731,7 +1755,8 @@ export class SchematicPropertyPanelController {
       pinSymbolVisibilityInput.dataset.propertyPinSymbolVisibilityId ?? "",
       this.checkboxValue(pinSymbolVisibilityInput)
     );
-    if (noteFormatSelect) this.callbacks.onNoteFormatChange?.(noteFormatSelect.value as SchematicNoteFormat);
+    if (noteAnchor && NOTE_ANCHORS.includes(noteAnchor.value as SchematicNoteAnchor)) this.callbacks.onNoteAnchorChange?.(noteAnchor.value as SchematicNoteAnchor);
+    if (noteText) this.callbacks.onNoteTextChange?.(noteText.value);
     if (couplingCoefficientInput) {
       this.commitCouplingCoefficientInput(couplingCoefficientInput);
     }
@@ -1912,13 +1937,6 @@ export class SchematicPropertyPanelController {
       }
       return;
     }
-    const noteFormatButton = this.closestInRoot<HTMLButtonElement>(event, "[data-property-note-format-value]");
-    if (noteFormatButton && !noteFormatButton.disabled) {
-      event.preventDefault();
-      const format = noteFormatButton.dataset.propertyNoteFormatValue;
-      if (format === "plain" || format === "markdown") this.callbacks.onNoteFormatChange?.(format);
-      return;
-    }
     const gainPolarityButton = this.closestInRoot<HTMLButtonElement>(event, "[data-property-gain-polarity-value]");
     if (gainPolarityButton) {
       event.preventDefault();
@@ -1935,8 +1953,10 @@ export class SchematicPropertyPanelController {
     const swatch = this.closestInRoot<HTMLButtonElement>(event, "[data-note-background-swatch]");
     if (swatch) {
       event.preventDefault();
-      const value = swatch.dataset.noteBackgroundSwatch;
-      this.callbacks.onNoteBackgroundChange?.(value === "none" ? null : value ?? "");
+      if (!swatch.disabled) {
+        const value = swatch.dataset.noteBackgroundSwatch;
+        this.callbacks.onNoteBackgroundChange?.(value === "default" ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : value ?? "");
+      }
       return;
     }
     const fillSwatch = this.closestInRoot<HTMLButtonElement>(event, "[data-library-shape-fill-color-swatch]");

@@ -215,7 +215,11 @@ export interface NetLabel {
   attachment: NetLabelAttachment;
 }
 
-export type SchematicNoteFormat = "plain" | "markdown";
+export const NOTE_ANCHORS = [
+  "upperLeft", "centerLeft", "lowerLeft", "upperCenter", "centerCenter", "lowerCenter",
+  "upperRight", "centerRight", "lowerRight"
+] as const;
+export type SchematicNoteAnchor = typeof NOTE_ANCHORS[number];
 
 export interface SchematicLayer {
   id: string;
@@ -239,10 +243,12 @@ export interface SchematicNote {
   y: number;
   width: number;
   height?: number;
-  format: SchematicNoteFormat;
+  anchor?: SchematicNoteAnchor;
   text: string;
   /** Undefined uses the default fill; null explicitly disables the fill. */
   backgroundColor?: string | null;
+  backgroundEnabled?: boolean;
+  backgroundOpacity?: number;
   textColor?: string;
   fontSizePx?: number;
   fontFamily?: SchematicTextFont;

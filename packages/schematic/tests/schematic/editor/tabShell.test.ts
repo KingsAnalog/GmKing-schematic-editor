@@ -178,13 +178,17 @@ describe("renderSchematicTabShell", () => {
     expect(shell).toContain("data-property-note-background-swatches");
     expect(shell).toContain("data-property-note-font-size-row");
     expect(shell).toContain("data-property-note-font-size");
-    expect(shell).toContain("data-property-note-format");
-    expect(shell).toContain("data-property-note-width");
+    expect(shell).not.toContain("data-property-note-format");
+    expect(shell).toContain("data-property-note-anchor");
+    expect(shell).toContain("data-property-note-text");
     expect(shell).not.toContain("data-property-note-editor-mode");
     expect(shell).not.toContain("data-property-note-editor-mode-segmented");
     expect(shell).not.toContain(">WYSIWYG<");
     expect(shell).not.toContain(">Source<");
-    expect(valuesFor(shell, "data-note-background-swatch")).toEqual(["none", ...NOTE_BACKGROUND_COLOR_PRESETS.map(preset => preset.color)]);
+    expect(valuesFor(shell, "data-note-background-swatch")).toEqual([
+      "default",
+      ...NOTE_BACKGROUND_COLOR_PRESETS.map(preset => preset.color).filter(color => color !== "#ffffff")
+    ]);
     expect(shell.indexOf("data-property-network-color />"))
       .toBeGreaterThan(shell.lastIndexOf("data-network-color-swatch"));
     expect(shell.indexOf("data-property-component-color />"))

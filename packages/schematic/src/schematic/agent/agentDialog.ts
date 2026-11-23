@@ -27,7 +27,7 @@ export function buildAgentDialog<T extends object>(ui: UiBuilder<T>, namespace: 
       el("button", { type: "button", "data-agent-disconnect": true, hidden: true }, message("agent.disconnect", "Disconnect"))
     ),
     el("p", {}, message("agent.local",
-      "Start the local connector with npm run agent:connector, then copy the pairing prompt to your AI. The code expires after two minutes.")),
+      "Start the local connector with npm run agent:connector, then copy the pairing prompt to your AI. The code expires after two minutes. A paired session lasts up to two hours.")),
     el("p", { "data-agent-state": true, role: "status" }),
     el("textarea", {
       "data-agent-prompt": true, readonly: true, hidden: true, spellcheck: "false",

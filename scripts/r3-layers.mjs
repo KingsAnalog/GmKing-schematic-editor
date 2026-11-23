@@ -53,9 +53,9 @@ async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId
     const { editor, mountReadonlySchematicViewer, objectIds } = window.layersSmoke;
     editor.transact(draft => {
       draft.notes.push(
-        { id: "front-note", layerId: "layer-2", x: 100, y: 100, width: 120, format: "plain", text: "Front" },
-        { id: "back-note", layerId: "layer-2", x: 100, y: 100, width: 120, format: "plain", text: "Back" },
-        { id: "private-note", layerId: "layer-3", x: 2200, y: 100, width: 160, height: 80, format: "plain",
+        { id: "front-note", layerId: "layer-2", x: 100, y: 100, width: 120, anchor: "upperLeft", text: "Front" },
+        { id: "back-note", layerId: "layer-2", x: 100, y: 100, width: 120, anchor: "upperLeft", text: "Back" },
+        { id: "private-note", layerId: "layer-3", x: 2200, y: 100, width: 160, height: 80, anchor: "upperLeft",
           backgroundColor: "#ff0000", text: "Private" }
       );
       draft.layerObjectStates["front-note"] = { z: 20 };
@@ -131,8 +131,10 @@ async function checkImageExport({ hiddenWireId, branchId, shapeId, copiedShapeId
         const [x, y, width, height] = svg.getAttribute("viewBox").split(" ").map(Number);
         const sampleX = Number(privateRect.getAttribute("x")) + Number(privateRect.getAttribute("width")) / 2;
         const sampleY = Number(privateRect.getAttribute("y")) + Number(privateRect.getAttribute("height")) - 6;
-        const px = (sampleX - x) * image.width / width;
-        const py = (sampleY - y) * image.height / height;
+        const transform = privateRect.parentElement.transform.baseVal.consolidate()?.matrix;
+        const sample = new DOMPoint(sampleX, sampleY).matrixTransform(transform);
+        const px = (sample.x - x) * image.width / width;
+        const py = (sample.y - y) * image.height / height;
         hiddenNoteColor = Array.from(context.getImageData(Math.floor(px), Math.floor(py), 1, 1).data);
       }
       image.close();
@@ -312,7 +314,6 @@ async function checkLayersRoundTrip(fixture, { selectInLayers, moveSelection, em
   await clickPoint(await worldPoint(675, 130), 8);
   await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
   await pressKey("c");
-  await clickPoint(await worldPoint(675, 150));
   await waitFor(page, () => document.querySelector("[data-schematic-status]")?.textContent.includes("2 objects attached to cursor"),
     "copy did not pick both the shape and the split wire");
   await clickPoint(await emptyCanvasPoint());
@@ -432,7 +433,7 @@ try {
       { id: "wire-c", points: [{ x: 200, y: 100 }, { x: 200, y: 0 }], routeMode: "orthogonal" }
     ];
     draft.netLabels = [{ id: "label-1", name: "VOUT", attachment: { wireId: "wire-a", point: { x: 200, y: 100 } } }];
-    draft.notes = [{ id: "note-1", x: 400, y: 400, width: 180, format: "plain", text: "Output stage" }];
+    draft.notes = [{ id: "note-1", x: 400, y: 400, width: 180, anchor: "upperLeft", text: "Output stage" }];
   }, { origin: "editor", reason: "layers-tree-fixture" }));
   await clickSelector(page, "[data-sidebar-tab='layers']");
   await waitFor(page, () => document.querySelectorAll("[data-layer-object-select]").length >= 7, "objects did not render");
@@ -779,6 +780,13 @@ try {
     wire.layerId === "layer-2" && wire.id !== "output-branch"), "new wire was not assigned to the active layer");
   await pressKey("Escape");
   await clickSelector(page, "[data-command='note']");
+  await evaluate(page, () => {
+    const input = document.querySelector("[data-schematic-note-dialog][open] [data-note-text]");
+    input.value = "Layer 2 note";
+    input.focus();
+  });
+  await pressKey("Enter");
+  await clickPoint({ x: blank.x, y: blank.y - 80 });
   await waitFor(page, () => window.layersSmoke.editor.getContent().notes.some(note => note.id !== "output-note" && note.layerId === "layer-2"),
     "new note was not assigned to the active layer");
   await pressKey("Escape");
@@ -814,7 +822,6 @@ try {
   const sameDocumentWireIds = await evaluate(page, () => window.layersSmoke.editor.getContent().wires.map(wire => wire.id));
   await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
   await pressKey("c");
-  await clickPoint({ x: blank.x, y: blank.y - 200 });
   await clickPoint({ x: blank.x + 80, y: blank.y - 200 });
   await waitFor(page, ids => window.layersSmoke.editor.getContent().wires.some(wire => !ids.includes(wire.id) && wire.layerId === "layer-2"),
     "copy within the tab did not retain the source layer", { args: [sameDocumentWireIds] });
@@ -853,9 +860,8 @@ try {
   await selectInLayers("output-branch");
   await evaluate(page, () => window.layersSmoke.editor.editor.hostFocusCanvas());
   await pressKey("c");
-  await clickPoint(await emptyCanvasPoint());
   await waitFor(page, () => document.querySelector("[data-schematic-status]")?.textContent.includes("attached to cursor"),
-    "cross-tab copy did not capture a reference point");
+    "cross-tab copy did not attach the selected wire");
   await activateTab(fileImport.activeTab);
   await clickPoint(await emptyCanvasPoint());
   await waitFor(page, count => window.layersSmoke.editor.getContent().wires.length === count

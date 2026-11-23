@@ -124,6 +124,9 @@ export function isLibraryShapeType(type: string): type is LibraryShapeType {
 }
 
 export function supportsLibraryShapeStyle(type: ComponentType, property: LibraryShapeStyleProperty) {
+  if (type === "sheetBlock") {
+    return property === "fillEnabled" || property === "fillColor" || property === "fillOpacity";
+  }
   if (!isLibraryShapeType(type)) return false;
   switch (property) {
     case "cornerRadius": return type === "rectangle";

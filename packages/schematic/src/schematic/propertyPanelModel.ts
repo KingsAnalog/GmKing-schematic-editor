@@ -14,7 +14,7 @@ import type {
   GainPolarity,
   InductorCouplingLabelMode,
   OperatorPinMode,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   WireEndpointMarker,
   WireLineWidth
 } from "./types";
@@ -131,8 +131,8 @@ export interface SchematicPropertyPanelComponentInput {
   /** Pure library shapes have no name, label, or electrical pin controls. */
   libraryShape?: boolean;
   libraryShapeStyle?: {
-    strokeWidth: AggregateValue<number>;
-    lineStyle: AggregateValue<LibraryShapeLineStyle>;
+    strokeWidth?: AggregateValue<number>;
+    lineStyle?: AggregateValue<LibraryShapeLineStyle>;
     cornerRadius?: AggregateValue<number>;
     startArrow?: AggregateValue<LibraryShapeArrowType>;
     endArrow?: AggregateValue<LibraryShapeArrowType>;
@@ -149,10 +149,12 @@ export interface SchematicPropertyPanelComponentInput {
 
 export interface SchematicPropertyPanelNoteInput {
   backgroundColor: AggregateValue<string | null>;
+  backgroundEnabled: AggregateValue<boolean>;
+  backgroundOpacity: AggregateValue<number>;
   textColor?: AggregateValue<string>;
   fontSizePx: AggregateValue<number>;
-  format: AggregateValue<SchematicNoteFormat>;
-  widthPx?: AggregateValue<number>;
+  anchor: AggregateValue<SchematicNoteAnchor>;
+  text?: string;
 }
 
 export interface SchematicPropertyPanelNetworkInput {

@@ -1,3 +1,6 @@
+import { SchematicNoteDialog, type NoteDraft } from "./notes/noteDialog";
+import { typesetNotesForExport } from "./notes/noteTypeset";
+import { DEFAULT_NOTE_ANCHOR } from "./notes/noteGeometry";
 import { SchematicInductorInteractionController } from "./inductorInteractionController";
 import { ComponentRefAllocator } from "./componentRefAllocator";
 import { switchStateCycleCommand } from "./switchInteractionModel";
@@ -9,11 +12,14 @@ import {
 } from "./cellGeometryInteractionCoordinator";
 import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
 import { InstanceBrowser } from "./instanceBrowser";
+import { applyTranslatedWireAnchors } from "./wire/wireMoveTopology";
+import { syncDeviceModelFields, syncMosParameterFields } from "./componentNetlistFields";
+import type { PlacementComponentProperties } from "./placementModel";
 import { SidebarLibrary } from "./sidebarLibrary";
 import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
 import { SchematicEventLog, type LogEntry } from "./eventLog";
 import { NetlistPanelController } from "./netlist/panel";
-import { DEFAULT_NETLIST_PROCESS, isDeviceKind, isNetlistModelText, isProcessId, NETLIST_MODEL_VALUE_KEY, processProfile, type ProcessId } from "./netlist/profiles";
+import { DEFAULT_NETLIST_PROCESS, isDeviceKind, isNetlistModelText, isProcessId, NETLIST_MODEL_VALUE_KEY, type ProcessId } from "./netlist/profiles";
 import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
 import { createCircleGeometry } from "./circleComponentModel";
 import { LIBRARY_PATH_MAX_POINTS } from "./libraryPathPoints";
@@ -73,9 +79,7 @@ import { SchematicNoteLayer } from "./notes/noteLayer";
 import { SchematicNoteInteractionController } from "./notes/noteInteractionController";
 import {
   NotePropertyBatchSession,
-  type NotePropertyBatchProjectionContext
 } from "./notes/notePropertyBatchSession";
-import { noteFontSizePx } from "./notes/noteSizing";
 import { isSchematicTextFont } from "./schematicFont";
 import { wireHopPaths } from "./wire/wireCrossings";
 import { createSchematicPaperSurface, type SchematicPaperSurface } from "./paperLifecycle";
@@ -83,7 +87,9 @@ import { SchematicPreviewRenderer } from "./previewRenderer";
 import { SchematicPropertyInteractionController } from "./propertyInteractionController";
 import { SchematicPropertyPanelController } from "./propertyPanelController";
 import {
-  createPlainSchematicNoteDocumentOp,
+  commitSelectionMoveDocumentOp,
+  createSchematicNoteDocumentOp,
+  projectPointerSelectionMove,
   resetSchematicDocument,
   restoreSchematicDocumentOp,
   transformSelectionDocumentGeometryOp,
@@ -103,7 +109,7 @@ import {
   ShapeResizeSession,
   type ShapeResizeHandle
 } from "./shapeResizeSession";
-import { pointKey, snapPoint } from "./geometry";
+import { pointKey, samePoint, snapPoint } from "./geometry";
 import { junctionCustomColor, pruneJunctionAppearances } from "./networkColorModel";
 import type {
   SchematicEditorCommand,
@@ -122,6 +128,7 @@ import type {
   SchematicHostedEditor
 } from "./schematicHostedEditor";
 import { SchematicToolbarController } from "./toolbar";
+import { SCHEMATIC_PLUS_CURSOR, syncSchematicToolCursor, type ToolCursorFeedback } from "./toolCursor";
 import {
   SchematicTransientToolSessionCoordinator,
   type TransientInteractionCleanupPolicy
@@ -133,6 +140,7 @@ import {
   buildPlacementToolEntryIntent,
   buildWireToolEntryIntent,
   isDeleteToolMode as isSchematicDeleteToolMode,
+  isMoveOrRotateMode,
   projectSchematicEscapeKeyIntent,
   projectSchematicKeyboardShortcut,
   projectSchematicToolbarCommandIntent,
@@ -152,6 +160,7 @@ import {
   selectedExportJunctionPoints
 } from "./selection/selectionCopyExportModel";
 import { SchematicCopyController } from "./copyController";
+import { projectSchematicSelection, selectionPlacementAnchor } from "./selection/selectionProjection";
 import {
   captureCopyLayers,
   copySourceCenterAnchor,
@@ -182,8 +191,8 @@ import {
   projectLinkPointerClickTarget,
   projectPinPointerClickTarget
 } from "./pointerClickTargetProjection";
-import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
-import type { SelectionGesture } from "./selection/selectionModel";
+import { beginSelectionMoveTransaction, type SelectionMoveBehavior, type SelectionMoveTransaction } from "./selection/selectionMoveTransaction";
+import { createSchematicSelectionState, type SelectionGesture } from "./selection/selectionModel";
 import { SchematicSelectionBoxController } from "./selection/selectionBoxController";
 import { projectFinishedSelectionBox, type FinishedSelectionBoxIntent } from "./selection/selectionBoxModel";
 import { SchematicSelectionSessionCoordinator } from "./selection/selectionSessionCoordinator";
@@ -197,6 +206,7 @@ import {
 } from "./selection/selectionDeleteModel";
 import type { GroupTransformKind } from "./selection/selectionTransformModel";
 import {
+  assignRestoredSchematicDocument,
   cloneSchematicDocument,
   contentFromDocument,
   documentFromContent,
@@ -261,7 +271,7 @@ import type {
   SchematicContent,
   SchematicDocument,
   SchematicNote,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   SchematicViewState,
   Wire,
   WireRouteMode
@@ -272,7 +282,6 @@ const MIN_FIT_ZOOM = 0.00001;
 const MAX_ZOOM = 280;
 const FIT_PADDING_PX = 48;
 const FIT_BOUNDS_MARGIN = 28;
-const NOTE_COMMIT_DEBOUNCE_MS = 400;
 // Shape creation follows the visible 10 px canvas grid.
 const LIBRARY_SHAPE_DRAW_GRID_SIZE = GRID_SIZE;
 const VERTEX_SHAPE_GEOMETRY = {
@@ -289,6 +298,7 @@ function isPathDraft(kind: LibraryShapeType | undefined): kind is keyof typeof S
 
 type SchematicEditorOptions = SchematicEditorMountElements;
 type MoveBehavior = SelectionMoveBehavior;
+const ROTATE_PICK_STATUS = "Rotate mode: click a component, then click to place it. Esc cancels.";
 type SchematicContextTarget = SchematicViewTarget;
 
 interface SchematicDocumentRenderRuntime {
@@ -323,6 +333,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly eventLog: SchematicEventLog;
   private readonly netlistPanel: NetlistPanelController | null;
   private netlistRefreshTimer: number | null = null;
+  private toolCursorFeedback?: { cursor: ToolCursorFeedback; timer: number };
   private activeLayerId = "layer-1";
   private readonly collapsedLayerTreeNodes = new Set<string>();
   private libraryShapeDraw: { kind: LibraryShapeType; points: Point[] } | null = null;
@@ -350,6 +361,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly selectionBoxController: SchematicSelectionBoxController<any>;
   private readonly viewportController: SchematicViewportController;
   private readonly noteInteractionController: SchematicNoteInteractionController;
+  private readonly noteDialog: SchematicNoteDialog;
+  private noteDraft?: NoteDraft;
   private readonly notePropertyBatchSession: NotePropertyBatchSession;
   private readonly propertyInteractions: SchematicPropertyInteractionController;
   private readonly shapeResizeSession = new ShapeResizeSession(this.document);
@@ -363,9 +376,13 @@ export class SchematicEditor implements SchematicHostedEditor {
   private netResolutionCache: NetResolution | undefined;
   private activeHostedDocumentId = "";
   private readonly hostedActiveLayerIds = new Map<string, string>();
-  private readonly copyMarkdownPreviewContent = new Map<string, HTMLElement>();
-  private copyMarkdownPreviewGeneration = 0;
   private copyPreviewNeedsPointer = false;
+  private copyAfterDrop: "select" | "pick" | "paste" = "select";
+  private pointerMove: {
+    transaction: SelectionMoveTransaction;
+    repeat: boolean;
+    displayed(id: string): boolean;
+  } | null = null;
   private readonly inductorInteractions: SchematicInductorInteractionController;
   private readonly lifecycleController: AbortController;
   private readonly stateListeners = new Set<SchematicEditorStateListener>();
@@ -378,7 +395,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private lastOrigin = "init";
   private lastReason = "init";
   private statusMessage = "";
-  private noteCommitTimer: number | null = null;
 
   private get paper() {
     return this.activeRenderRuntime.surface.paper as any;
@@ -430,6 +446,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     event.preventDefault();
     event.stopImmediatePropagation();
     this.shapeResizePointerId = event.pointerId;
+    this.syncToolCursor();
     this.host.ownerWindow.addEventListener("pointermove", this.handleShapeResizePointerMove, true);
     this.host.ownerWindow.addEventListener("pointerup", this.handleShapeResizePointerUp, true);
     this.host.ownerWindow.addEventListener("pointercancel", this.handleShapeResizePointerCancel, true);
@@ -541,30 +558,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setStatus((geometryCommit?.affectedGraphIds.length ?? 0) > 0 ? geometryCommit!.status : noteCommit.status);
   };
 
-  private readonly handleGlobalNoteWidthPointerMove = (event: PointerEvent) => {
-    const result = this.noteInteractionController.moveWidthDrag({
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      zoom: this.zoom
-    });
-    if (!result.valid) return;
-    event.preventDefault();
-    if (result.changed) {
-      this.persistWorkspaceState();
-      this.renderPropertyEditor();
-    }
-  };
-
-  private readonly handleGlobalNoteWidthPointerUp = (event: PointerEvent) => {
-    const result = this.noteInteractionController.endWidthDrag(event.pointerId);
-    if (result.kind === "ignored") return;
-    event.preventDefault();
-    this.removeNoteWidthDragListeners();
-    this.commitNotePropertyResult(result.commit);
-    this.renderPropertyEditor();
-  };
-
   constructor(
     private readonly options: SchematicEditorOptions,
     private readonly host: SchematicEditorRuntimeServices,
@@ -574,6 +567,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       throw new Error("Schematic editor host services must belong to the mount root document.");
     }
     this.lifecycleController = host.createAbortController();
+    this.noteDialog = new SchematicNoteDialog(options.shellEl);
     this.netLabelDialog = new SchematicNetLabelDialog(options.shellEl);
     this.analysisController = hostBridge.analysis ?? createNoopAnalysisBridge();
     this.contextMenuController = hostBridge.contextMenu ?? createNoopContextMenuBridge();
@@ -635,7 +629,16 @@ export class SchematicEditor implements SchematicHostedEditor {
     };
     this.selectionBoxController = new SchematicSelectionBoxController({
       graphAdapter: this.graphAdapter,
-      listeners: viewportListeners
+      listeners: {
+        add: () => {
+          viewportListeners.add();
+          this.syncToolCursor();
+        },
+        remove: () => {
+          viewportListeners.remove();
+          this.syncToolCursor();
+        }
+      }
     });
     this.viewportController = new SchematicViewportController({
       host: this.options.paperEl,
@@ -666,32 +669,16 @@ export class SchematicEditor implements SchematicHostedEditor {
       maxZoom: MAX_ZOOM
     });
     setSchematicPresentationClass(this.options.paperEl, this.presentationMode);
-    this.options.paperEl.style.setProperty(
-      "--schematic-delete-cursor",
-      this.host.cursors?.delete ?? "crosshair"
-    );
-    this.options.paperEl.style.setProperty(
-      "--schematic-temp-delete-cursor",
-      this.host.cursors?.temporaryDelete ?? "crosshair"
-    );
-    this.noteLayer = new SchematicNoteLayer(this.options.paperEl, {
-      defaultTextFont: () => this.document.display?.textFont,
-      runtimeAdapter: this.host.noteRuntimeAdapter,
-      onMarkdownChange: (noteId, markdown) => this.updateMarkdownNoteText(noteId, markdown),
-      onMarkdownResize: (noteId, height) => this.updateMarkdownNoteHeight(noteId, height)
-    });
+    this.options.paperEl.style.setProperty("--schematic-plus-cursor", SCHEMATIC_PLUS_CURSOR);
+    this.noteLayer = new SchematicNoteLayer(this.options.paperEl, { defaultTextFont: () => this.document.display?.textFont });
     const frameScheduler = {
       request: (callback: () => void) => this.requestOwnedFrame(() => callback()),
       cancel: (handle: number) => this.cancelOwnedFrame(handle)
     };
-    this.noteInteractionController = new SchematicNoteInteractionController(
-      this.document,
-      this.noteLayer,
-      (callback) => this.requestOwnedFrame(() => callback())
-    );
+    this.noteInteractionController = new SchematicNoteInteractionController(this.document);
     this.notePropertyBatchSession = new NotePropertyBatchSession(
       this.document,
-      (note, context) => this.projectNotePropertyBatch(note, context),
+      note => this.projectNotePropertyBatch(note),
       frameScheduler
     );
     this.inductorInteractions = new SchematicInductorInteractionController({
@@ -730,10 +717,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       defaultTextFont: () => this.document.display?.textFont,
       presentationMode: () => this.presentationMode,
       worldToScreenPoint: (point) => this.worldToScreenPoint(point),
-      zoom: () => this.zoom,
-      cloneRenderedNoteContent: (note) =>
-        this.copyMarkdownPreviewContent.get(note.text)?.cloneNode(true) as HTMLElement | undefined
-        ?? this.noteLayer.cloneRenderedMarkdownByText(note.text)
+      zoom: () => this.zoom
     });
     this.propertyPanelController = new SchematicPropertyPanelController(this.options.propertyEl, this.propertyInteractions.callbacks({
       ...this.inductorInteractions.callbacks(),
@@ -741,12 +725,9 @@ export class SchematicEditor implements SchematicHostedEditor {
       onNoteFontSizeEditStart: () => this.beginNoteFontSizePropertyEdit(),
       onNoteFontSizeInput: (value) => this.setSelectedNoteFontSize(value, { commit: false }),
       onNoteFontSizeCommit: (value) => this.setSelectedNoteFontSize(value, { commit: true }),
-      onNoteFormatChange: (format) => this.setSelectedNoteFormat(format),
-      onNoteWidthEditStart: () => this.beginNoteWidthPropertyEdit(),
-      onNoteWidthInput: (value) => this.setSelectedNoteWidth(value, { commit: false }),
-      onNoteWidthCommit: (value) => this.setSelectedNoteWidth(value, { commit: true }),
-      onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit(),
-      onNoteWidthCancel: () => this.cancelNoteWidthPropertyEdit()
+      onNoteAnchorChange: anchor => this.setSelectedNoteAnchor(anchor),
+      onNoteTextChange: text => this.setSelectedNoteText(text),
+      onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit()
     }));
     this.junctionRenderCoordinator = new SchematicJunctionRenderCoordinator({
       document: this.document,
@@ -758,6 +739,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       cancelAnimationFrame: (handle) => this.host.cancelAnimationFrame(handle)
     });
     this.transientToolSession = new SchematicTransientToolSessionCoordinator({
+      clearToolCursorFeedback: () => this.clearToolCursorFeedback(),
       clearWireSegmentMove: () => {
         this.wireSegmentMove = null;
       },
@@ -765,7 +747,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       clearActiveNetPick: () => this.analysisController.clearActivePick(),
       clearDeleteHover: () => this.clearDeleteHover(),
       clearPlacementPreview: () => this.removePlacementPreview(),
-      clearShapeDraft: () => this.clearLibraryShapeDraw(),
+      clearShapeDraft: () => { this.clearLibraryShapeDraw(); this.clearNotePlacement(); },
       clearWirePreview: () => this.removeWirePreview(),
       clearCopyPreview: () => this.removeCopyPreview(),
       clearCopyState: () => this.clearCopyState(),
@@ -777,6 +759,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       updatePlacementPreview: (point) => this.updatePlacementPreview(point),
       updateWirePreview: (point) => this.updateWirePreview(point),
       updateCopyPreview: (point) => this.updateCopyPreview(point),
+      updateMovePreview: (point) => this.updateMovePreview(point),
       updateLabelPreview: (point) => this.updateNetLabelPreview(point)
     });
     this.instanceSelector = new InstanceSelector(this.options.paletteEl, {
@@ -806,11 +789,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     this.instanceBrowser = new InstanceBrowser(this.options.shellEl, {
       symbolTemplate: () => this.document.symbolTemplate,
-      onPick: (item) => {
-        this.beginPlacement(item);
+      netlistProcess: () => this.document.netlistProcess,
+      onPick: (item, properties) => {
+        this.beginPlacement(item, { properties });
         this.focusCanvas();
       },
-      onClose: () => this.focusCanvas()
+      onClose: () => {
+        this.syncToolCursor();
+        this.focusCanvas();
+      }
     });
     const { analysisEl } = this.options;
     this.rightDock = analysisEl
@@ -898,22 +885,23 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.flushTransientEdits("destroy");
     this.destroyed = true;
     this.destroyResult = Promise.resolve();
-    this.copyMarkdownPreviewGeneration += 1;
     this.lifecycleController.abort();
     this.cancelOwnedFrames();
-    this.cancelScheduledNoteCommit();
     this.cancelShapeResize();
     this.removeNoteDragListeners();
-    this.removeNoteWidthDragListeners();
     this.selectionBoxController.cancel();
     this.viewportController.cancelActiveGestures();
     this.junctionRenderCoordinator.cancelScheduledRefresh();
     this.notePropertyBatchSession.dispose();
     this.propertyInteractions.dispose();
-    this.noteInteractionController.dispose();
+    this.noteInteractionController.cancelDrag();
+    this.clearNotePlacement();
     this.instanceSelector.destroy();
     this.sidebarLibrary.destroy();
     this.instanceBrowser.destroy();
+    this.clearToolCursorFeedback();
+    syncSchematicToolCursor(this.options.paperEl);
+    this.options.paperEl.style.removeProperty("--schematic-plus-cursor");
     this.rightDock?.destroy();
     this.eventLog.destroy();
     if (this.netlistRefreshTimer !== null) this.host.clearTimeout(this.netlistRefreshTimer);
@@ -927,7 +915,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.destroyResult = this.noteLayer.destroy().catch((error) => {
       console.error("Schematic Note runtime cleanup failed.", error);
     });
-    this.copyMarkdownPreviewContent.clear();
     this.stateListeners.clear();
     return this.destroyResult;
   }
@@ -1034,6 +1021,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.revision = revision;
     this.lastOrigin = origin;
     this.lastReason = reason;
+    if (this.pointerMove) {
+      this.transientToolSession.transition("select", "restore");
+      this.syncToolUi();
+    }
     this.emitStateChange();
     return true;
   }
@@ -1069,7 +1060,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.beginLabelTool();
         return true;
       case "note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         return true;
       case "copy":
         this.beginCopyCommand();
@@ -1186,6 +1177,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.hierarchyPlacement = null;
     this.previewRenderer.clearPlacement();
     this.options.paperEl.classList.remove("is-hierarchy-placing");
+    this.syncToolCursor();
   }
 
   hostArmHierarchyPlacement(component: ComponentInstance) {
@@ -1193,6 +1185,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.hierarchyPlacement = component;
     if (this.options.layout?.isNarrow?.()) this.options.layout.closePanel("left");
     this.options.paperEl.classList.add("is-hierarchy-placing");
+    this.syncToolCursor();
     this.previewHierarchyPlacement(this.lastPointerPoint ?? this.viewportCenterPoint());
     this.focusCanvas();
   }
@@ -1236,7 +1229,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.commitDisplayChange(() => {
           this.document.display = { ...this.document.display, textFont: value };
           this.document.notes.filter(note => !note.fontFamily).forEach(note => {
-            this.noteLayer.resizeNoteToContent(note, noteFontSizePx(note));
+            this.noteLayer.resizeNoteToContent(note);
           });
         });
       } else if (select.hasAttribute("data-netlist-process") && isProcessId(value)) {
@@ -1247,7 +1240,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.commitDisplayChange(() => {
           if (value === "") delete target.object.fontFamily;
           else target.object.fontFamily = value;
-          if (target.kind === "note") this.noteLayer.resizeNoteToContent(target.object, noteFontSizePx(target.object));
+          if (target.kind === "note") this.noteLayer.resizeNoteToContent(target.object);
         });
       }
     }, { signal });
@@ -2128,17 +2121,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncMosParams(force = false) {
-    const container = this.options.propertyEl?.querySelector<HTMLElement>("[data-property-mos-params]");
-    if (!container) return;
-    const component = this.selectedMosComponent();
-    container.hidden = !component;
-    if (!component) return;
-    container.querySelectorAll<HTMLInputElement>("[data-property-mos-param]").forEach((input) => {
-      const parameter = input.dataset.propertyMosParam;
-      if (!parameter) return;
-      if (!force && this.host.ownerDocument.activeElement === input) return;
-      input.value = component.values[`mos:${parameter}`] ?? "";
-    });
+    syncMosParameterFields(this.options.propertyEl, this.selectedMosComponent(), force);
   }
 
   private changeNetlistProcess(process: ProcessId) {
@@ -2196,44 +2179,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncDeviceModel(force = false) {
-    const selected = this.selectedModelDevice();
-    const profile = processProfile(this.document.netlistProcess ?? DEFAULT_NETLIST_PROCESS);
-    const rows = this.options.propertyEl.querySelectorAll<HTMLElement>("[data-property-device-model]");
-    for (const row of rows) {
-      const section = selected && (["resistor", "capacitor", "inductor"].includes(selected.kind) ? "passive" : "transistor");
-      row.hidden = row.dataset.propertyDeviceModel !== section;
-      if (!selected || row.hidden) continue;
-      const { component, kind } = selected;
-      const model = component.values[NETLIST_MODEL_VALUE_KEY] ?? "";
-      const defaultModel = profile.defaults[kind];
-      const select = row.querySelector<HTMLSelectElement>("[data-property-model-select]")!;
-      const input = row.querySelector<HTMLInputElement>("[data-property-model-input]")!;
-      const custom = profile.id === "custom";
-      select.hidden = custom;
-      input.hidden = !custom;
-      if (custom) {
-        if (force || input.dataset.componentId !== component.id || this.host.ownerDocument.activeElement !== input) input.value = model;
-        input.dataset.componentId = component.id;
-        input.placeholder = defaultModel;
-      } else {
-        const caption = uiFormat("parameter.processDefaultModel", "Process default ({name})", { name: defaultModel });
-        const choices = [...new Set([...profile.options[kind], ...(model ? [model] : [])])];
-        const options = [["", caption], ...choices.map(name => [name, name])];
-        if (select.options.length !== options.length || options.some(
-          ([value, label], index) => select.options[index].value !== value || select.options[index].text !== label
-        )) {
-          select.replaceChildren(...options.map(([value, label]) => {
-            const option = select.ownerDocument.createElement("option");
-            option.value = value;
-            option.text = label;
-            return option;
-          }));
-        }
-        select.dataset.componentId = component.id;
-        select.value = model;
-        select.title = model || caption;
-      }
-    }
+    syncDeviceModelFields(this.options.propertyEl, this.selectedModelDevice()?.component ?? null, this.document.netlistProcess, force);
   }
 
   private bindGlobalDocumentWindowInteractions() {
@@ -2261,10 +2207,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.noteLayer.element.addEventListener("pointerdown", (event) => this.handleNotePointerDown(event), { signal });
     this.noteLayer.element.addEventListener("pointermove", (event) => this.handleNotePointerMove(event), { signal });
     this.noteLayer.element.addEventListener("click", (event) => this.handleNoteClick(event), { signal });
-    this.noteLayer.element.addEventListener("dblclick", (event) => this.handleNoteDoubleClick(event), { signal });
-    this.noteLayer.element.addEventListener("blur", (event) => this.handleNoteBlur(event), { capture: true, signal });
-    this.noteLayer.element.addEventListener("input", (event) => this.handleNoteInput(event), { signal });
-    this.noteLayer.element.addEventListener("compositionend", () => this.flushScheduledNoteCommit(), { signal });
     ["mousedown", "mouseup", "pointerup"].forEach((type) => {
       this.noteLayer.element.addEventListener(
         type,
@@ -2318,6 +2260,12 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.handleShapeResizePointerDown,
       { capture: true, signal }
     );
+    this.options.paperEl.addEventListener("click", event => {
+      if (!this.noteDraft || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.placeNote(this.localPointFromClient(event.clientX, event.clientY));
+    }, { capture: true, signal });
     this.options.paperEl.addEventListener("pointerdown", (event) => {
       this.focusCanvas();
       this.viewportController.handleTouchPointerDown(event);
@@ -2364,7 +2312,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.options.paperEl.addEventListener("mousemove", this.handleCanvasMouseMove, { signal });
     this.options.paperEl.addEventListener("pointerleave", () => {
       this.routingPointer = null;
-      if (this.transientToolSession.mode === "wire" || this.transientToolSession.mode === "label") {
+      if (this.noteDraft) this.showRoutingSnap(null);
+      const mode = this.transientToolSession.mode;
+      if (isMoveOrRotateMode(mode)) this.lastPointerPoint = null;
+      if (mode === "wire" || mode === "label" || isMoveOrRotateMode(mode)) {
         this.transientToolSession.projectActivePreview(null);
       }
     }, { signal });
@@ -2425,9 +2376,15 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handleBlankPointerDown(event: MouseEvent, x: number, y: number) {
-    if (this.inductorInteractions.pendingSourceId) return;
-    if ((this.transientToolSession.mode !== "select" && !this.isDeleteToolMode()) || event.button !== 0) return;
-    this.startDragSelection(event, snapPoint({ x, y }));
+    const mode = this.transientToolSession.mode;
+    if (event.button !== 0) return;
+    if (this.inductorInteractions.pendingSourceId || (mode === "select" && this.analysisController.hasActivePick())) return;
+    const pickingTargets = (mode === "move" && !this.pointerMove) || (mode === "copy" && !this.copyController.hasSource);
+    if (mode === "select" || this.isDeleteToolMode() || pickingTargets) {
+      this.startDragSelection(event, snapPoint({ x, y }));
+    } else if (mode === "copy" || mode === "move") {
+      this.viewportController.setNextBlankClickSuppressed(false);
+    }
   }
 
   private handleBlankPointerMove(x: number, y: number) {
@@ -2540,7 +2497,16 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private applyPointerClickTarget(target: PointerClickTarget, event: MouseEvent) {
     const objectId = target.kind === "pin" ? target.componentId : target.kind === "junction" ? target.selectionId : "id" in target ? target.id : null;
-    if (objectId && !resolveLayerObjects(this.document).selectable(objectId)) return;
+    const mode = this.transientToolSession.mode;
+    if (isMoveOrRotateMode(mode)) {
+      const point = this.pointFromClientEvent(event);
+      if (this.pointerMove) this.finishPointerMove(point);
+      else if (objectId && (mode === "move" || target.kind === "component" || target.kind === "pin")) {
+        this.pickMoveTarget([objectId], [], point);
+      }
+      return;
+    }
+    if (objectId && !(mode === "copy" && this.copyController.hasSource) && !resolveLayerObjects(this.document).selectable(objectId)) return;
     if (this.inductorInteractions.pendingSourceId) {
       this.inductorInteractions.applyInductorCouplingPartnerPick(target);
       return;
@@ -2559,7 +2525,6 @@ export class SchematicEditor implements SchematicHostedEditor {
         mode: this.transientToolSession.mode,
         target,
         copyHasSource: this.copyController.hasSource,
-        copyAwaitingReference: this.copyController.awaitingReference,
         analysisPickActive: this.analysisController.hasActivePick(),
         deleteMode: this.isDeleteToolMode(),
         selectionModified: event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
@@ -2577,9 +2542,6 @@ export class SchematicEditor implements SchematicHostedEditor {
         return;
       case "clear-selection":
         this.setSelection([]);
-        return;
-      case "set-copy-reference":
-        this.setCopyReference(intent.point);
         return;
       case "place-copy":
         this.placeCopyAt(intent.point);
@@ -2624,10 +2586,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
-    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open], [data-schematic-agent-dialog][open]")) return;
+    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open], [data-schematic-note-dialog][open], [data-schematic-agent-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
-    if (key === "escape" && this.transientToolSession.mode === "label") {
+    if (key === "escape" && (this.transientToolSession.mode === "label" || this.noteDraft)) {
       event.preventDefault();
       event.stopPropagation();
       this.cancelTool();
@@ -2670,7 +2632,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.cancelShapeResize();
       return;
     }
-    if (key === "escape" && (target?.closest("[data-math-source-editor]") || this.noteLayer.element.querySelector(".is-source-editing [data-math-source-editor]"))) return;
 
     const escapeIntent = projectSchematicEscapeKeyIntent({
       key,
@@ -2678,23 +2639,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       queryTarget: this.instanceSelector.isQueryTarget(target),
       dropdownOpen: this.instanceSelector.hasDropdownOpen(),
       optionsOpen: this.instanceSelector.hasOptionsOpen(),
-      editable,
-      noteEditorTarget: !!target && this.noteLayer.element.contains(target),
-      noteEditingActive: this.noteInteractionController.hasActiveEdit()
+      editable
     });
     if (escapeIntent.kind !== "none") {
       this.applySchematicEscapeKeyIntent(event, escapeIntent);
-      return;
-    }
-
-    if (
-      !editable
-      && this.noteInteractionController.hasActiveEdit()
-      && isUnmodifiedPrintableKey(event)
-      && this.noteInteractionController.insertText(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
       return;
     }
 
@@ -2753,13 +2701,13 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.beginLabelTool();
         return;
       case "create-note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         return;
       case "set-move-behavior":
         this.setMoveBehavior(shortcutIntent.behavior);
         return;
       case "rotate":
-        this.rotateSelectedOrPreview();
+        if (!event.repeat) this.rotateSelectedOrPreview();
         return;
       case "mirror":
         this.mirrorSelectedOrPreview(shortcutIntent.axis);
@@ -2787,11 +2735,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       case "close-instance-options":
         this.instanceSelector.closeOptions();
         break;
-      case "finish-note-edit": {
-        const noteId = this.noteInteractionController.editingNoteId;
-        if (noteId) this.finishNoteEditing(noteId);
-        break;
-      }
       case "cancel-tool":
         this.cancelTool();
         return;
@@ -2821,10 +2764,11 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.toggleLabelTool();
         break;
       case "create-note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         break;
       case "rotate":
-        this.rotateSelectedOrPreview();
+        if (this.transientToolSession.mode === "rotate") this.cancelTool();
+        else this.rotateSelectedOrPreview();
         break;
       case "mirror":
         this.mirrorSelectedOrPreview(intent.axis);
@@ -2973,15 +2917,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const display = this.document.display && { ...this.document.display };
     const crossingJunctions = this.document.junctions.map(point => ({ ...point }));
     const wireEndpoints = new Map(input.wires.map(wire => [wire.id, wireEndpointConnections(this.document, wire)]));
-    const renderedNotes = await Promise.all(input.notes.map(async (note) => {
-      const rendered = await this.noteLayer.waitForRenderedNoteExport(note, { inlineStyles: true });
-      return {
-        id: note.id,
-        html: rendered.content ? new this.host.ownerWindow.XMLSerializer().serializeToString(rendered.content) : "",
-        text: rendered.text,
-        textStyle: rendered.textStyle
-      };
-    }));
+    const noteGraphics = await typesetNotesForExport(input.notes, this.host.ownerDocument, display?.textFont);
     return {
       ...input,
       display,
@@ -2989,9 +2925,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       wireEndpoints,
       busWireIds: resolution.busWireIds,
       layerObjectOrder,
-      renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
-      renderedNoteText: Object.fromEntries(renderedNotes.map(({ id, text }) => [id, text])),
-      renderedNoteTextStyles: Object.fromEntries(renderedNotes.map(({ id, textStyle }) => [id, textStyle]))
+      noteGraphics
     };
   }
 
@@ -3083,7 +3017,9 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private openInstancePalette() {
     this.clearLibraryShapeDraw();
+    this.clearToolCursorFeedback();
     this.instanceBrowser.open();
+    this.syncToolCursor();
   }
 
   private openLibraryPanel() {
@@ -3130,16 +3066,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.openInstancePalette();
   }
 
-  private beginPlacement(item: InstancePaletteItem, options: { armPaletteKeyboard?: boolean; prefillQuery?: boolean } = {}) {
+  private beginPlacement(item: InstancePaletteItem, options: {
+    armPaletteKeyboard?: boolean; prefillQuery?: boolean; properties?: PlacementComponentProperties;
+  } = {}) {
     if (isLibraryShapeType(item)) {
       this.beginLibraryShapeDraw(item);
       return;
     }
-    this.applyPlacementToolEntryIntent(buildPlacementToolEntryIntent(item, options));
+    this.applyPlacementToolEntryIntent(buildPlacementToolEntryIntent(item, options), options.properties);
   }
 
-  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>) {
-    this.placementToolController.setItem(intent.placementItem);
+  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>, properties?: PlacementComponentProperties) {
+    this.placementToolController.setItem(intent.placementItem, properties);
     this.transientToolSession.transition(intent.nextMode, "enter-tool");
     this.instanceSelector.beginPlacement(intent.placementItem, intent.instanceSelectorBeginPlacementOptions);
     if (intent.updatePlacementPreview) this.updatePlacementPreview(this.lastPointerPoint);
@@ -3187,7 +3125,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private beginCopyCommand() {
     const selection = this.selectedTransformObjects();
-    if (this.hasHierarchyCopyObjects(selection.components)) return;
+    if (!this.canCopyObjects(selection.components)) return;
     const result = this.copyController.prepareSelectionEntry({
       selection,
       junctionAppearances: this.document.junctionAppearances,
@@ -3198,7 +3136,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       documentId: this.activeHostedDocumentId
     });
     if (result.kind === "no-source") {
-      this.applyCopyToolEntryIntent(result.intent);
+      this.applyCopyToolEntryIntent(result.intent, undefined, undefined, "pick");
       return;
     }
     if (result.kind === "empty-source") {
@@ -3209,26 +3147,27 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyFromTargets(ids: string[], noteIds: string[], anchor: Point) {
-    if (this.hasHierarchyCopyObjects(this.document.components.filter(component => ids.includes(component.id)))) return;
+    if (!this.canCopyObjects(this.document.components.filter(component => ids.includes(component.id)))) return;
     const result = this.copyController.prepareTargetEntry(
-      this.document, ids, noteIds, anchor, this.lastPointerPoint ?? anchor, this.activeHostedDocumentId
+      this.document, ids, noteIds, anchor, anchor, this.activeHostedDocumentId
     );
     if (result.kind === "empty-target") {
       this.setStatus(result.status);
       return;
     }
 
-    this.selectionSession.setMixed(result.ids, result.noteIds);
-    this.syncSelectionUi();
-    this.applyCopyToolEntryIntent(result.entry.intent, result.entry.attachSource, result.entry.previewPoint);
+    this.applyCopyToolEntryIntent(result.entry.intent, result.entry.attachSource, result.entry.previewPoint, "pick");
   }
 
-  private applyCopyToolEntryIntent(intent: CopyToolEntryIntent, attachSource?: () => void, previewPoint?: Point) {
+  private applyCopyToolEntryIntent(
+    intent: CopyToolEntryIntent, attachSource?: () => void, previewPoint?: Point,
+    afterDrop: typeof this.copyAfterDrop = "select"
+  ) {
     this.transientToolSession.transition(intent.nextMode, "enter-tool");
+    this.copyAfterDrop = afterDrop;
     if (intent.closeInstancePanel) this.instanceSelector.closePanel();
     this.viewportController.setNextBlankClickSuppressed(intent.suppressNextBlankClick);
-    if (intent.hasSource || intent.awaitingReference) attachSource?.();
-    if (intent.hasSource || intent.awaitingReference) this.cacheCopyMarkdownPreviewContent();
+    if (intent.hasSource) attachSource?.();
     this.copyPreviewNeedsPointer = false;
     if (intent.syncToolUi) this.syncToolUi();
     if (intent.focusTarget === "canvas") this.focusCanvas();
@@ -3243,18 +3182,6 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private copyLayerTarget() {
     return { documentId: this.activeHostedDocumentId, activeLayerId: this.activeLayerId };
-  }
-
-  private setCopyReference(point: Point) {
-    const result = this.copyController.setReferencePoint(point);
-    if (!result.ok) {
-      this.setStatus(result.status);
-      return;
-    }
-    this.copyPreviewNeedsPointer = false;
-    this.updateCopyPreview(point);
-    this.syncToolUi();
-    this.setStatus(result.status);
   }
 
   private copyInstantiationFactories(): { nextComponentRef: (type: ComponentType) => string; createId: () => string } {
@@ -3390,6 +3317,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyDeleteSelectionCommand(mode: DeleteToolMode) {
+    this.clearToolCursorFeedback();
     const intent = this.deleteToolController.commandForSelection(mode, this.hasExportableSelection());
     switch (intent.kind) {
       case "begin-tool":
@@ -3398,9 +3326,12 @@ export class SchematicEditor implements SchematicHostedEditor {
         return;
       case "delete-selected":
         this.deleteSelected();
+        if (this.transientToolSession.mode !== "delete") this.showToolCursorFeedback("delete");
         return;
       case "temporary-delete-selected":
+        this.transientToolSession.transition("select", "selection");
         this.toggleTemporaryDeleteSelected();
+        this.showToolCursorFeedback("plus");
         return;
     }
   }
@@ -3410,12 +3341,104 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyMoveBehaviorToolEntryIntent(intent: MoveBehaviorToolEntryIntent) {
+    this.hostFinishActiveEdits();
     this.transientToolSession.setMoveBehavior(intent.moveBehavior);
     this.transientToolSession.transition(intent.nextMode, "move-behavior");
     if (intent.closeInstancePanel) this.instanceSelector.closePanel();
+    const anchor = this.beginPointerMove(this.selectionSession.selectedIds, this.selectionSession.selectedNoteIds);
+    if (anchor) this.updateMovePreview(this.lastPointerPoint ?? anchor);
     if (intent.syncToolUi) this.syncToolUi();
     if (intent.focusTarget === "canvas") this.focusCanvas();
-    this.setStatus(intent.status);
+    this.setStatus(anchor ? "Click to place the moved objects. Esc cancels." : intent.status);
+  }
+
+  private beginPointerMove(ids: Iterable<string>, noteIds: Iterable<string>, pickupPoint?: Point) {
+    const { selectable, displayed } = resolveLayerObjects(this.document);
+    const selection = createSchematicSelectionState({
+      selectedIds: new Set([...ids].filter(selectable)),
+      selectedNoteIds: new Set([...noteIds].filter(selectable))
+    });
+    const anchor = selectionPlacementAnchor(projectSchematicSelection(this.document, selection), pickupPoint);
+    if (!anchor) return null;
+    const transaction = beginSelectionMoveTransaction({
+      document: this.document,
+      selectedIds: selection.selectedIds,
+      selectedNoteIds: selection.selectedNoteIds,
+      pointer: anchor
+    });
+    if (!transaction) return null;
+    this.pointerMove = { transaction, repeat: pickupPoint !== undefined, displayed };
+    return anchor;
+  }
+
+  private pickMoveTarget(ids: string[], noteIds: string[], point: Point) {
+    if (!this.beginPointerMove(ids, noteIds, point)) return;
+    this.updateMovePreview(point);
+    this.setStatus(this.transientToolSession.mode === "rotate"
+      ? "Click to place the rotated component. Esc cancels."
+      : "Click to place the moved objects. Esc cancels.");
+  }
+
+  private projectPointerMove(move: NonNullable<typeof this.pointerMove>, point: Point) {
+    const rotating = this.transientToolSession.mode === "rotate";
+    return projectPointerSelectionMove(
+      this.document, move.transaction, point,
+      rotating ? "moveOnly" : this.transientToolSession.moveBehavior,
+      rotating ? "rotate" : undefined
+    );
+  }
+
+  private updateMovePreview(point: Point | null) {
+    const move = this.pointerMove;
+    if (!move || !point) {
+      this.removeCopyPreview();
+      this.showRoutingSnap(null);
+      return;
+    }
+    this.showRoutingSnap(point);
+    const { draft, affectedIds, wireAnchors } = this.projectPointerMove(move, point);
+    const anchorIds = new Set(wireAnchors.map(({ wire }) => wire.id));
+    draft.wires.push(...wireAnchors.map(({ wire }) => wire));
+    const prefix = this.transientToolSession.mode === "rotate" ? "rotate-preview-" : "move-preview-";
+    this.previewRenderer.renderCopy(draft, id => anchorIds.has(id) || (affectedIds.has(id) && move.displayed(id)), prefix);
+  }
+
+  private finishPointerMove(point: Point) {
+    const move = this.pointerMove;
+    if (!move) return;
+    const rotating = this.transientToolSession.mode === "rotate";
+    const { draft, result, wireAnchors, changed } = this.projectPointerMove(move, point);
+    this.pointerMove = null;
+    this.removeCopyPreview();
+    this.showRoutingSnap(null);
+    if (move.repeat) this.selectionSession.setMixed([], []);
+    else this.transientToolSession.transition("select", "selection");
+    const commit = commitSelectionMoveDocumentOp({
+      geometryChanged: false, selectionMoveChanged: changed, liveGeometryDirty: false
+    });
+    if (commit.changed) {
+      reconcileDocumentConnectionEdit(draft, this.document);
+      applyTranslatedWireAnchors(draft, wireAnchors);
+      assignRestoredSchematicDocument(this.document, draft);
+      this.document.junctions = buildVisibleJunctions(this.document);
+      pruneJunctionAppearances(this.document);
+      if (!move.repeat) this.selectionSession.remapJunctions(result.transformedJunctionIds);
+      this.renderDocument();
+      this.consumeHistoryIntent(commit);
+    } else {
+      this.syncSelectionStyles();
+      this.syncNoteSelectionStyles();
+    }
+    this.syncToolUi();
+    if (rotating) {
+      this.setStatus(commit.changed ? "Component rotated. Click another component to rotate. Esc cancels." : ROTATE_PICK_STATUS);
+    } else if (move.repeat) {
+      this.setStatus(commit.changed
+        ? "Objects moved. Click another object or drag a box to continue. Esc cancels."
+        : buildMoveBehaviorToolEntryIntent(this.transientToolSession.moveBehavior).status);
+    } else {
+      this.setStatus(commit.status || this.selectionStatus());
+    }
   }
 
   private prepareAnalysisNetPick() {
@@ -3439,21 +3462,39 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setStatus(intent.status);
   }
 
-  private createNoteAtCurrentPoint() {
-    const layer = this.editablePlacementLayer();
-    if (!layer) return;
+  private openNotePlacement() {
+    if (!this.editablePlacementLayer()) return;
     this.transientToolSession.transition("select", "create-note");
+    this.syncToolCursor();
     this.instanceSelector.closePanel();
-    const anchor = snapPoint(this.lastPointerPoint ?? this.viewportCenterPoint());
-    const noteId = this.host.idFactory();
-    const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor, layer.id);
+    this.noteDialog.open(draft => {
+      this.noteDialog.close();
+      this.noteDraft = draft;
+      this.showRoutingSnap(this.lastPointerPoint);
+      this.focusCanvas();
+      this.setStatus("Click the canvas to place the Note. Esc cancels.");
+    }, () => this.cancelTool());
+  }
+
+  private clearNotePlacement() {
+    this.noteDialog.close();
+    if (!this.noteDraft) return;
+    this.noteDraft = undefined;
+    this.showRoutingSnap(null);
+  }
+
+  private placeNote(point: Point) {
+    const draft = this.noteDraft;
+    const layer = draft && this.editablePlacementLayer();
+    if (!draft || !layer) return;
+    this.clearNotePlacement();
+    const result = createSchematicNoteDocumentOp(this.document, this.host.idFactory(), snapPoint(point), draft, layer.id);
     this.setNoteSelection(layer.visible ? result.noteIds : []);
     this.renderNotes();
     this.renderLayersPanel();
     this.consumeHistoryIntent(result);
-    if (layer.visible) this.beginNoteEditing(noteId);
-    this.setStatus(layer.visible ? result.status
-      : "Note created on a hidden layer. Show the layer to edit it.");
+    this.focusCanvas();
+    this.setStatus(layer.visible ? result.status : "Note created on a hidden layer. Show the layer to edit it.");
   }
 
   private nextComponentRef(type: ComponentType) {
@@ -3466,7 +3507,14 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
-    this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
+    const pickNextCopySource = outcome.source === "copy" && this.copyAfterDrop === "pick";
+    if (outcome.source === "copy" && this.copyAfterDrop !== "paste") {
+      this.transientToolSession.transition(pickNextCopySource ? "copy" : "select", "enter-tool");
+      if (pickNextCopySource) this.copyAfterDrop = "pick";
+    }
+    this.setMixedSelection(
+      pickNextCopySource ? [] : outcome.result.selectedIds, pickNextCopySource ? [] : outcome.result.noteIds, false
+    );
     applyNormalizedDocumentWires(this.document);
     this.renderDocument();
     if (outcome.source === "placement") this.renderLayersPanel();
@@ -3477,7 +3525,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (outcome.source === "placement") this.updatePlacementPreview(outcome.previewPoint);
     else this.updateCopyPreview(outcome.previewPoint);
     if (outcome.syncToolUiAfterPreview) this.syncToolUi();
-    this.setStatus(outcome.result.status);
+    const status = pickNextCopySource
+      ? "Copy placed. Click another object or drag a box to continue. Esc cancels."
+      : outcome.source === "copy" && this.transientToolSession.mode === "select" ? "Copy placed." : outcome.result.status;
+    this.setStatus(status);
   }
 
   private commitPlacementItem(point: Point) {
@@ -3486,9 +3537,15 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handlePointerMove(point: Point) {
+    const previousPoint = this.lastPointerPoint;
     this.lastPointerPoint = snapPoint(point);
+    if (this.noteDraft) {
+      this.showRoutingSnap(this.lastPointerPoint);
+      return;
+    }
     if (this.transientToolSession.mode === "copy") this.copyPreviewNeedsPointer = false;
     const mode = this.transientToolSession.mode;
+    if (isMoveOrRotateMode(mode) && previousPoint && samePoint(previousPoint, this.lastPointerPoint)) return;
     this.transientToolSession.projectActivePreview(mode === "wire" || mode === "label" ? point : this.lastPointerPoint);
   }
 
@@ -3564,7 +3621,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private rotateSelectedOrPreview() {
+    if (this.transientToolSession.mode === "rotate") return;
     if (this.transientToolSession.mode === "place") {
+      this.showToolCursorFeedback("rotate");
       const result = this.placementToolController.rotatePreview();
       if (result.kind === "template") {
         this.setStatus("Place the template, then rotate or mirror the selected objects.");
@@ -3574,7 +3633,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(`Preview rotation ${result.pose.rotation} deg. Click to place.`);
       return;
     }
-    if (this.transientToolSession.mode === "copy" && (this.copyController.hasSource || this.copyController.awaitingReference)) {
+    if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
+      this.showToolCursorFeedback("rotate");
       const result = this.copyController.rotateSource();
       if (!result.ok) {
         this.setStatus(result.status);
@@ -3585,11 +3645,17 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
-    const selection = this.selectedTransformObjects();
-    if (selection.count === 0) {
-      this.setStatus("Select at least one object before rotating.");
+    this.hostFinishActiveEdits();
+    if (!this.selectionSession.hasAny()) {
+      this.transientToolSession.transition("rotate", "enter-tool");
+      this.instanceSelector.closePanel();
+      this.viewportController.setNextBlankClickSuppressed(false);
+      this.focusCanvas();
+      this.setStatus(ROTATE_PICK_STATUS);
       return;
     }
+    this.transientToolSession.transition("select", "selection");
+    const selection = this.selectedTransformObjects();
     if (!this.hasSingleSelectedComponentOnly()) {
       this.transformSelectedObjects("rotate", selection);
       return;
@@ -3606,6 +3672,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private mirrorSelectedOrPreview(axis: "x" | "y") {
+    this.clearToolCursorFeedback();
     if (this.transientToolSession.mode === "place") {
       const result = this.placementToolController.mirrorPreview(axis);
       if (result.kind === "template") {
@@ -3616,7 +3683,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(`Preview mirrored ${axis === "x" ? "left-right" : "up-down"}. Click to place.`);
       return;
     }
-    if (this.transientToolSession.mode === "copy" && (this.copyController.hasSource || this.copyController.awaitingReference)) {
+    if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
       const result = this.copyController.mirrorSource(axis);
       if (!result.ok) {
         this.setStatus(result.status);
@@ -3753,10 +3820,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(TEMPORARY_DELETE_TARGET_EMPTY_STATUS);
       return;
     }
-    this.setSelection(ids, false);
-    this.toggleTemporaryDeleteSelected();
-    this.transientToolSession.setMode("temp-delete");
-    this.syncToolUi();
+    this.applyDeleteCommitOutcome(this.deleteCommitCoordinator.toggleTemporary(ids), false);
   }
 
   private toggleTemporaryDeleteSelected() {
@@ -3770,12 +3834,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     );
   }
 
-  private applyDeleteCommitOutcome(outcome: SchematicDeleteCommitOutcome) {
+  private applyDeleteCommitOutcome(outcome: SchematicDeleteCommitOutcome, selectAffected = true) {
     if (outcome.kind === "status") {
       this.setStatus(outcome.status);
       return;
     }
-    this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
+    this.setMixedSelection(selectAffected ? outcome.result.selectedIds : [], selectAffected ? outcome.result.noteIds : [], false);
     this.commitChangedRenderedDocumentTail(outcome.result, outcome.result.status);
   }
 
@@ -3898,8 +3962,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (this.destroyed) return;
     const preserveCopy =
       this.transientToolSession.mode === "copy"
-      && this.copyController.hasSource;
-    if (preserveCopy) this.cacheCopyMarkdownPreviewContent();
+      && this.copyController.hasSource
+      && (!this.copyController.hasSheetBlocks || input.id === this.activeHostedDocumentId);
 
     this.hostFinishActiveEdits();
     this.viewportController.cancelActiveGestures();
@@ -3913,8 +3977,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.syncSelectionStyles({ cellIds: selectedIds, resolution: this.netResolutionCache });
       this.syncNoteSelectionStyles();
       this.junctionRenderCoordinator.cancelScheduledRefresh();
-      this.noteLayer.deactivateDocument(this.activeHostedDocumentId);
-      this.noteLayer.discardDocument(this.activeHostedDocumentId);
+      this.noteLayer.reset();
     }
 
     this.lastPointerPoint = null;
@@ -3953,7 +4016,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   hostBeginClipboardCopy(document: SchematicDocument) {
-    if (this.destroyed || this.hasHierarchyCopyObjects(document.components)) return false;
+    if (this.destroyed || !this.canCopyObjects(document.components, "clipboard")) return false;
     const source = copySourceFromDocument(document);
     const anchor = copySourceCenterAnchor(source);
     if (copySourceCount(source) === 0 || !anchor) {
@@ -3970,28 +4033,27 @@ export class SchematicEditor implements SchematicHostedEditor {
       return false;
     }
     this.hostFinishActiveEdits();
-    this.applyCopyToolEntryIntent(entry.intent, entry.attachSource, entry.previewPoint);
+    this.applyCopyToolEntryIntent(entry.intent, entry.attachSource, entry.previewPoint, "paste");
     return true;
   }
 
-  private hasHierarchyCopyObjects(components: ComponentInstance[]) {
-    if (!components.some(component => component.type === "sheetPort" || component.type === "sheetBlock")) return false;
-    this.setStatus(t("hierarchy.copyUnsupported", "Place sheet instances from the Hierarchy library and create ports with the Pin tool."));
+  private canCopyObjects(components: readonly ComponentInstance[], source: "sheet" | "clipboard" = "sheet") {
+    if (components.some(component => component.type === "sheetPort" || (source === "clipboard" && component.type === "sheetBlock"))) {
+      this.setStatus(t("hierarchy.copyUnsupported", "Place sheet instances from the Hierarchy library and create ports with the Pin tool."));
+      return false;
+    }
     return true;
   }
 
   hostFinishActiveEdits() {
-    const editingNoteId = this.noteInteractionController.editingNoteId;
-    if (editingNoteId) this.finishNoteEditing(editingNoteId);
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.propertyInteractions.flush();
   }
 
   hostHasActiveEdit() {
     const focus = this.host.ownerDocument.activeElement;
     return this.transientToolSession.mode !== "select" || !!this.libraryShapeDraw || !!this.hierarchyPlacement ||
-      this.noteInteractionController.hasActiveEdit() || this.shapeResizeSession.isActive || !!this.wireSegmentMove ||
+      !!this.noteDraft || this.shapeResizeSession.isActive || !!this.wireSegmentMove ||
       (isEditableTarget(focus, this.options.shellEl) && !focus?.closest("[data-schematic-agent-dialog]"));
   }
 
@@ -4014,6 +4076,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.prepareAnalysisNetPick();
   }
 
+  hostRefreshToolCursor() {
+    if (!this.destroyed) this.syncToolCursor();
+  }
+
   hostFocusCanvas() {
     this.focusCanvas();
   }
@@ -4030,42 +4096,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     return this.prepareSelectionJsonText();
   }
 
-  private cacheCopyMarkdownPreviewContent() {
-    const generation = ++this.copyMarkdownPreviewGeneration;
-    const notesByMarkdown = new Map<string, SchematicNote>();
-    this.copyController.sourceNotes.forEach((note) => {
-      if (
-        note.format === "markdown"
-        && !this.copyMarkdownPreviewContent.has(note.text)
-        && !notesByMarkdown.has(note.text)
-      ) {
-        notesByMarkdown.set(note.text, note);
-      }
-    });
-    const notes = Array.from(notesByMarkdown.values());
-    if (notes.length === 0) return;
-
-    void Promise.all(notes.map(async (note) => {
-      const existing = this.noteLayer.cloneRenderedMarkdownByText(note.text);
-      if (existing) return [note.text, existing] as const;
-      const liveContent = this.noteLayer.getNoteElement(note.id)
-        ? await this.noteLayer.waitForRenderedNoteContent(note).catch(() => null)
-        : null;
-      const content = liveContent ?? await this.noteLayer.renderDetachedMarkdown(note.text);
-      return [note.text, content] as const;
-    })).then((entries) => {
-      if (generation !== this.copyMarkdownPreviewGeneration) return;
-      let changed = false;
-      entries.forEach(([markdown, content]) => {
-        if (!content || !this.copyController.sourceNotes.some((note) => note.format === "markdown" && note.text === markdown)) return;
-        this.copyMarkdownPreviewContent.set(markdown, content);
-        changed = true;
-      });
-      if (changed && this.transientToolSession.mode === "copy") {
-        this.updateCopyPreview(this.lastPointerPoint ?? this.copyController.anchor);
-      }
-    });
-  }
 
   private rebuildCounters() {
     this.componentRefs.rebuild(this.document);
@@ -4517,8 +4547,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private clearCopyState() {
     this.copyController.cancel();
-    this.copyMarkdownPreviewGeneration += 1;
-    this.copyMarkdownPreviewContent.clear();
+    this.copyAfterDrop = "select";
     this.copyPreviewNeedsPointer = false;
     this.removeCopyPreview();
   }
@@ -4556,20 +4585,24 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private clearNotePointerInteractions(policy: TransientInteractionCleanupPolicy) {
-    const cleanup = this.noteInteractionController.clearPointerInteractions(policy);
-    if (cleanup.dragNoteIds.length > 0) {
+    const noteIds = this.noteInteractionController.clearPointerInteractions(policy);
+    if (noteIds.length > 0) {
       this.removeNoteDragListeners();
       if (policy === "rollback") {
-        cleanup.dragNoteIds.forEach((noteId) => {
+        noteIds.forEach((noteId) => {
           const note = this.noteById(noteId);
           if (note) this.noteLayer.positionNoteElement(note, this.noteLayerState());
         });
       }
     }
-    if (cleanup.widthNoteId) this.removeNoteWidthDragListeners();
   }
 
   private clearCellGeometryInteraction(policy: TransientInteractionCleanupPolicy) {
+    if (this.pointerMove) {
+      this.pointerMove = null;
+      this.removeCopyPreview();
+      this.showRoutingSnap(null);
+    }
     if (policy === "discard") {
       this.cellGeometryInteractionCoordinator.invalidateAgainstDocument();
       return;
@@ -4587,11 +4620,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.host.ownerWindow.removeEventListener("pointerup", this.handleGlobalNotePointerUp, true);
   }
 
-  private removeNoteWidthDragListeners() {
-    this.host.ownerWindow.removeEventListener("pointermove", this.handleGlobalNoteWidthPointerMove, true);
-    this.host.ownerWindow.removeEventListener("pointerup", this.handleGlobalNoteWidthPointerUp, true);
-  }
-
   private commitNotePropertyResult(result: SchematicDocumentOpResult | null) {
     if (!result?.changed) return false;
     this.commitChangedNoteDocument(result);
@@ -4603,9 +4631,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.notePropertyBatchSession.invalidateAgainstDocument(
       Array.from(this.selectionSession.selectedNoteIds)
     );
-    const invalidation = this.noteInteractionController.invalidateAgainstDocument();
-    if (invalidation.drag) this.removeNoteDragListeners();
-    if (invalidation.width) this.removeNoteWidthDragListeners();
+    if (this.noteInteractionController.invalidateAgainstDocument()) this.removeNoteDragListeners();
     this.noteLayer.render(this.displayedNotesInStackOrder(), this.noteLayerState());
   }
 
@@ -4627,15 +4653,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     );
     if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
       this.updateCopyPreview(this.lastPointerPoint ?? this.copyController.anchor);
+    } else if (this.pointerMove) {
+      this.updateMovePreview(this.lastPointerPoint);
     }
   }
 
   private noteLayerState() {
     return {
       selectedIds: this.selectionSession.selectedNoteIds,
-      editingNoteId: this.noteInteractionController.editingNoteId,
       zoom: this.zoom,
-      noteFontSizePx,
       worldToScreenPoint: (point: Point) => this.worldToScreenPoint(point)
     };
   }
@@ -4644,22 +4670,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     const element = this.noteElementFromEvent(event);
     if (!element) return;
     const noteId = element.dataset.noteId;
-    if (!noteId) return;
-    const widthHandle = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-note-width-handle]");
-    if (widthHandle && element.contains(widthHandle)) {
-      this.beginNoteWidthDrag(event, noteId);
-      return;
-    }
+    if (!noteId || this.noteDraft) return;
     event.stopPropagation();
     if (this.isDeleteToolMode()) {
       this.handleDeleteModeNotePointerDown(event, noteId);
       return;
     }
-    if (this.transientToolSession.mode === "copy") {
-      this.handleCopyModeNotePointerDown(event, noteId);
+    const mode = this.transientToolSession.mode;
+    if (mode === "copy" || isMoveOrRotateMode(mode)) {
+      event.preventDefault();
+      this.focusCanvas();
       return;
     }
-    if (this.noteInteractionController.isEditing(noteId)) return;
     event.preventDefault();
     this.focusCanvas();
     const note = this.noteById(noteId);
@@ -4677,16 +4699,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private handleDeleteModeNotePointerDown(event: PointerEvent, noteId: string) {
     event.preventDefault();
     this.applyDeleteToolToIds([], [noteId]);
-  }
-
-  private handleCopyModeNotePointerDown(event: PointerEvent, noteId: string) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    this.focusCanvas();
-    const point = this.pointFromClientEvent(event);
-    if (this.copyController.awaitingReference) this.setCopyReference(point);
-    else if (this.copyController.hasSource) this.placeCopyAt(point);
-    else this.beginCopyFromTargets([], [noteId], point);
   }
 
   private beginNoteDrag(event: PointerEvent, element: HTMLElement, noteId: string) {
@@ -4716,98 +4728,31 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setDeleteHover([], noteId ? [noteId] : []);
   }
 
-  private beginNoteWidthDrag(event: PointerEvent, noteId: string) {
-    const note = this.noteById(noteId);
-    if (!note || note.format !== "markdown" || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.setNoteSelection([noteId]);
-    if (!this.noteInteractionController.beginWidthDrag({
-      noteId,
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY
-    })) return;
-    this.host.ownerWindow.addEventListener("pointermove", this.handleGlobalNoteWidthPointerMove, true);
-    this.host.ownerWindow.addEventListener("pointerup", this.handleGlobalNoteWidthPointerUp, true);
-  }
-
   private handleNoteClick(event: MouseEvent) {
-    const element = this.noteElementFromEvent(event);
+    const mode = this.transientToolSession.mode;
+    const placing = (isMoveOrRotateMode(mode) && this.pointerMove) || (mode === "copy" && this.copyController.hasSource);
+    const element = placing ? this.noteLayer.noteElementFromEvent(event) : this.noteElementFromEvent(event);
     if (!element) return;
     event.stopPropagation();
-    if (this.transientToolSession.mode === "copy" || this.isDeleteToolMode()) return;
+    if (this.isDeleteToolMode()) return;
     const noteId = element.dataset.noteId;
-    if (!noteId || this.noteInteractionController.isEditing(noteId) || this.noteInteractionController.consumeMoved(noteId)) return;
-    this.setNoteSelectionFromEvent(noteId, event);
-  }
-
-  private handleNoteDoubleClick(event: MouseEvent) {
-    const element = this.noteElementFromEvent(event);
-    if (!element) return;
-    event.stopPropagation();
-    if (this.transientToolSession.mode === "copy" || this.isDeleteToolMode()) return;
-    const noteId = element.dataset.noteId;
-    if (noteId && this.noteInteractionController.isEditing(noteId)) return;
-    event.preventDefault();
-    if (noteId) this.beginNoteEditing(noteId);
-  }
-
-  private handleNoteBlur(event: FocusEvent) {
-    const element = this.noteElementFromEvent(event);
-    const noteId = element?.dataset.noteId;
-    const nextTarget = event.relatedTarget;
-    const notePropertySelector = "[data-property-note-form]";
-    if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) {
-      if (element && nextTarget instanceof this.host.ownerWindow.Node && element.contains(nextTarget)) return;
-      if (nextTarget instanceof this.host.ownerWindow.Element && nextTarget.closest(notePropertySelector)) return;
-      if (noteId) {
-        queueMicrotask(() => {
-          const currentElement = this.noteLayer.getNoteElement(noteId);
-          const activeElement = currentElement?.ownerDocument.activeElement;
-          if (currentElement && activeElement instanceof this.host.ownerWindow.Node && currentElement.contains(activeElement)) return;
-          if (activeElement instanceof this.host.ownerWindow.Element && activeElement.closest(notePropertySelector)) return;
-          if (this.noteInteractionController.isEditing(noteId)) this.finishNoteEditing(noteId);
-        });
-      }
+    if (!noteId) return;
+    if (isMoveOrRotateMode(mode)) {
+      if (event.button !== 0) return;
+      const point = this.pointFromClientEvent(event);
+      if (this.pointerMove) this.finishPointerMove(point);
+      else if (mode === "move") this.pickMoveTarget([], [noteId], point);
       return;
     }
-    if (element && nextTarget instanceof this.host.ownerWindow.Node && element.contains(nextTarget)) return;
-    if (
-      nextTarget instanceof this.host.ownerWindow.Element
-      && nextTarget.closest(notePropertySelector)
-    ) return;
-    if (noteId && this.noteInteractionController.isEditing(noteId)) {
-      this.finishNoteEditing(noteId);
+    if (mode === "copy") {
+      if (event.button !== 0) return;
+      const point = this.pointFromClientEvent(event);
+      if (this.copyController.hasSource) this.placeCopyAt(point);
+      else this.beginCopyFromTargets([], [noteId], point);
+      return;
     }
-  }
-
-  private handleNoteInput(event: Event) {
-    if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) return;
-    const element = this.noteElementFromEvent(event);
-    const noteId = element?.dataset.noteId;
-    if (!noteId || !this.noteInteractionController.isEditing(noteId)) return;
-    this.updateNoteFromElement(noteId);
-  }
-
-  private beginNoteEditing(noteId: string) {
-    this.setNoteSelection([noteId]);
-    if (!this.noteInteractionController.beginEdit(noteId)) return;
-    this.syncNoteSelectionStyles();
-    this.renderPropertyEditor();
-  }
-
-  private finishNoteEditing(noteId: string) {
-    this.flushScheduledNoteCommit();
-    const result = this.noteInteractionController.finishEdit(noteId);
-    if (!result) return;
-    this.commitNotePropertyResult(result);
-    this.syncNoteSelectionStyles();
-    this.renderPropertyEditor();
-  }
-
-  private updateNoteFromElement(noteId: string) {
-    if (this.noteInteractionController.readEditor(noteId)) this.scheduleNoteCommit();
+    if (this.noteInteractionController.consumeMoved(noteId)) return;
+    this.setNoteSelectionFromEvent(noteId, event);
   }
 
   private noteElementFromEvent(event: Event) {
@@ -4820,44 +4765,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     return (this.document.notes ?? []).find((note) => note.id === id);
   }
 
-  private updateMarkdownNoteText(noteId: string, markdown: string) {
-    if (this.noteInteractionController.acceptMarkdownChange(noteId, markdown)) {
-      this.scheduleNoteCommit();
-    }
-  }
-
-  private updateMarkdownNoteHeight(noteId: string, height: number) {
-    this.noteInteractionController.acceptMarkdownResize(noteId, height);
-  }
-
-  private scheduleNoteCommit() {
-    this.cancelScheduledNoteCommit();
-    this.noteCommitTimer = this.host.setTimeout(() => {
-      this.noteCommitTimer = null;
-      this.commitNotePropertyResult(this.noteInteractionController.checkpointEdit());
-    }, NOTE_COMMIT_DEBOUNCE_MS);
-  }
-
-  private flushScheduledNoteCommit() {
-    if (this.noteCommitTimer === null) return false;
-    this.cancelScheduledNoteCommit();
-    return this.commitNotePropertyResult(this.noteInteractionController.checkpointEdit());
-  }
-
-  private cancelScheduledNoteCommit() {
-    if (this.noteCommitTimer === null) return;
-    this.host.clearTimeout(this.noteCommitTimer);
-    this.noteCommitTimer = null;
-  }
-
   private beginNoteFontSizePropertyEdit() {
     this.beginSelectedNotePropertyBatch("font-size");
   }
 
   private finishNoteFontSizePropertyEdit() {
-    const result = this.notePropertyBatchSession.activeKind === "font-size"
-      ? this.notePropertyBatchSession.commit()
-      : this.noteInteractionController.finishFontSizePropertyEdit();
+    const result = this.notePropertyBatchSession.commit();
     this.commitNotePropertyResult(result);
     this.renderPropertyEditor();
   }
@@ -4869,52 +4782,27 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.renderPropertyEditor();
   }
 
-  private beginNoteWidthPropertyEdit() {
-    this.beginSelectedNotePropertyBatch("width");
-  }
-
-  private finishNoteWidthPropertyEdit() {
-    const result = this.notePropertyBatchSession.activeKind === "width"
-      ? this.notePropertyBatchSession.commit()
-      : this.noteInteractionController.finishWidthPropertyEdit();
-    this.commitNotePropertyResult(result);
-    this.renderPropertyEditor();
-  }
-
-  private cancelNoteWidthPropertyEdit() {
-    if (this.notePropertyBatchSession.activeKind === "width") {
-      this.notePropertyBatchSession.cancel();
-    }
-    this.renderPropertyEditor();
-  }
-
-  private setSelectedNoteWidth(value: string, options: { commit?: boolean } = { commit: true }) {
-    if (this.notePropertyBatchSession.activeKind !== "width") {
-      const started = this.beginSelectedNotePropertyBatch("width");
-      if (!started) {
-        if (options.commit) this.renderPropertyEditor();
-        return;
-      }
-    }
-    if (options.commit) {
-      this.commitNotePropertyResult(this.notePropertyBatchSession.commit(value));
-      this.renderPropertyEditor();
-      return;
-    }
-    this.notePropertyBatchSession.input(value);
-  }
-
-  private setSelectedNoteFormat(format: SchematicNoteFormat) {
+  private setSelectedNoteAnchor(anchor: SchematicNoteAnchor) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
-    const editingNoteId = this.noteInteractionController.editingNoteId;
-    if (editingNoteId && this.selectionSession.isNoteSelected(editingNoteId)) {
-      this.finishNoteEditing(editingNoteId);
-    }
-    this.propertyInteractions.run({ kind: "note-format", format });
-    if (editingNoteId && this.selectionSession.isNoteSelected(editingNoteId)) {
-      this.beginNoteEditing(editingNoteId);
-    }
+    const notes = this.selectionSession.project().notes.filter(note => (note.anchor ?? DEFAULT_NOTE_ANCHOR) !== anchor);
+    if (!notes.length) return;
+    for (const note of notes) note.anchor = anchor;
+    this.renderNotes();
+    this.renderPropertyEditor();
+    this.commitCurrentContent("note-anchor");
+    this.setStatus("Note anchor updated.");
+  }
+
+  private setSelectedNoteText(text: string) {
+    this.finishNoteFontSizePropertyEdit();
+    const notes = this.selectionSession.project().notes;
+    if (notes.length !== 1 || notes[0].text === text) return;
+    notes[0].text = text;
+    this.renderNotes();
+    this.renderPropertyEditor();
+    this.renderLayersPanel();
+    this.commitCurrentContent("note-text");
+    this.setStatus("Note updated.");
   }
 
   private setSelectedNoteFontSize(value: string, options: { commit?: boolean } = { commit: true }) {
@@ -4933,50 +4821,31 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.notePropertyBatchSession.input(value);
   }
 
-  private beginSelectedNotePropertyBatch(kind: "font-size" | "width") {
+  private beginSelectedNotePropertyBatch(kind: "font-size") {
     if (this.selectionSession.selectedIds.size !== 0) return false;
     const result = this.notePropertyBatchSession.begin(
       kind,
       Array.from(this.selectionSession.selectedNoteIds)
     );
     if (!result.ok) {
-      this.setStatus(
-        result.reason === "requires-markdown"
-          ? "Width is available only when every selected Note uses Markdown."
-          : "The selected Notes changed before the property edit began."
-      );
+      this.setStatus("The selected Notes changed before the property edit began.");
       return false;
     }
     return true;
   }
 
-  private projectNotePropertyBatch(
-    note: SchematicNote,
-    context: NotePropertyBatchProjectionContext
-  ) {
-    if (context.kind === "font-size") {
-      const fontSize = noteFontSizePx(note);
-      if (context.phase === "preview" && note.format !== "markdown") {
-        this.noteLayer.resizeNoteToText(note, note.text, fontSize);
-      }
-      this.noteLayer.setNoteFontSize(note, fontSize);
-      if (note.format === "markdown") this.noteLayer.refreshMarkdownLayout(note.id);
-      return;
-    }
-    this.noteLayer.applyNoteElementSize(note);
-    this.noteLayer.refreshMarkdownLayout(note.id);
+  private projectNotePropertyBatch(note: SchematicNote) {
+    this.noteLayer.refresh(note);
   }
 
   private setNoteSelectionFromEvent(id: string, event: MouseEvent | PointerEvent) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.selectionSession.selectNote(id, selectionGestureFromEvent(event));
     this.finishSelectionChange();
   }
 
   private setNoteSelection(ids: string[], updateStyles = true) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.selectionSession.setNotes(ids);
     if (updateStyles) {
       this.syncSelectionUi();
@@ -4987,7 +4856,6 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private setMixedSelection(ids: string[], noteIds: string[], updateStyles = true) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.clearDeleteHover();
     this.selectionSession.setMixed(ids, noteIds);
     if (updateStyles) {
@@ -5000,7 +4868,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private syncNoteSelectionStyles() {
     this.noteLayer.syncSelectionStyles(
       this.selectionSession.selectedNoteIds,
-      this.noteInteractionController.editingNoteId,
       this.deleteHoverState()
     );
   }
@@ -5114,10 +4981,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       hasActiveAnalysisPick: this.analysisController.hasActivePick(),
       selectionState: this.selectionSession.snapshot()
     });
-    this.applyFinishedSelectionBoxIntent(intent);
+    this.applyFinishedSelectionBoxIntent(intent, point);
   }
 
-  private applyFinishedSelectionBoxIntent(intent: FinishedSelectionBoxIntent) {
+  private applyFinishedSelectionBoxIntent(intent: FinishedSelectionBoxIntent, point: Point) {
     if (intent.kind === "noop") {
       return;
     }
@@ -5130,6 +4997,13 @@ export class SchematicEditor implements SchematicHostedEditor {
 
     if (intent.kind === "delete-targets") {
       this.applyDeleteToolToIds(intent.ids, intent.noteIds);
+      return;
+    }
+
+    if (intent.kind === "pick-tool-targets") {
+      if (intent.mode === "copy") this.beginCopyFromTargets(intent.ids, intent.noteIds, point);
+      else this.pickMoveTarget(intent.ids, intent.noteIds, point);
+      this.viewportController.suppressBlankClickOnce();
       return;
     }
 
@@ -5172,6 +5046,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncToolUi(resolution?: NetResolution) {
+    this.syncToolCursor();
     this.scheduleWireCrossings();
     const templateSelect = this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
     if (templateSelect) templateSelect.value = resolveSymbolTemplate(this.document.symbolTemplate).id;
@@ -5182,10 +5057,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     const process = this.options.shellEl.querySelector<HTMLSelectElement>("[data-netlist-process]");
     if (process) process.value = this.document.netlistProcess ?? DEFAULT_NETLIST_PROCESS;
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
-    this.options.paperEl.classList.toggle(
-      "is-coupling-pick-mode",
-      this.inductorInteractions.pendingSourceId !== null
-    );
     this.instanceSelector.update();
     const toolbarState = {
       mode: this.transientToolSession.mode,
@@ -5196,6 +5067,38 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.toolbarController?.sync(toolbarState);
     this.renderSelectionSummary(resolution);
     this.scheduleNetlistRefresh();
+  }
+
+  private syncToolCursor() {
+    const mode = this.transientToolSession.mode;
+    syncSchematicToolCursor(this.options.paperEl, {
+      mode,
+      moveBehavior: this.transientToolSession.moveBehavior,
+      browsingInstances: this.instanceBrowser.isOpen(),
+      placingNote: !!this.noteDraft,
+      hierarchyPlacement: this.hierarchyPlacement?.type,
+      precisionPick: !!this.libraryShapeDraw || (mode === "select" && this.analysisController.hasActivePick()) ||
+        this.inductorInteractions.pendingSourceId !== null || this.shapeResizeSession.isActive,
+      selectingBox: this.selectionBoxController.isActive(),
+      feedback: this.toolCursorFeedback?.cursor
+    });
+  }
+
+  private showToolCursorFeedback(cursor: ToolCursorFeedback) {
+    if (this.toolCursorFeedback) this.host.clearTimeout(this.toolCursorFeedback.timer);
+    const timer = this.host.setTimeout(() => {
+      this.toolCursorFeedback = undefined;
+      this.syncToolCursor();
+    }, 800);
+    this.toolCursorFeedback = { cursor, timer };
+    this.syncToolCursor();
+  }
+
+  private clearToolCursorFeedback() {
+    if (!this.toolCursorFeedback) return;
+    this.host.clearTimeout(this.toolCursorFeedback.timer);
+    this.toolCursorFeedback = undefined;
+    this.syncToolCursor();
   }
 
   private scheduleNetlistRefresh() {
@@ -5273,7 +5176,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       },
       activePlacementItem: this.placementToolController.activeItem,
       wire: { variant: this.wireToolController.variant, routePointCount: this.wireToolController.routePointCount() },
-      copy: { hasSource: this.copyController.hasSource, awaitingReference: this.copyController.awaitingReference },
+      copy: { hasSource: this.copyController.hasSource },
+      moveHasSource: this.pointerMove !== null,
       moveBehavior: this.transientToolSession.moveBehavior
     });
   }
@@ -5293,7 +5197,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private focusCanvas() {
     this.options.paperEl.focus({ preventScroll: true });
     this.requestOwnedFrame(() => {
-      if (!this.noteInteractionController.hasActiveEdit()) {
+      {
         this.options.paperEl.focus({ preventScroll: true });
       }
     });
@@ -5396,17 +5300,6 @@ function isEditableTarget(target: EventTarget | null, shellEl: HTMLElement) {
   return !!editable && shellEl.contains(editable);
 }
 
-function isUnmodifiedPrintableKey(event: KeyboardEvent) {
-  if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return false;
-  if (
-    event.key === " "
-    && isElementLike(event.target)
-    && event.target.closest("button, [role='button']")
-  ) {
-    return false;
-  }
-  return true;
-}
 
 function isElementLike(target: EventTarget | null): target is Element {
   return !!target && typeof (target as Element).closest === "function";

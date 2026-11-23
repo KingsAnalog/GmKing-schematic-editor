@@ -15,6 +15,7 @@ export type TransientToolTransitionReason =
 export type TransientInteractionCleanupPolicy = "rollback" | "discard";
 
 export interface SchematicTransientToolSessionHooks {
+  clearToolCursorFeedback?(): void;
   clearWireSegmentMove(): void;
   resetWireTool(): void;
   clearActiveNetPick(): void;
@@ -32,6 +33,7 @@ export interface SchematicTransientToolSessionHooks {
   updatePlacementPreview(point: Point | null): void;
   updateWirePreview(point: Point | null): void;
   updateCopyPreview(point: Point | null): void;
+  updateMovePreview?(point: Point | null): void;
   updateLabelPreview(point: Point | null): void;
 }
 
@@ -66,6 +68,7 @@ export class SchematicTransientToolSessionCoordinator {
 
   transition(mode: ToolMode, reason: TransientToolTransitionReason) {
     const previousMode = this.modeState;
+    this.hooks.clearToolCursorFeedback?.();
     this.hooks.clearShapeDraft?.();
     this.modeState = mode;
     if (
@@ -80,6 +83,7 @@ export class SchematicTransientToolSessionCoordinator {
   }
 
   prepareHistoryRestore() {
+    this.hooks.clearToolCursorFeedback?.();
     this.hooks.clearShapeDraft?.();
     this.hooks.clearWireSegmentMove();
     this.hooks.resetWireTool();
@@ -95,6 +99,7 @@ export class SchematicTransientToolSessionCoordinator {
   }
 
   prepareDocumentSwitch(preserveCopyState: boolean) {
+    this.hooks.clearToolCursorFeedback?.();
     this.hooks.clearShapeDraft?.();
     this.modeState = "select";
     this.moveBehaviorState = "stretch";
@@ -147,6 +152,10 @@ export class SchematicTransientToolSessionCoordinator {
         return;
       case "copy":
         this.hooks.updateCopyPreview(copyPoint);
+        return;
+      case "move":
+      case "rotate":
+        this.hooks.updateMovePreview?.(point);
         return;
       case "label":
         this.hooks.updateLabelPreview(point);

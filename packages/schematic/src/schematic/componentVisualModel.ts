@@ -1,4 +1,4 @@
-import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { isLibraryShapeType, libraryShapeStyle } from "./libraryShapeStyleModel";
 import { resolveComponentDef } from "./catalog";
 import { componentScale } from "./componentScaleModel";
 import { scaleComponentAppearance } from "./componentScaleVisualModel";
@@ -29,6 +29,13 @@ export function resolveComponentVisualModel(instance: ComponentInstance, options
   if (hierarchy) {
     base.path = hierarchy.path;
     base.symbolFill = hierarchy.fill === "currentColor" ? base.color : "none";
+    if (instance.type === "sheetBlock") {
+      const fill = libraryShapeStyle(instance);
+      if (fill.fillEnabled) {
+        base.symbolFill = fill.fillColor;
+        base.symbolFillOpacity = fill.fillOpacity;
+      }
+    }
     base.symbolContentLayout = hierarchy.content;
     base.showSymbolLabel = false;
     if (instance.type === "sheetPort") base.showRefLabel = false;

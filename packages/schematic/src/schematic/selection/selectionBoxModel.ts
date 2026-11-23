@@ -31,6 +31,7 @@ export type FinishedSelectionBoxIntent =
   | { kind: "noop" }
   | { kind: "clear-selection" }
   | { kind: "delete-targets"; ids: string[]; noteIds: string[] }
+  | { kind: "pick-tool-targets"; mode: "copy" | "move"; ids: string[]; noteIds: string[] }
   | { kind: "replace-selection"; selection: SchematicSelectionState }
   | { kind: "merge-selection"; selection: SchematicSelectionState };
 
@@ -108,6 +109,10 @@ export function projectFinishedSelectionBox(input: FinishedSelectionBoxProjectio
   const { ids, noteIds } = selectionBox;
   if (input.mode === "delete" || input.mode === "temp-delete") {
     return { kind: "delete-targets", ids, noteIds };
+  }
+  if (input.mode === "copy" || input.mode === "move") {
+    if (ids.length === 0 && noteIds.length === 0) return { kind: "noop" };
+    return { kind: "pick-tool-targets", mode: input.mode, ids, noteIds };
   }
 
   if (input.additive) {

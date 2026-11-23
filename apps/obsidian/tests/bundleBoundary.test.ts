@@ -11,7 +11,10 @@ describe("Obsidian bundle boundary", () => {
     const result = await buildPlugin({ write: false, production: true });
     if (!result.metafile) throw new Error("Obsidian build did not return a metafile.");
     const inputs = Object.keys(result.metafile.inputs).map((input) => input.replace(/\\/g, "/"));
-    inputs.forEach((input) => expect(input, input).not.toMatch(BANNED_INPUT));
+    inputs.forEach((input) => {
+      // Notes call the host's MathJax through this bridge, without bundling the MathJax engine.
+      if (!input.endsWith("/dist/shared/mathjax.js")) expect(input, input).not.toMatch(BANNED_INPUT);
+    });
     inputs.forEach((input) => {
       expect(input, input).not.toMatch(/node_modules\/(?:@codemirror|@lezer)\//);
       expect(input, input).not.toMatch(/node_modules\/obsidian\//);
@@ -52,7 +55,8 @@ describe("Obsidian bundle boundary", () => {
     const css = result.outputFiles?.find((output) => output.path.endsWith(".css"))?.text;
     expect(css).toBeDefined();
     expect(css).toContain(".schematic-editor-root .schematic-paper.is-delete-mode");
-    expect(css).toContain(".schematic-editor-root .schematic-note-raw-markdown-content");
+    expect(css).toContain(".schematic-editor-root .schematic-note-dialog");
+    expect(css).toContain(".schematic-editor-root .schematic-note-anchor");
     expect(css).toContain(".schematic-editor-root .instance-query-overlay");
     expect(css).toContain(".schematic-editor-root .property-color-control");
     expect(css).toContain(".schematic-editor-root .property-row input:not([type=checkbox])");

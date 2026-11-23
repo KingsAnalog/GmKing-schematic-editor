@@ -1,14 +1,11 @@
-import { DEFAULT_NOTE_TEXT_COLOR, noteTextColor } from "./noteAppearance";
+import { DEFAULT_NOTE_TEXT_COLOR, noteFillStyle, noteTextColor } from "./noteAppearance";
+import { normalizeLibraryShapeFillOpacity } from "../libraryShapeStyleModel";
 import {
-  MAX_MARKDOWN_NOTE_WIDTH,
   MAX_NOTE_FONT_SIZE_PX,
-  MIN_MARKDOWN_NOTE_WIDTH,
   MIN_NOTE_FONT_SIZE_PX,
-  normalizeMarkdownNoteWidth,
-  noteFontSizePx,
-  noteWidthPx
+  noteFontSizePx
 } from "./noteSizing";
-import type { SchematicNote, SchematicNoteFormat } from "../types";
+import type { SchematicNote } from "../types";
 import { clamp } from "../uiUtils";
 import { normalizeHexColor } from "../../shared/color";
 
@@ -28,20 +25,15 @@ export interface NoteFontSizePropertySnapshot {
   height?: number;
 }
 
-export interface NoteWidthPropertySnapshot {
-  noteId: string;
-  width: number;
-  height?: number;
-}
-
 export function normalizeNoteBackgroundColor(value: string): string | null {
   return normalizeHexColor(value);
 }
 
 export function applyNoteBackgroundColor(note: SchematicNote, value: string | null): NoteBackgroundColorResult {
   if (value === null) {
-    if (note.backgroundColor === null) return { status: "unchanged", color: null };
+    if (note.backgroundColor === null && !noteFillStyle(note).fillEnabled) return { status: "unchanged", color: null };
     note.backgroundColor = null;
+    delete note.backgroundEnabled;
     return { status: "changed", color: null };
   }
   const color = normalizeNoteBackgroundColor(value);
@@ -49,6 +41,21 @@ export function applyNoteBackgroundColor(note: SchematicNote, value: string | nu
   if (note.backgroundColor === color) return { status: "unchanged", color };
   note.backgroundColor = color;
   return { status: "changed", color };
+}
+
+export function applyNoteFillEnabled(note: SchematicNote, enabled: boolean) {
+  if (typeof enabled !== "boolean") return { status: "invalid" };
+  if (noteFillStyle(note).fillEnabled === enabled) return { status: "unchanged" };
+  note.backgroundEnabled = enabled;
+  return { status: "changed" };
+}
+
+export function applyNoteFillOpacity(note: SchematicNote, value: string | number) {
+  const opacity = normalizeLibraryShapeFillOpacity(value);
+  if (opacity === null) return { status: "invalid" };
+  if (noteFillStyle(note).fillOpacity === opacity) return { status: "unchanged" };
+  note.backgroundOpacity = opacity;
+  return { status: "changed" };
 }
 
 export function normalizeNoteFontSizeInput(value: string): number | null {
@@ -75,39 +82,6 @@ export function applyNoteFontSize(note: SchematicNote, nextSize: number): NoteFo
   note.fontSizePx = nextSize;
   return { status: "changed", nextSize };
 }
-
-export function normalizeNoteWidthInput(value: string): number | null {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  return normalizeMarkdownNoteWidth(numeric);
-}
-
-export function applyNoteWidth(note: SchematicNote, nextWidth: number): NoteFontSizeInputResult {
-  const normalized = normalizeMarkdownNoteWidth(nextWidth);
-  if (noteWidthPx(note) === normalized) return { status: "unchanged", nextSize: normalized };
-  note.width = normalized;
-  return { status: "changed", nextSize: normalized };
-}
-
-export function createNoteWidthSnapshot(note: SchematicNote): NoteWidthPropertySnapshot {
-  return { noteId: note.id, width: note.width, height: note.height };
-}
-
-export function noteWidthSnapshotChanged(snapshot: NoteWidthPropertySnapshot, note: SchematicNote) {
-  return snapshot.width !== note.width || snapshot.height !== note.height;
-}
-
-export function applyNoteFormat(note: SchematicNote, format: SchematicNoteFormat) {
-  if (note.format === format) return false;
-  note.format = format;
-  if (format === "markdown") {
-    note.width = note.width < MIN_MARKDOWN_NOTE_WIDTH ? 320 : normalizeMarkdownNoteWidth(note.width);
-  }
-  return true;
-}
-
-export const NOTE_WIDTH_INPUT_MIN = MIN_MARKDOWN_NOTE_WIDTH;
-export const NOTE_WIDTH_INPUT_MAX = MAX_MARKDOWN_NOTE_WIDTH;
 
 export function applyNoteTextColor(note: SchematicNote, value: string | null): NoteBackgroundColorResult {
   const color = value === null ? DEFAULT_NOTE_TEXT_COLOR : normalizeHexColor(value);

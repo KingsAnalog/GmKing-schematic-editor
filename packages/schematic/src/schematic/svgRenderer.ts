@@ -1,17 +1,11 @@
-import { noteBackgroundColor, noteTextColor } from "./notes/noteAppearance";
-import { noteRotation } from "./notes/noteGeometry";
+import { noteFillStyle, noteTextColor } from "./notes/noteAppearance";
+import { noteAnchorOffset, noteRotation } from "./notes/noteGeometry";
 import { junctionId } from "./junctionIdentity";
 import { renderComponentSvg } from "./componentSvgRenderer";
 import { componentExportBounds } from "./componentExportBounds";
 import type { SymbolTemplateContext } from "./symbolTemplateModel";
 import { netLabelPosition, NET_LABEL_FONT_SIZE, NET_LABEL_HEIGHT } from "./netLabelModel";
-import {
-  DEFAULT_NOTE_BACKGROUND_OPACITY,
-  noteFontSizePx, noteWidthPx, noteHeightPx, PLAIN_NOTE_LINE_HEIGHT,
-  NOTE_HORIZONTAL_PADDING,
-  NOTE_LINE_HEIGHT,
-  NOTE_VERTICAL_PADDING
-} from "./notes/noteSizing";
+import { noteFontSizePx, noteWidthPx, noteHeightPx, NOTE_HORIZONTAL_PADDING, type NoteGraphic } from "./notes/noteSizing";
 import type { NetLabelStatus } from "./netResolution";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { escapeAttribute, escapeHtml } from "./uiUtils";
@@ -47,11 +41,6 @@ import { svgIdFragment } from "./svgId";
 const DEFAULT_PADDING = 24;
 const JUNCTION_RADIUS = 2.5 * SYMBOL_STROKE_WIDTH;
 
-export interface SchematicSvgTextStyle {
-  fontWeight?: number;
-  fontStyle?: "italic";
-}
-
 export interface SchematicSvgScene extends SymbolTemplateContext {
   display?: SchematicDisplaySettings;
   crossingJunctions?: readonly Point[];
@@ -69,16 +58,13 @@ export interface SchematicSvgScene extends SymbolTemplateContext {
   notes: readonly SchematicNote[];
   /** Optional bottom-to-top object order shared with the Layers panel. */
   layerObjectOrder?: readonly string[];
-  renderedNoteHtml?: Readonly<Record<string, string>>;
-  renderedNoteText?: Readonly<Record<string, string>>;
-  renderedNoteTextStyles?: Readonly<Record<string, SchematicSvgTextStyle>>;
+  noteGraphics?: Readonly<Record<string, NoteGraphic>>;
 }
 
 export interface SchematicSvgRenderOptions {
   namespace: string;
   padding?: number;
   presentationMode?: boolean;
-  portableNotes?: boolean;
   showGrid?: boolean;
   backgroundColor?: string | null;
 }
@@ -121,7 +107,7 @@ function sceneBounds(scene: SchematicSvgScene, options: Pick<SchematicSvgRenderO
     height: JUNCTION_RADIUS * 2
   }));
   scene.netLabels.forEach((label) => rects.push(netLabelVisualBounds(label)));
-  scene.notes.forEach((note) => rects.push(noteVisualBounds(note)));
+  scene.notes.forEach((note) => rects.push(noteVisualBounds(noteFrame(scene, note))));
   return unionRects(rects);
 }
 
@@ -169,7 +155,7 @@ export function renderSchematicSvgScene(
     })),
     ...scene.notes.map((note) => ({
       id: note.id,
-      svg: renderNote(scene, note, namespace, !!options.portableNotes)
+      svg: renderNote(scene, note)
     }))
   ];
   const order = new Map(scene.layerObjectOrder?.map((id, index) => [id, index]));
@@ -273,62 +259,27 @@ function renderNetLabel(label: NetLabel, status?: NetLabelStatus, documentFont?:
   return `<text data-net-label-id="${escapeAttribute(label.id)}" x="${number(position.x)}" y="${number(position.y + NET_LABEL_HEIGHT / 2)}" fill="${color}" font-family="${escapeAttribute(schematicTextFontStack(label.fontFamily, documentFont))}" font-size="${NET_LABEL_FONT_SIZE}" dominant-baseline="middle"${conflict ? ' text-decoration="underline"' : ""}${opacityAttr(inactive ? 0.42 : 1)}>${escapeHtml(label.name)}</text>`;
 }
 
-function renderNote(
-  scene: SchematicSvgScene,
-  note: SchematicNote,
-  namespace: string,
-  portable: boolean
-) {
-  const box = { x: note.x, y: note.y, width: noteWidthPx(note), height: noteHeightPx(note) };
-  const fontSize = noteFontSizePx(note);
-  const fontFamily = schematicTextFontStack(note.fontFamily, scene.display?.textFont);
-  const fill = noteBackgroundColor(note) ?? "none";
-  const fillOpacity = note.format === "markdown" && note.backgroundColor === undefined ? DEFAULT_NOTE_BACKGROUND_OPACITY : undefined;
-  const text = scene.renderedNoteText?.[note.id] ?? note.text;
-  const native = renderNativeNoteText(
-    note,
-    box,
-    text,
-    fontSize,
-    fontFamily,
-    scene.renderedNoteTextStyles?.[note.id],
-    namespace
-  );
-  const markdown = note.format === "markdown";
-  const html = markdown ? scene.renderedNoteHtml?.[note.id] : escapeHtml(note.text || " ");
-  const whiteSpace = markdown ? "normal" : "pre";
-  const overflowWrap = markdown ? "anywhere" : "normal";
-  const lineHeight = markdown ? NOTE_LINE_HEIGHT : PLAIN_NOTE_LINE_HEIGHT;
-  const border = markdown ? 1 : 0;
-  const horizontalPadding = NOTE_HORIZONTAL_PADDING + (markdown ? 0 : 1);
-  const foreignObject = !portable && html
-    ? `<foreignObject${markdown ? ' requiredExtensions="http://www.w3.org/1999/xhtml"' : ""} x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}"><div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;border:${border}px solid transparent;padding:${number(NOTE_VERTICAL_PADDING)}px ${horizontalPadding}px;overflow:hidden;color:${escapeAttribute(noteTextColor(note))};font-family:${escapeAttribute(fontFamily)};font-size:${number(fontSize)}px;line-height:${lineHeight};white-space:${whiteSpace};overflow-wrap:${overflowWrap}">${html}</div></foreignObject>`
-    : "";
-  const content = foreignObject
-    ? markdown ? `<switch>${foreignObject}${native}</switch>` : foreignObject
-    : native;
-  const transform = noteRotation(note) ? ` transform="rotate(${noteRotation(note)} ${number(note.x)} ${number(note.y)})"` : "";
-  return `<g data-note-id="${escapeAttribute(note.id)}"${transform}><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" fill="${escapeAttribute(fill)}"${fillOpacity === undefined ? "" : ` fill-opacity="${number(fillOpacity)}"`} stroke="none" />${content}</g>`;
+function noteFrame(scene: SchematicSvgScene, note: SchematicNote) {
+  const graphic = scene.noteGraphics?.[note.id];
+  return graphic ? { ...note, width: graphic.width, height: graphic.height } : note;
 }
 
-function renderNativeNoteText(
-  note: SchematicNote,
-  box: Rect,
-  text: string,
-  fontSize: number,
-  fontFamily: string,
-  style: SchematicSvgTextStyle | undefined,
-  namespace: string
-) {
-  const plain = note.format === "plain";
-  const lineHeight = fontSize * (plain ? PLAIN_NOTE_LINE_HEIGHT : NOTE_LINE_HEIGHT);
-  const maxLines = Math.max(1, Math.floor(Math.max(1, box.height - NOTE_VERTICAL_PADDING * 2) / lineHeight));
-  const lines = (text || " ").replace(/\r\n?/g, "\n").split("\n").slice(0, maxLines);
-  const x = box.x + NOTE_HORIZONTAL_PADDING + (plain ? 1 : 0);
-  const y = box.y + NOTE_VERTICAL_PADDING + fontSize * (plain ? 0.85 : 1);
-  const tspans = lines.map((line, index) => `<tspan x="${number(x)}"${index === 0 ? "" : ` dy="${number(lineHeight)}"`}>${escapeHtml(line || " ")}</tspan>`).join("");
-  const clipId = `${namespace}-note-text-clip-${svgIdFragment(note.id)}`;
-  return `<g data-markdown-note-fallback="${escapeAttribute(note.id)}" clip-path="url(#${clipId})"><defs><clipPath id="${escapeAttribute(clipId)}"><rect x="${number(box.x)}" y="${number(box.y)}" width="${number(box.width)}" height="${number(box.height)}" /></clipPath></defs><text x="${number(x)}" y="${number(y)}" fill="${escapeAttribute(noteTextColor(note))}" font-family="${escapeAttribute(fontFamily)}" font-size="${number(fontSize)}"${style?.fontWeight ? ` font-weight="${style.fontWeight}"` : ""}${style?.fontStyle ? ` font-style="${style.fontStyle}"` : ""} xml:space="preserve">${tspans}</text></g>`;
+function renderNote(scene: SchematicSvgScene, source: SchematicNote) {
+  const note = noteFrame(scene, source);
+  const width = noteWidthPx(note), height = noteHeightPx(note);
+  const offset = noteAnchorOffset(note);
+  const color = escapeAttribute(noteTextColor(note));
+  const fill = noteFillStyle(note);
+  const colorFill = fill.fillEnabled ? fill.fillColor : "none";
+  const fillOpacity = fill.fillEnabled && fill.fillOpacity !== 1 ? ` fill-opacity="${number(fill.fillOpacity)}"` : "";
+  const size = noteFontSizePx(note);
+  const font = escapeAttribute(schematicTextFontStack(note.fontFamily, scene.display?.textFont));
+  const x = NOTE_HORIZONTAL_PADDING + 1;
+  const fallback = () => note.text.replace(/\r\n?/g, "\n").split("\n").map((line, index) =>
+    `<text x="${x}" y="${number(size * (0.85 + index * 1.1))}" fill="currentColor" font-family="${font}" font-size="${size}" xml:space="preserve">${escapeHtml(line)}</text>`
+  ).join("");
+  const text = scene.noteGraphics?.[note.id]?.markup ?? fallback();
+  return `<g data-note-id="${escapeAttribute(note.id)}" color="${color}" transform="translate(${number(note.x)} ${number(note.y)}) rotate(${noteRotation(note)}) translate(${number(-offset.x)} ${number(-offset.y)})"><rect width="${number(width)}" height="${number(height)}" fill="${colorFill}"${fillOpacity} />${text}</g>`;
 }
 
 function opacityAttr(opacity: number) {

@@ -16,7 +16,7 @@ const validSchematicJson = JSON.stringify({
       x: 20,
       y: 40,
       width: 160,
-      format: "plain",
+      anchor: "upperLeft",
       text: "clipboard"
     }]
   }))
@@ -73,7 +73,7 @@ describe("readSchematicDocumentFromClipboard", () => {
         x: 20,
         y: 40,
         width: 160,
-        format: "plain",
+        anchor: "upperLeft",
         text: "clipboard"
       }],
       junctions: []

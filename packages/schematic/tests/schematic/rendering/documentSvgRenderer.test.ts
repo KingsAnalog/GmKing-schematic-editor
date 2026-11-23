@@ -76,7 +76,6 @@ describe("pure schematic SVG rendering", () => {
     expect(rendered.svg).toContain('data-junction="40,0"');
     expect(rendered.svg).toContain('data-note-id="plain-note"');
     expect(rendered.svg).toContain('data-note-id="markdown-note"');
-    expect(rendered.svg).toContain('data-markdown-note-fallback="markdown-note"');
     expect(rendered.svg).toContain("# Heading");
     expect(rendered.topology.junctions).toContainEqual({ x: 40, y: 0 });
   });
@@ -92,13 +91,11 @@ describe("pure schematic SVG rendering", () => {
     }).svg;
 
     expect(first).toContain('id="viewer-a-grid"');
-    expect(first).toContain('id="viewer-a-note-text-clip-markdown-note"');
     expect(second).toContain('id="viewer-b-grid"');
-    expect(second).toContain('id="viewer-b-note-text-clip-markdown-note"');
     expect(second).not.toContain("viewer-a-");
   });
 
-  it("keeps unsafe namespaces and colliding sanitized Note IDs unique", () => {
+  it("keeps unsafe namespaces and distinct Note IDs scoped", () => {
     const content = decoratedContent();
     content.notes = [
       { ...content.notes[0], id: "a:b" },
@@ -113,11 +110,10 @@ describe("pure schematic SVG rendering", () => {
       showGrid: true
     }).svg;
     const firstIds = [...first.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
-    const firstClipIds = firstIds.filter((id) => id.includes("-note-text-clip-"));
 
     expect(new Set(firstIds).size).toBe(firstIds.length);
-    expect(firstClipIds).toHaveLength(2);
-    expect(new Set(firstClipIds).size).toBe(2);
+    expect(first).toContain('data-note-id="a:b"');
+    expect(first).toContain('data-note-id="a?b"');
     expect(first).not.toContain('id="viewer_a-grid"');
     expect(second).not.toContain('id="viewer_a-grid"');
     expect(firstIds.find((id) => id.endsWith("-grid"))).not.toBe(
@@ -159,7 +155,7 @@ describe("pure schematic SVG rendering", () => {
         { ...fixtureWire("south", [point, { x: 40, y: 40 }]), layerId: "layer-2" }
       ],
       netLabels: [{ id: "tag", layerId: "layer-2", name: "OUT", attachment: { wireId: "east", point } }],
-      notes: [{ id: "note", layerId: "layer-2", x: 80, y: 80, width: 120, format: "plain" as const, text: "Overlay note" }]
+      notes: [{ id: "note", layerId: "layer-2", x: 80, y: 80, width: 120, anchor: "upperLeft", text: "Overlay note" }]
     });
     applyNormalizedDocumentWires(document);
     const render = () => renderSchematicDocumentSvg(document, { namespace: "layers", presentationMode: false });
@@ -301,7 +297,7 @@ function decoratedContent(): SchematicContent {
       y: 120,
       width: 140,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "plain note"
     }, {
       id: "markdown-note",
@@ -309,7 +305,7 @@ function decoratedContent(): SchematicContent {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "# Heading"
     }]
   }, { joinAt: [{ x: 40, y: 0 }] });

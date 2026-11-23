@@ -229,7 +229,7 @@ describe("schematic Web host import boundary", () => {
     expect(destroy).toContain("this.junctionRenderCoordinator.cancelScheduledRefresh();");
     expect(destroy).toContain("this.notePropertyBatchSession.dispose();");
     expect(destroy).toContain("this.propertyInteractions.dispose();");
-    expect(destroy).toContain("this.noteInteractionController.dispose();");
+    expect(destroy).toContain("this.noteInteractionController.cancelDrag();");
     expect(destroy).not.toContain("this.analysisController.destroy();");
     expect(destroy).toContain("this.activeRenderRuntime.surface.destroy();");
     expect(destroy).toContain("this.noteLayer.destroy()");

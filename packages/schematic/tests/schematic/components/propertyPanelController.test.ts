@@ -300,18 +300,14 @@ function normalizePanelInput(input: any): SchematicPropertyPanelInput {
           : undefined
       }
     : undefined;
-  const noteFormat = input.note ? aggregate(input.note.format) : undefined;
-  const noteIsUniformMarkdown = noteFormat?.state === "uniform" && noteFormat.value === "markdown";
-  const note = input.note && noteFormat
-    ? {
-        backgroundColor: aggregate(input.note.backgroundColor),
-        fontSizePx: aggregate(input.note.fontSizePx),
-        format: noteFormat,
-        widthPx: noteIsUniformMarkdown && input.note.widthPx !== undefined
-          ? aggregate(input.note.widthPx)
-          : undefined
-      }
-    : undefined;
+  const note = input.note ? {
+    backgroundColor: aggregate(input.note.backgroundColor),
+    backgroundEnabled: aggregate(input.note.backgroundEnabled ?? (input.note.backgroundColor !== null)),
+    backgroundOpacity: aggregate(input.note.backgroundOpacity ?? 1),
+    fontSizePx: aggregate(input.note.fontSizePx),
+    anchor: aggregate(input.note.anchor ?? "lowerLeft"),
+    text: input.note.text
+  } : undefined;
   return {
     ...input,
     component,
@@ -482,22 +478,23 @@ function createPropertyPanelFixture(callbacks: ConstructorParameters<typeof Sche
   couplingBlueColorSwatch.dataset.couplingColorSwatch = "#005f9e";
   const couplingCreateButton = couplingForm.appendChild(element(document, "propertyCouplingCreate"));
   const noteForm = root.appendChild(element(document, "propertyNoteForm"));
-  const noteFormatRow = noteForm.appendChild(element(document, "propertyNoteFormatRow"));
-  const noteFormatSelect = noteFormatRow.appendChild(element(document, "propertyNoteFormat"));
-  const noteFormatSegmented = noteFormatRow.appendChild(element(document, "propertyNoteFormatSegmented"));
   const noteBackgroundRow = noteForm.appendChild(element(document, "propertyNoteBackgroundRow"));
   const noteBackgroundInput = noteBackgroundRow.appendChild(element(document, "propertyNoteBackground"));
+  noteBackgroundRow.appendChild(element(document, "propertyNoteFillEnabled"));
+  noteBackgroundRow.appendChild(element(document, "propertyNoteFillOpacity"));
   noteBackgroundInput.ariaLabel = "Note fill color";
-  const swatches = ["none", "#ffffe8", "#dcfce7", "#dbeafe"].map((color) => {
+  const swatches = ["default", "#ffffe8", "#dcfce7", "#dbeafe"].map((color) => {
     const swatch = element(document, "noteBackgroundSwatch");
     swatch.dataset.noteBackgroundSwatch = color;
     noteBackgroundRow.appendChild(swatch);
     return swatch;
   });
+  const noteAnchor = noteForm.appendChild(element(document, "propertyNoteAnchor"));
+  const noteTextRow = noteForm.appendChild(element(document, "propertyNoteTextRow"));
+  noteTextRow.appendChild(element(document, "propertyNoteText"));
+  noteForm.appendChild(element(document, "propertyNoteTextDivider"));
   const noteFontSizeRow = noteForm.appendChild(element(document, "propertyNoteFontSizeRow"));
   const noteFontSizeInput = noteFontSizeRow.appendChild(element(document, "propertyNoteFontSize"));
-  const noteWidthRow = noteForm.appendChild(element(document, "propertyNoteWidthRow"));
-  const noteWidthInput = noteWidthRow.appendChild(element(document, "propertyNoteWidth"));
   const rawController = new SchematicPropertyPanelController(root as unknown as Element, callbacks);
   const controller = {
     bind: () => rawController.bind(),
@@ -597,12 +594,8 @@ function createPropertyPanelFixture(callbacks: ConstructorParameters<typeof Sche
     noteBackgroundInput,
     swatches,
     noteFontSizeRow,
+    noteAnchor,
     noteFontSizeInput,
-    noteFormatRow,
-    noteFormatSelect,
-    noteFormatSegmented,
-    noteWidthRow,
-    noteWidthInput
   };
 }
 
@@ -882,10 +875,6 @@ describe("SchematicPropertyPanelController", () => {
       onNoteFontSizeInput: (value) => calls.push(`size-input:${value}`),
       onNoteFontSizeCommit: (value) => calls.push(`size-commit:${value}`),
       onNoteFontSizeCancel: () => calls.push("size-cancel"),
-      onNoteWidthEditStart: () => calls.push("width-start"),
-      onNoteWidthInput: (value) => calls.push(`width-input:${value}`),
-      onNoteWidthCommit: (value) => calls.push(`width-commit:${value}`),
-      onNoteWidthCancel: () => calls.push("width-cancel")
     });
     fixture.controller.bind();
     fixture.controller.sync({
@@ -893,35 +882,23 @@ describe("SchematicPropertyPanelController", () => {
       note: {
         backgroundColor: mixed(),
         fontSizePx: mixed(),
-        format: uniform<"markdown">("markdown"),
-        widthPx: mixed()
       }
     });
 
     expect(fixture.noteBackgroundInput.value).toBe("#111111");
     expect(fixture.noteFontSizeInput.placeholder).toBe("Multiple values");
-    expect(fixture.noteWidthInput.placeholder).toBe("Multiple values");
 
     fixture.root.dispatchEvent(new FakeEvent("focusin", fixture.noteFontSizeInput));
     fixture.noteFontSizeInput.value = "24";
     fixture.root.dispatchEvent(new FakeEvent("input", fixture.noteFontSizeInput));
     fixture.root.dispatchEvent(new FakeEvent("keydown", fixture.noteFontSizeInput, { key: "Escape" }));
     fixture.root.dispatchEvent(new FakeEvent("focusout", fixture.noteFontSizeInput));
-    fixture.root.dispatchEvent(new FakeEvent("focusin", fixture.noteWidthInput));
-    fixture.noteWidthInput.value = "420";
-    fixture.root.dispatchEvent(new FakeEvent("input", fixture.noteWidthInput));
-    fixture.root.dispatchEvent(new FakeEvent("keydown", fixture.noteWidthInput, { key: "Escape" }));
-    fixture.root.dispatchEvent(new FakeEvent("focusout", fixture.noteWidthInput));
 
     expect(fixture.noteFontSizeInput.value).toBe("");
-    expect(fixture.noteWidthInput.value).toBe("");
     expect(calls).toEqual([
       "size-start",
       "size-input:24",
       "size-cancel",
-      "width-start",
-      "width-input:420",
-      "width-cancel"
     ]);
   });
 
@@ -1622,8 +1599,7 @@ describe("SchematicPropertyPanelController", () => {
       note: {
         backgroundColor: "#ffffe8",
         fontSizePx: 14,
-        format: "markdown",
-        widthPx: 320
+        anchor: "upperLeft",
       }
     });
 
@@ -1634,11 +1610,7 @@ describe("SchematicPropertyPanelController", () => {
     expect(selectedSwatchColors(fixture)).toEqual(["#ffffe8"]);
     expect(fixture.noteFontSizeRow.hidden).toBe(false);
     expect(fixture.noteFontSizeInput.value).toBe("14");
-    expect(fixture.noteFormatSegmented.querySelectorAll("[data-property-note-format-value]")
-      .filter((button) => button.classList.contains("is-selected"))
-      .map((button) => button.dataset.propertyNoteFormatValue)).toEqual(["markdown"]);
-    expect(fixture.noteWidthRow.hidden).toBe(false);
-    expect(fixture.noteWidthInput.value).toBe("320");
+    expect(fixture.noteAnchor.value).toBe("upperLeft");
 
     fixture.noteFontSizeInput.value = "72";
     fixture.controller.sync({
@@ -1646,59 +1618,25 @@ describe("SchematicPropertyPanelController", () => {
       note: {
         backgroundColor: "#dcfce7",
         fontSizePx: 18,
-        format: "plain",
-        widthPx: 120
+        anchor: "upperLeft",
       }
     });
 
     expect(fixture.noteBackgroundInput.value).toBe("#dcfce7");
     expect(selectedSwatchColors(fixture)).toEqual(["#dcfce7"]);
     expect(fixture.noteFontSizeInput.value).toBe("18");
-    expect(fixture.noteWidthRow.hidden).toBe(true);
 
     fixture.controller.sync({
       hasSelection: true,
       note: {
         backgroundColor: null,
         fontSizePx: 18,
-        format: "plain"
+        anchor: "upperLeft"
       }
     });
-    expect(fixture.noteBackgroundInput.value).toBe("#ffffe8");
-    expect(selectedSwatchColors(fixture)).toEqual(["none"]);
-  });
-
-  it("dispatches note format and width transaction callbacks", () => {
-    const calls: Array<[string, string?]> = [];
-    const fixture = createPropertyPanelFixture({
-      onNoteFormatChange: (value) => calls.push(["format", value]),
-      onNoteWidthEditStart: () => calls.push(["width-start"]),
-      onNoteWidthInput: (value) => calls.push(["width-input", value]),
-      onNoteWidthCommit: (value) => calls.push(["width-commit", value])
-    });
-    fixture.controller.bind();
-    fixture.controller.sync({
-      hasSelection: true,
-      note: {
-        backgroundColor: null,
-        fontSizePx: 18,
-        format: "markdown",
-        widthPx: 380
-      }
-    });
-    fixture.noteWidthInput.value = "380";
-    const plainButton = fixture.noteFormatSegmented.querySelectorAll("[data-property-note-format-value]")
-      .find((button) => button.dataset.propertyNoteFormatValue === "plain")!;
-    fixture.root.dispatchEvent(new FakeEvent("click", plainButton));
-    fixture.root.dispatchEvent(new FakeEvent("focusin", fixture.noteWidthInput));
-    fixture.root.dispatchEvent(new FakeEvent("input", fixture.noteWidthInput));
-    fixture.root.dispatchEvent(new FakeEvent("focusout", fixture.noteWidthInput));
-    expect(calls).toEqual([
-      ["format", "plain"],
-      ["width-start"],
-      ["width-input", "380"],
-      ["width-commit", "380"]
-    ]);
+    expect(fixture.noteBackgroundInput.value).toBe("#ffffff");
+    expect(fixture.noteBackgroundInput.disabled).toBe(true);
+    expect(selectedSwatchColors(fixture)).toEqual(["default"]);
   });
 
   it("dispatches component ref, value, and variant change callbacks", () => {
@@ -1835,14 +1773,14 @@ describe("SchematicPropertyPanelController", () => {
     fixture.noteBackgroundInput.value = "#123456";
 
     fixture.root.dispatchEvent(new FakeEvent("change", fixture.noteBackgroundInput));
-    const noFillClick = new FakeEvent("click", fixture.swatches[0]);
-    fixture.root.dispatchEvent(noFillClick);
+    const defaultFillClick = new FakeEvent("click", fixture.swatches[0]);
+    fixture.root.dispatchEvent(defaultFillClick);
     const colorSwatchClick = new FakeEvent("click", fixture.swatches[2]);
     fixture.root.dispatchEvent(colorSwatchClick);
 
-    expect(noFillClick.defaultPrevented).toBe(true);
+    expect(defaultFillClick.defaultPrevented).toBe(true);
     expect(colorSwatchClick.defaultPrevented).toBe(true);
-    expect(backgrounds).toEqual(["#123456", null, "#dcfce7"]);
+    expect(backgrounds).toEqual(["#123456", "#ffffff", "#dcfce7"]);
   });
 
   it("dispatches note font size preview, edit start, and commit callbacks", () => {

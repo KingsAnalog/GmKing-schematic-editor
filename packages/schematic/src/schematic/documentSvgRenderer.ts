@@ -6,7 +6,7 @@ import { pointKey } from "./geometry";
 import { junctionId } from "./junctionIdentity";
 import { resolveLayerObjects } from "./layerObjectStateModel";
 import { layerObjectStackIds } from "./layerObjectTreeModel";
-import { renderSchematicSvgScene } from "./svgRenderer";
+import { renderSchematicSvgScene, type SchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
 import { svgIdFragment } from "./svgId";
@@ -22,6 +22,7 @@ export interface SchematicDocumentSvgOptions {
   padding?: number;
   presentationMode?: boolean;
   includeHidden?: boolean;
+  noteGraphics?: SchematicSvgScene["noteGraphics"];
   showGrid?: boolean;
   backgroundColor?: string | null;
 }
@@ -80,11 +81,11 @@ export function renderSchematicDocumentSvg(
       netLabels: document.netLabels.filter(label => displayed(label.id)),
       netLabelStatuses,
       notes: document.notes.filter(note => displayed(note.id)),
+      noteGraphics: options.noteGraphics,
       layerObjectOrder
     },
     {
       presentationMode,
-      portableNotes: true,
       padding: options.padding,
       namespace: options.namespace,
       showGrid: options.showGrid,

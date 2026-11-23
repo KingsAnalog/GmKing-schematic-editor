@@ -5,13 +5,11 @@ import type {
 import type { SchematicDocument, SchematicNote } from "../types";
 import {
   applyNoteFontSize,
-  applyNoteWidth,
-  normalizeNoteFontSizeInput,
-  normalizeNoteWidthInput
+  normalizeNoteFontSizeInput
 } from "./noteProperties";
-import { noteFontSizePx, noteWidthPx } from "./noteSizing";
+import { noteFontSizePx } from "./noteSizing";
 
-export type NotePropertyBatchKind = "font-size" | "width";
+export type NotePropertyBatchKind = "font-size";
 export type NotePropertyBatchProjectionPhase = "preview" | "restore";
 
 export interface NotePropertyBatchProjectionContext {
@@ -45,7 +43,7 @@ export type NotePropertyBatchBeginResult =
     }
   | {
       ok: false;
-      reason: "empty" | "missing" | "ambiguous" | "requires-markdown";
+      reason: "empty" | "missing" | "ambiguous";
       noteIds: string[];
     };
 
@@ -119,7 +117,7 @@ export class NotePropertyBatchSession {
   }
 
   begin(kind: NotePropertyBatchKind, selectedIds: readonly string[]): NotePropertyBatchBeginResult {
-    const preflight = this.preflight(kind, selectedIds);
+    const preflight = this.preflight(selectedIds);
     if (!preflight.ok) return preflight;
 
     if (
@@ -144,7 +142,7 @@ export class NotePropertyBatchSession {
       targets: preflight.notes.map((note) => ({
         note,
         snapshot: snapshotNote(note),
-        resolvedValue: resolvedValue(kind, note)
+        resolvedValue: noteFontSizePx(note)
       })),
       pendingValue: null,
       frameHandle: null
@@ -161,7 +159,7 @@ export class NotePropertyBatchSession {
     const session = this.active;
     if (!session) return { accepted: false, reason: "inactive" };
 
-    const normalized = normalizeInput(session.kind, value);
+    const normalized = normalizeNoteFontSizeInput(value);
     if (normalized === null) {
       session.pendingValue = null;
       this.cancelScheduledFrame(session);
@@ -189,7 +187,7 @@ export class NotePropertyBatchSession {
     if (!session) return null;
 
     if (finalValue !== undefined) {
-      const normalized = normalizeInput(session.kind, finalValue);
+      const normalized = normalizeNoteFontSizeInput(finalValue);
       session.pendingValue = normalized;
     }
     this.cancelScheduledFrame(session);
@@ -206,7 +204,7 @@ export class NotePropertyBatchSession {
       .filter(({ note, snapshot }) => snapshotChanged(snapshot, note))
       .map(({ note }) => note.id);
     const changed = changedNoteIds.length > 0;
-    return batchCommitResult(session.kind, changed, changedNoteIds);
+    return batchCommitResult(changed, changedNoteIds);
   }
 
   cancel(): NotePropertyBatchCancelResult {
@@ -263,7 +261,6 @@ export class NotePropertyBatchSession {
   }
 
   private preflight(
-    kind: NotePropertyBatchKind,
     selectedIds: readonly string[]
   ):
     | { ok: true; notes: SchematicNote[] }
@@ -285,12 +282,6 @@ export class NotePropertyBatchSession {
     if (missingIds.length > 0) return { ok: false, reason: "missing", noteIds: missingIds };
 
     const notes = this.document.notes.filter((note) => requested.has(note.id));
-    if (kind === "width") {
-      const unsupportedIds = notes.filter((note) => note.format !== "markdown").map((note) => note.id);
-      if (unsupportedIds.length > 0) {
-        return { ok: false, reason: "requires-markdown", noteIds: unsupportedIds };
-      }
-    }
     return { ok: true, notes };
   }
 
@@ -312,10 +303,7 @@ export class NotePropertyBatchSession {
         continue;
       }
 
-      const result =
-        session.kind === "font-size"
-          ? applyNoteFontSize(target.note, value)
-          : applyNoteWidth(target.note, value);
+      const result = applyNoteFontSize(target.note, value);
       if (result.status === "changed") {
         this.projectNote(target.note, { kind: session.kind, phase: "preview" });
       }
@@ -340,8 +328,7 @@ export class NotePropertyBatchSession {
     }
     return session.targets.every(
       ({ note }) =>
-        liveById.get(note.id) === note &&
-        (session.kind !== "width" || note.format === "markdown")
+        liveById.get(note.id) === note
     );
   }
 
@@ -356,16 +343,6 @@ export class NotePropertyBatchSession {
     }
     return restoredIds;
   }
-}
-
-function normalizeInput(kind: NotePropertyBatchKind, value: string) {
-  return kind === "font-size"
-    ? normalizeNoteFontSizeInput(value)
-    : normalizeNoteWidthInput(value);
-}
-
-function resolvedValue(kind: NotePropertyBatchKind, note: SchematicNote) {
-  return kind === "font-size" ? noteFontSizePx(note) : noteWidthPx(note);
 }
 
 function snapshotNote(note: SchematicNote): NotePropertyBatchSnapshot {
@@ -400,7 +377,6 @@ function sameOrderedIds(left: readonly string[], right: readonly string[]) {
 }
 
 function batchCommitResult(
-  kind: NotePropertyBatchKind,
   changed: boolean,
   noteIds: string[]
 ): SchematicDocumentOpResult {
@@ -411,7 +387,7 @@ function batchCommitResult(
     selectedIds: [],
     noteIds,
     status: changed
-      ? `Note ${kind === "font-size" ? "font size" : "width"} updated.`
+      ? "Note font size updated."
       : ""
   };
 }

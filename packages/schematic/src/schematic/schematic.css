@@ -697,275 +697,6 @@
   gap: 8px;
 }
 
-.schematic-note.is-markdown {
-  white-space: normal;
-  overflow: visible;
-  overflow-wrap: anywhere;
-}
-
-.schematic-note.is-markdown .schematic-note-content {
-  height: auto;
-  min-height: 0;
-}
-
-.schematic-note.is-markdown .milkdown,
-.schematic-note.is-markdown .ProseMirror {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 1.25em;
-  padding: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: inherit;
-  white-space: normal;
-  overflow-y: visible;
-}
-
-.schematic-note.is-markdown .ProseMirror > :first-child {
-  margin-top: 0;
-}
-
-.schematic-note.is-markdown .ProseMirror > :last-child {
-  margin-bottom: 0;
-}
-
-.schematic-note.is-markdown p,
-.schematic-note.is-markdown blockquote,
-.schematic-note.is-markdown pre,
-.schematic-note.is-markdown ul,
-.schematic-note.is-markdown ol,
-.schematic-note.is-markdown table {
-  margin: 0 0 0.7em;
-}
-
-.schematic-note.is-markdown h1,
-.schematic-note.is-markdown h2,
-.schematic-note.is-markdown h3,
-.schematic-note.is-markdown h4,
-.schematic-note.is-markdown h5,
-.schematic-note.is-markdown h6 {
-  margin: 0.55em 0 0.3em;
-  letter-spacing: 0;
-  line-height: 1.2;
-}
-
-.schematic-note.is-markdown h1 { font-size: 1.7em; }
-.schematic-note.is-markdown h2 { font-size: 1.45em; }
-.schematic-note.is-markdown h3 { font-size: 1.25em; }
-.schematic-note.is-markdown h4,
-.schematic-note.is-markdown h5,
-.schematic-note.is-markdown h6 { font-size: 1.05em; }
-
-.schematic-note.is-markdown ul,
-.schematic-note.is-markdown ol {
-  padding-left: 1.7em;
-}
-
-.schematic-note.is-markdown blockquote {
-  padding-left: 0.8em;
-  border-left: 3px solid #9ca3af;
-  color: #374151;
-}
-
-.schematic-note.is-markdown code {
-  padding: 0.08em 0.25em;
-  background: rgba(17, 24, 39, 0.08);
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 0.92em;
-}
-
-.schematic-note.is-markdown pre {
-  padding: 0.6em;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background: rgba(17, 24, 39, 0.08);
-  white-space: pre-wrap;
-}
-
-.schematic-note.is-markdown pre code {
-  padding: 0;
-  background: transparent;
-}
-
-.schematic-note.is-markdown table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.schematic-note.is-markdown .tableWrapper {
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.schematic-note.is-markdown th,
-.schematic-note.is-markdown td {
-  padding: 0.3em 0.45em;
-  border: 1px solid #9ca3af;
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-
-.schematic-note.is-markdown a {
-  color: #005f9e;
-  text-decoration: underline;
-}
-
-.schematic-note.is-markdown input[type="checkbox"] {
-  accent-color: #005f9e;
-}
-
-.schematic-note.is-markdown .schematic-markdown-task-item {
-  display: grid;
-  grid-template-columns: 1.1em minmax(0, 1fr);
-  align-items: start;
-  gap: 0.35em;
-  list-style: none;
-}
-
-.schematic-note.is-markdown .schematic-markdown-task-item > input {
-  width: 1em;
-  height: 1em;
-  margin: 0.18em 0 0;
-}
-
-.schematic-note.is-markdown .schematic-markdown-list-item-content > :last-child {
-  margin-bottom: 0;
-}
-
-.schematic-markdown-math {
-  position: relative;
-  max-width: 100%;
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-.schematic-markdown-math.ProseMirror-selectednode,
-.schematic-markdown-math:focus,
-.schematic-markdown-math:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-.schematic-markdown-math.is-inline {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.schematic-markdown-math.is-block {
-  display: block;
-  margin: 0.45em 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  text-align: center;
-}
-
-.schematic-markdown-math-rendered mjx-container {
-  margin: 0 !important;
-}
-
-.schematic-note.is-markdown .schematic-markdown-math-rendered {
-  cursor: text;
-}
-
-.schematic-markdown-math-source {
-  display: none !important;
-  box-sizing: border-box;
-  min-width: 8em;
-  max-width: 100%;
-  min-height: 1.5em;
-  border: 1px solid #d1d5db;
-  background: rgba(255, 255, 255, 0.7);
-  overflow: hidden;
-  text-align: left;
-}
-
-.schematic-markdown-math.is-inline.is-source-editing {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0.2em;
-  align-items: stretch;
-  min-width: 8em;
-}
-
-.schematic-markdown-math.is-block.is-source-editing {
-  display: grid;
-  gap: 0.25em;
-  overflow: visible;
-}
-
-.schematic-markdown-math.is-source-editing .schematic-markdown-math-rendered {
-  display: block;
-  min-height: 1.35em;
-}
-
-.schematic-markdown-math.is-source-editing .schematic-markdown-math-source {
-  display: block !important;
-  width: 100%;
-}
-
-.schematic-markdown-math-source .cm-editor,
-.schematic-markdown-math-source .cm-editor.cm-focused {
-  width: 100%;
-  max-width: 100%;
-  border: 0;
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent;
-}
-
-.schematic-markdown-math-source .cm-scroller {
-  max-height: none;
-  overflow-y: hidden !important;
-}
-
-.schematic-note.is-markdown .ProseMirror-gapcursor {
-  position: relative;
-  display: block;
-  height: 0;
-  margin: 0;
-  pointer-events: none;
-}
-
-.schematic-note.is-markdown .ProseMirror-gapcursor::after {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -1px;
-  border-top: 1px solid #6f6f6f;
-  content: "";
-}
-
-.schematic-markdown-math.is-math-error .schematic-markdown-math-rendered {
-  padding: 0.1em 0.25em;
-  border: 1px dashed #b42318;
-  color: #b42318;
-}
-
-.schematic-markdown-image-literal {
-  display: inline-block;
-  padding: 0.08em 0.25em;
-  border: 1px dashed #9ca3af;
-  background: rgba(255, 255, 255, 0.55);
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 0.9em;
-}
-
-.schematic-markdown-image-host {
-  display: inline-block;
-  max-width: 100%;
-  vertical-align: middle;
-}
-
-.schematic-markdown-image {
-  display: block;
-  width: auto;
-  max-width: 100%;
-  height: auto;
-}
-
 .schematic-status {
   padding: 8px 10px;
   border-top: 1px solid var(--soft-rule);
@@ -1750,10 +1481,6 @@
   font-style: italic;
 }
 
-.schematic-shell.is-drawing-shape .schematic-paper {
-  cursor: crosshair;
-}
-
 .schematic-shape-draft {
   position: absolute;
   inset: 0;
@@ -1893,7 +1620,7 @@
 .schematic-instance-browser-columns {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: 190px minmax(250px, 1fr) 320px;
+  grid-template-columns: 190px minmax(220px, 1fr) minmax(300px, 34%);
   min-height: 0;
 }
 
@@ -2041,33 +1768,59 @@
   border-right: 0;
 }
 
+.browser-symbol-heading {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--schematic-ui-line);
+}
+
 .browser-symbol-preview {
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 0 clamp(100px, 20vh, 155px);
   place-items: center;
   min-height: 0;
-  padding: 16px;
+  padding: 10px 16px;
   color: var(--schematic-ink);
 }
 
 .browser-symbol-preview svg {
   width: 100%;
   height: 100%;
-  max-height: 360px;
+  min-height: 0;
+  max-height: 135px;
+}
+
+.browser-draft-symbol [data-selector="refLabel"] {
+  display: none;
+}
+
+:root[data-effective-theme="dark"] .schematic-shell .browser-draft-symbol {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 .browser-symbol-name {
   flex: 0 0 auto;
-  padding: 0 16px;
   font-size: 1rem;
   font-weight: 600;
 }
 
 .browser-symbol-meta {
   flex: 0 0 auto;
-  padding: 4px 16px 14px;
+  margin-top: 4px;
   color: var(--schematic-ui-muted);
   font-size: 0.74rem;
+}
+
+.browser-instance-properties {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--schematic-ui-line);
+}
+
+.browser-instance-properties .property-row:has([data-property-ref]) {
+  display: none;
 }
 
 .schematic-instance-browser-footer {
@@ -2256,13 +2009,7 @@
   display: none;
 }
 
-.schematic-paper.is-hierarchy-placing,
-.schematic-paper.is-hierarchy-picking {
-  cursor: crosshair;
-}
-
 .schematic-paper.is-hierarchy-picking [data-sheet-block] [joint-selector="frame"] {
-  cursor: crosshair;
   pointer-events: all;
 }
 
@@ -2744,7 +2491,7 @@ button.netlist-diagnostic:hover {
 
   .schematic-instance-browser-columns {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(180px, 1fr) 220px;
+    grid-template-rows: minmax(140px, 1fr) minmax(240px, 52%);
   }
 
   .instance-browser-column.browser-symbol {
@@ -2753,18 +2500,14 @@ button.netlist-diagnostic:hover {
   }
 
   .browser-symbol-preview {
-    max-height: 150px;
-  }
-
-  .browser-symbol-name {
-    padding-top: 4px;
+    flex-basis: 98px;
   }
 }
 
 @media (max-width: 560px) {
   .schematic-instance-browser-columns {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 190px 220px 200px;
+    grid-template-rows: 145px 200px 310px;
     overflow: auto;
   }
 

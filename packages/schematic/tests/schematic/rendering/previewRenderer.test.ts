@@ -119,7 +119,7 @@ function note(overrides: Partial<SchematicNote> = {}): SchematicNote {
     y: 60,
     width: 120,
     height: 48,
-    format: "plain",
+    anchor: "upperLeft",
     text: "copied note",
     ...overrides
   };
@@ -200,7 +200,7 @@ describe("SchematicPreviewRenderer", () => {
     expect(createdNotes[0].dataset.noteId).toBe("note-1");
     expect(createdNotes[0].style.left).toBe("45px");
     expect(createdNotes[0].style.top).toBe("70px");
-    expect(createdNotes[0].style.transform).toBe("scale(2)");
+    expect(createdNotes[0].style.transform).toBe("scale(2) rotate(0deg) translate(0px, 0px)");
 
     const oldCells = [...graph.cells];
     const oldNote = createdNotes[0];
@@ -239,41 +239,6 @@ describe("SchematicPreviewRenderer", () => {
       preview: true,
       endpointConnections: { start: true, end: false }
     });
-  });
-
-  it("uses the live Markdown note class and content hierarchy for copy previews", () => {
-    const createdNotes: FakeElement[] = [];
-    const rendered = fakeElement();
-    rendered.className = "milkdown";
-    rendered.textContent = "(Q) Noise";
-    const rendererWithMarkdown = new SchematicPreviewRenderer<FakeCell>({
-      graphAdapter: new FakeGraph(),
-      noteLayerElement: new FakeNoteLayerElement() as unknown as HTMLElement,
-      makeComponentCell: (instance) => new FakeCell(instance),
-      makeWireCell: (instance, options) => new FakeCell(instance, options),
-      presentationMode: () => false,
-      worldToScreenPoint: (point) => point,
-      zoom: () => 1,
-      createNoteElement: () => {
-        const element = new FakeElement();
-        createdNotes.push(element);
-        return element as unknown as HTMLElement;
-      },
-      cloneRenderedNoteContent: () => rendered
-    });
-
-    rendererWithMarkdown.renderCopy(fixtureDocument({
-      components: [],
-      wires: [],
-      netLabels: [],
-      notes: [note({ format: "markdown", text: "**(Q) Noise**", width: 160, height: 40, fontSizePx: 28 })]
-    }));
-
-    const preview = createdNotes[0];
-    expect(preview.className).toBe("schematic-note is-markdown schematic-note-copy-preview");
-    expect(preview.children[0]?.className).toBe("schematic-note-content");
-    expect(preview.children[0]?.children).toEqual([rendered]);
-    expect(rendered.textContent).toBe("(Q) Noise");
   });
 
   it("renders wire previews through a preview wire cell", () => {

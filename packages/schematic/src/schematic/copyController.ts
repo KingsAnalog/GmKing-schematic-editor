@@ -6,12 +6,13 @@ import {
 import {
   buildSelectionCopySource,
   buildTargetCopySource,
+  copyAnchorFromBounds,
   type SelectionCopyExportProjection
 } from "./selection/selectionCopyExportModel";
 import {
   buildCopyToolNoSourceEntryIntent,
-  buildCopyToolReferenceEntryIntent,
   buildCopyToolSourceEntryIntent,
+  COPY_PICK_STATUS,
   type CopyToolEntryIntent
 } from "./toolState";
 import type { ComponentType, InductorCoupling, JunctionAppearance, Point, SchematicDocument, SchematicNote } from "./types";
@@ -91,20 +92,18 @@ type CopyPlacementPreparation =
       keepSourceArmed: boolean;
     };
 
-const COPY_NO_SOURCE_STATUS = "Copy mode: click an object to copy, or Esc cancels.";
 const COPY_EMPTY_SELECTION_STATUS = "Select objects before copying.";
 const COPY_EMPTY_TARGET_STATUS = "Copy mode: click a component, wire, junction, or note.";
 
 export class SchematicCopyController {
   private copyState: CopyState | null = null;
-  private pendingSource: CopySource | null = null;
 
   get hasSource() {
     return !!this.copyState;
   }
 
-  get awaitingReference() {
-    return !!this.pendingSource && !this.copyState;
+  get hasSheetBlocks() {
+    return this.copyState?.source.components.some(component => component.type === "sheetBlock") ?? false;
   }
 
   get anchor() {
@@ -112,7 +111,7 @@ export class SchematicCopyController {
   }
 
   get sourceNotes(): readonly SchematicNote[] {
-    return this.copyState?.source.notes ?? this.pendingSource?.notes ?? [];
+    return this.copyState?.source.notes ?? [];
   }
 
   prepareNoSourceEntry(): CopyToolEntryIntent {
@@ -138,9 +137,9 @@ export class SchematicCopyController {
       input.connections,
       input.document?.symbolTemplate
     );
-    const entry = this.prepareReferenceEntry(
-      input.document ? captureCopyLayers(source, input.document, input.documentId) : source
-    );
+    const captured = input.document ? captureCopyLayers(source, input.document, input.documentId) : source;
+    const anchor = singleCopyObjectAnchor(source) ?? copyAnchorFromBounds(bounds, null);
+    const entry = this.prepareSourceEntry(captured, anchor, input.lastPointerPoint ?? anchor);
     if (!entry.ok) return { kind: "empty-source", status: entry.status };
     return { kind: "source", entry };
   }
@@ -155,7 +154,8 @@ export class SchematicCopyController {
   ): CopyTargetEntryResult {
     const projection = buildTargetCopySource(document, ids, noteIds);
     const source = captureCopyLayers(projection.source, document, documentId);
-    const entry = this.prepareSourceEntry(source, anchor, previewPoint, {
+    const reference = singleCopyObjectAnchor(source) ?? anchor;
+    const entry = this.prepareSourceEntry(source, reference, previewPoint, {
       emptyStatus: COPY_EMPTY_TARGET_STATUS
     });
     if (!entry.ok) return { kind: "empty-target", status: entry.status };
@@ -179,52 +179,15 @@ export class SchematicCopyController {
     };
   }
 
-  prepareReferenceEntry(source: CopySource, options: CopySourceEntryOptions = {}): CopySourceEntryResult {
-    const count = copySourceCount(source);
-    if (count === 0) {
-      return { ok: false, status: options.emptyStatus ?? COPY_EMPTY_SELECTION_STATUS };
-    }
-    const state = { source, anchor: { x: 0, y: 0 } };
-    return {
-      ok: true,
-      intent: buildCopyToolReferenceEntryIntent(count),
-      state,
-      previewPoint: state.anchor,
-      attachSource: () => {
-        this.attachPendingSource(source);
-      }
-    };
-  }
-
   attachSource(state: CopyState) {
     this.copyState = state;
-    this.pendingSource = null;
-  }
-
-  attachPendingSource(source: CopySource) {
-    this.pendingSource = source;
-    this.copyState = null;
-  }
-
-  setReferencePoint(point: Point) {
-    if (!this.pendingSource) {
-      return { ok: false as const, status: this.copyState ? "Copy mode: click to place the copied objects." : COPY_NO_SOURCE_STATUS };
-    }
-    const state = { source: this.pendingSource, anchor: snapPoint(point) };
-    this.attachSource(state);
-    const count = copySourceCount(state.source);
-    return {
-      ok: true as const,
-      state,
-      status: `Copy mode: ${count} object${count === 1 ? "" : "s"} attached to cursor. Click to place; Esc cancels.`
-    };
   }
 
   rotateSource() {
     if (!this.copyState) {
       return {
         ok: false as const,
-        status: this.awaitingReference ? "Copy mode: click a reference point before rotating." : COPY_NO_SOURCE_STATUS
+        status: COPY_PICK_STATUS
       };
     }
     if (!rotateCopySourceAroundAnchor(this.copyState)) {
@@ -237,7 +200,7 @@ export class SchematicCopyController {
     if (!this.copyState) {
       return {
         ok: false as const,
-        status: this.awaitingReference ? "Copy mode: click a reference point before mirroring." : COPY_NO_SOURCE_STATUS
+        status: COPY_PICK_STATUS
       };
     }
     if (!mirrorCopySourceAroundAnchor(this.copyState, axis)) {
@@ -249,7 +212,6 @@ export class SchematicCopyController {
 
   clear() {
     this.copyState = null;
-    this.pendingSource = null;
   }
 
   cancel() {
@@ -258,7 +220,7 @@ export class SchematicCopyController {
 
   preparePreview(point: Point, factories: CopyInstantiationFactories, document?: SchematicDocument, target?: CopyLayerTarget): CopyPreviewResult {
     if (!this.copyState) {
-      return { ok: false, status: this.awaitingReference ? "Copy mode: click a reference point before placing." : COPY_NO_SOURCE_STATUS };
+      return { ok: false, status: COPY_PICK_STATUS };
     }
     const layerPlan = document && target ? planCopyLayers(this.copyState.source, document, target) : undefined;
     return {
@@ -275,8 +237,8 @@ export class SchematicCopyController {
     if (!this.copyState) {
       return {
         ok: false,
-        status: this.awaitingReference ? "Copy mode: click a reference point before placing." : COPY_NO_SOURCE_STATUS,
-        keepSourceArmed: this.awaitingReference
+        status: COPY_PICK_STATUS,
+        keepSourceArmed: false
       };
     }
     const layerPlan = document && target ? planCopyLayers(this.copyState.source, document, target) : undefined;
@@ -302,4 +264,8 @@ export class SchematicCopyController {
       keepSourceArmed: true
     };
   }
+}
+
+function singleCopyObjectAnchor(source: CopySource): Point | undefined {
+  return copySourceCount(source) === 1 ? source.components[0] ?? source.notes[0] : undefined;
 }

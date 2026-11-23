@@ -1,5 +1,3 @@
-import deleteIcon from "./icons/delete.svg?raw";
-import tempDeleteIcon from "./icons/temp-delete.svg?raw";
 import { SchematicAnalysisController } from "./analysis/analysisController";
 import { SchematicContextMenuController } from "./contextMenuController";
 import type { SchematicEditorHandle } from "./editorHandle";
@@ -11,7 +9,6 @@ import {
   downloadSchematicDocumentImage
 } from "./schematicDocumentWebAdapter";
 import { SchematicDocumentTabs } from "./schematicDocumentTabs";
-import { webMarkdownNoteRuntimeAdapter } from "./notes/webMarkdownNoteRuntimeAdapter";
 import type { ImportedSchematicDocumentFile, SchematicEditorHostServices } from "./schematicEditorHostPorts";
 import { SchematicWebDocumentHost } from "./schematicWebDocumentHost";
 import { createSchematicWorkspacePersistence } from "./workspacePersistence";
@@ -138,11 +135,6 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
     workspace,
     documentFiles,
     clipboard: clipboardPort,
-    cursors: {
-      delete: cursorFromSvg(deleteIcon),
-      temporaryDelete: cursorFromSvg(tempDeleteIcon)
-    },
-    noteRuntimeAdapter: webMarkdownNoteRuntimeAdapter,
     idFactory: createId,
     createAbortController: () => new realm.AbortController(),
     requestAnimationFrame: (callback) => ownerWindow.requestAnimationFrame(callback),
@@ -172,13 +164,6 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
       }
     })
   };
-}
-
-function cursorFromSvg(svg: string) {
-  const cursorSvg = svg
-    .replace('width="200"', 'width="32"')
-    .replace('height="200"', 'height="32"');
-  return `url("data:image/svg+xml,${encodeURIComponent(cursorSvg)}") 16 16, crosshair`;
 }
 
 /** LAN HTTP has getRandomValues, but not the secure-context-only randomUUID. */

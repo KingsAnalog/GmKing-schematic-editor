@@ -18,7 +18,7 @@ function fixture() {
     return task;
   };
   const document = createEmptySchematicDocument();
-  document.notes.push({ id: "n", x: 0, y: 0, width: 120, format: "plain", text: "A" });
+  document.notes.push({ id: "n", x: 0, y: 0, width: 120, anchor: "upperLeft", text: "A" });
   persistSchematicDocumentSnapshot("doc", { document, zoom: 1 }, storage);
   const first = createSchematicWorkspacePersistence(storage, lock);
   const second = createSchematicWorkspacePersistence(storage, lock);

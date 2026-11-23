@@ -32,8 +32,8 @@ export interface SchematicSelectionUiProjectionInput {
   };
   copy: {
     hasSource: boolean;
-    awaitingReference?: boolean;
   };
+  moveHasSource?: boolean;
   moveBehavior: SelectionMoveBehavior;
 }
 
@@ -61,7 +61,8 @@ export function buildSchematicSelectionUiProjection(input: SchematicSelectionUiP
       selection: input.selection,
       placement: buildPlacementSummaryPlacement(input.activePlacementItem),
       wire: input.wire,
-      copy: input.copy
+      copy: input.copy,
+      move: { behavior: input.moveBehavior, hasSource: !!input.moveHasSource }
     }),
     status: buildSchematicSelectionStatus({
       selection: input.selection,

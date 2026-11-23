@@ -18,7 +18,7 @@ interface AgentHost {
 }
 
 const PAIR_MS = 2 * 60_000;
-const SESSION_MS = 30 * 60_000;
+const SESSION_MS = 2 * 60 * 60_000;
 const MAX_RECEIPTS = 512;
 const PAGE_ENDPOINT = AGENT_ENDPOINT.replace(/agent$/, "page");
 const error = (code: string, fields?: object) => ({ ok: false, code, ...fields });

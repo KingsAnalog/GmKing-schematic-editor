@@ -60,7 +60,7 @@ describe("schematic document model", () => {
         y: 20,
         width: 320,
         text: "Visible note",
-        format: "plain"
+        anchor: "upperLeft"
       }]
     })).toBe(false);
   });
@@ -120,7 +120,7 @@ describe("schematic document model", () => {
           x: 20,
           y: 20,
           width: 80,
-          format: "markdown",
+          anchor: "upperLeft",
           text: "**gain**"
         },
         {
@@ -128,7 +128,7 @@ describe("schematic document model", () => {
           x: 40,
           y: 40,
           width: 120,
-          format: "plain",
+          anchor: "upperLeft",
           text: "transparent",
           backgroundColor: null
         }
@@ -141,7 +141,7 @@ describe("schematic document model", () => {
     expect(restored.components[0].values).toEqual({});
     expect(source.components[0].variantId).toBe("invalid");
     expect(source.components[0].values).toEqual({});
-    expect(restored.notes[0]).toMatchObject({ format: "markdown", text: "**gain**" });
+    expect(restored.notes[0]).toMatchObject({ anchor: "upperLeft", text: "**gain**" });
     expect(restored.notes[1].backgroundColor).toBeNull();
 
     expect(restored.netLabels).toEqual([]);
@@ -344,14 +344,14 @@ describe("schematic document model", () => {
       ],
       wires: [],
       junctions: [],
-      notes: [{ id: "markdown-note", x: 0, y: 0, width: 80, format: "markdown", text: "history note" }]
+      notes: [{ id: "markdown-note", x: 0, y: 0, width: 80, anchor: "upperLeft", text: "history note" }]
     });
 
     expect(history.push(snapshot)).toBe(true);
     expect(history.undo()?.components).toEqual([]);
     const redone = history.redo();
     expect(redone?.components[0].variantId).toBe("missing-variant");
-    expect(redone?.notes[0]).toMatchObject({ format: "markdown", text: "history note" });
+    expect(redone?.notes[0]).toMatchObject({ anchor: "upperLeft", text: "history note" });
   });
 
   it("keeps reset as an undoable and redoable empty document snapshot", () => {
@@ -382,7 +382,7 @@ describe("schematic document model", () => {
       ],
       junctions: [{ x: 80, y: 0 }],
 
-      notes: [{ id: "note-1", x: 20, y: 40, width: 160, format: "plain", text: "before reset" }]
+      notes: [{ id: "note-1", x: 20, y: 40, width: 160, anchor: "upperLeft", text: "before reset" }]
     }, { joinAt: [{ x: 80, y: 0 }] });
     const history = createSchematicDocumentHistoryAdapter(beforeReset);
     const empty = createEmptySchematicDocument();
@@ -442,7 +442,7 @@ describe("schematic document model", () => {
           x: 20,
           y: 80,
           width: 160,
-          format: "markdown",
+          anchor: "upperLeft",
           text: "restore note"
         }
       ]
@@ -459,7 +459,7 @@ describe("schematic document model", () => {
 
     expect(history.undo()).toEqual(restoredBaseline);
     expect(history.redo()).toEqual(createEmptySchematicDocument());
-    expect(restoredBaseline.notes[0]).toMatchObject({ format: "markdown", text: "restore note" });
+    expect(restoredBaseline.notes[0]).toMatchObject({ anchor: "upperLeft", text: "restore note" });
     expect(restoredBaseline.components[1].variantId).toBe(getComponentDef("nmos").defaultVariantId);
   });
 });

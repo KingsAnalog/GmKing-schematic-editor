@@ -15,6 +15,7 @@ import { normalizeWirePath } from "./wire/wireGeometry";
 import { isHexColor } from "../shared/color";
 import { defaultLayers } from "./layers";
 import { SCHEMATIC_TEXT_FONTS } from "./schematicFont";
+import { NOTE_ANCHORS } from "./types";
 import type {
   ComponentAppearance,
   ComponentInstance,
@@ -242,10 +243,12 @@ function formatSchematicNotes(notes: readonly SchematicNote[]) {
         ...(note.layerId === undefined ? [] : [`"layerId": ${JSON.stringify(note.layerId)}`]),
         ...(note.height !== undefined ? [`"height": ${JSON.stringify(note.height)}`] : []),
         ...(note.rotation !== undefined ? [`"rotation": ${JSON.stringify(note.rotation)}`] : []),
-        `"format": ${JSON.stringify(note.format)}`,
+        ...(note.anchor ? [`"anchor": ${JSON.stringify(note.anchor)}`] : []),
         ...(note.backgroundColor !== undefined
           ? [`"backgroundColor": ${JSON.stringify(note.backgroundColor)}`]
           : []),
+        ...(note.backgroundEnabled !== undefined ? [`"backgroundEnabled": ${JSON.stringify(note.backgroundEnabled)}`] : []),
+        ...(note.backgroundOpacity !== undefined ? [`"backgroundOpacity": ${JSON.stringify(note.backgroundOpacity)}`] : []),
         ...(note.textColor !== undefined ? [`"textColor": ${JSON.stringify(note.textColor)}`] : []),
         ...(note.fontFamily === undefined ? [] : [`"fontFamily": ${JSON.stringify(note.fontFamily)}`]),
         ...(note.fontSizePx !== undefined
@@ -641,9 +644,9 @@ function decodeNote(value: unknown, path: string): SchematicNote {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx", "layerId", "fontFamily"],
+    ["id", "x", "y", "width", "height", "rotation", "anchor", "text", "backgroundColor", "backgroundEnabled", "backgroundOpacity", "textColor", "fontSizePx", "layerId", "fontFamily"],
     path,
-    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx", "layerId", "fontFamily"]
+    ["height", "rotation", "anchor", "backgroundColor", "backgroundEnabled", "backgroundOpacity", "textColor", "fontSizePx", "layerId", "fontFamily"]
   );
   const width = requireFiniteNumber(source.width, `${path}.width`);
   if (width <= 0) invalid(`${path}.width`, "a positive finite number");
@@ -652,9 +655,9 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     x: requireFiniteNumber(source.x, `${path}.x`),
     y: requireFiniteNumber(source.y, `${path}.y`),
     width,
-    format: requireEnum(source.format, ["plain", "markdown"] as const, `${path}.format`),
     text: requireString(source.text, `${path}.text`)
   };
+  if (hasOwn(source, "anchor")) note.anchor = requireEnum(source.anchor, NOTE_ANCHORS, path + ".anchor");
   if (hasOwn(source, "layerId")) note.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
   if (hasOwn(source, "fontFamily")) note.fontFamily = requireEnum(source.fontFamily, SCHEMATIC_TEXT_FONTS, `${path}.fontFamily`);
   if (hasOwn(source, "height")) {
@@ -666,6 +669,14 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     note.backgroundColor = source.backgroundColor === null
       ? null
       : requireColor(source.backgroundColor, `${path}.backgroundColor`);
+  }
+  if (hasOwn(source, "backgroundEnabled")) {
+    note.backgroundEnabled = requireBoolean(source.backgroundEnabled, `${path}.backgroundEnabled`);
+  }
+  if (hasOwn(source, "backgroundOpacity")) {
+    const opacity = requireFiniteNumber(source.backgroundOpacity, `${path}.backgroundOpacity`);
+    if (opacity < 0 || opacity > 1) invalid(`${path}.backgroundOpacity`, "a number from 0 to 1");
+    note.backgroundOpacity = opacity;
   }
   if (hasOwn(source, "textColor")) note.textColor = requireColor(source.textColor, `${path}.textColor`);
   if (hasOwn(source, "fontSizePx")) {
@@ -937,9 +948,11 @@ function snapshotNote(note: SchematicNote): SchematicNote {
     width: note.width,
     ...(note.height !== undefined ? { height: note.height } : {}),
     ...(note.rotation !== undefined ? { rotation: note.rotation } : {}),
-    format: note.format,
+    ...(note.anchor ? { anchor: note.anchor } : {}),
     text: note.text,
     ...(note.backgroundColor !== undefined ? { backgroundColor: note.backgroundColor } : {}),
+    ...(note.backgroundEnabled !== undefined ? { backgroundEnabled: note.backgroundEnabled } : {}),
+    ...(note.backgroundOpacity !== undefined ? { backgroundOpacity: note.backgroundOpacity } : {}),
     ...(note.textColor !== undefined ? { textColor: note.textColor } : {}),
     ...(note.fontSizePx !== undefined ? { fontSizePx: note.fontSizePx } : {})
   };

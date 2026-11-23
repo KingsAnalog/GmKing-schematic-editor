@@ -99,7 +99,7 @@ export function fixtureNote(id = "note-1", x = 220, y = 260): SchematicNote {
     y,
     width: 120,
     height: 60,
-    format: "plain",
+    anchor: "upperLeft",
     text: "rewrite note",
     backgroundColor: "#fff6bf",
     fontSizePx: 14

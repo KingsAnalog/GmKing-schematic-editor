@@ -1,6 +1,7 @@
 import { createSchematicSvgElement } from "./schematicSvgDom";
 export { createSchematicSvgElement } from "./schematicSvgDom";
 import { renderSchematicDocumentSvg, type SchematicDocumentSvgRender } from "./documentSvgRenderer";
+import { hasNoteMath, typesetNotesForExport } from "./notes/noteTypeset";
 import type { SchematicContent, SchematicDocument } from "./types";
 
 export interface ReadonlySchematicViewer {
@@ -25,16 +26,26 @@ export function mountReadonlySchematicViewer(
   container.textContent = "";
   let destroyed = false;
   let currentRender: SchematicDocumentSvgRender | null = null;
+  let generation = 0;
 
   function render(nextDocument: SchematicContent | SchematicDocument) {
     if (destroyed) return;
-    currentRender = renderSchematicDocumentSvg(nextDocument, {
-      namespace,
-      showGrid: options.showGrid,
-      padding: options.padding,
-      presentationMode: true,
-      backgroundColor: "#ffffff"
-    });
+    const revision = ++generation;
+    const draw = (noteGraphics?: Awaited<ReturnType<typeof typesetNotesForExport>>) => {
+      if (destroyed || revision !== generation) return;
+      show(renderSchematicDocumentSvg(nextDocument, {
+        namespace, showGrid: options.showGrid, padding: options.padding,
+        presentationMode: true, backgroundColor: "#ffffff", noteGraphics
+      }));
+    };
+    draw();
+    if (nextDocument.notes.some(note => hasNoteMath(note.text))) {
+      void typesetNotesForExport(nextDocument.notes, container.ownerDocument, nextDocument.display?.textFont).then(draw).catch(() => {});
+    }
+  }
+
+  function show(rendered: SchematicDocumentSvgRender) {
+    currentRender = rendered;
     const svg = createSchematicSvgElement(container.ownerDocument, currentRender.svg);
     container.replaceChildren(svg);
     svg.classList.add("schematic-readonly-svg");

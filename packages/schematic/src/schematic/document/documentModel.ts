@@ -3,7 +3,6 @@ import { DEFAULT_SYMBOL_TEMPLATE, resolveSymbolTemplate } from "../symbolTemplat
 import { isProcessId } from "../netlist/profiles";
 import { applyNormalizedDocumentWires } from "./documentWires";
 import { cloneConnections, emptyConnections, connectGeometry } from "../connectionGraph";
-import { normalizeMarkdownNoteWidth } from "../notes/noteSizing";
 import { defaultLayers } from "../layers";
 import { normalizeLayerObjectStates } from "../layerObjectStateModel";
 import { snapPoint } from "../geometry";
@@ -242,7 +241,17 @@ function normalizeComponentAppearances(document: SchematicDocument) {
 
 function normalizeSchematicNote(note: SchematicNote): SchematicNote {
   return {
-    ...note,
-    width: note.format === "markdown" ? normalizeMarkdownNoteWidth(note.width) : note.width
+    id: note.id, x: note.x, y: note.y, width: note.width,
+    ...(note.height !== undefined ? { height: note.height } : {}),
+    ...(note.rotation !== undefined ? { rotation: note.rotation } : {}),
+    ...(note.anchor !== undefined ? { anchor: note.anchor } : {}),
+    text: note.text,
+    ...(note.layerId !== undefined ? { layerId: note.layerId } : {}),
+    ...(note.fontFamily !== undefined ? { fontFamily: note.fontFamily } : {}),
+    ...(note.fontSizePx !== undefined ? { fontSizePx: note.fontSizePx } : {}),
+    ...(note.textColor !== undefined ? { textColor: note.textColor } : {}),
+    ...(note.backgroundColor !== undefined ? { backgroundColor: note.backgroundColor } : {}),
+    ...(note.backgroundEnabled !== undefined ? { backgroundEnabled: note.backgroundEnabled } : {}),
+    ...(note.backgroundOpacity !== undefined ? { backgroundOpacity: note.backgroundOpacity } : {})
   };
 }

@@ -3,56 +3,15 @@ import indexHtml from "../../../../apps/web/index.html?raw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderMathTexInto } from "../../src/shared/mathjax";
 
-const APPROVED_TEX_PACKAGES = [
-  "amscd",
-  "bbox",
-  "bbm",
-  "bboldx",
-  "begingroup",
-  "boldsymbol",
-  "braket",
-  "bussproofs",
-  "cancel",
-  "cases",
-  "centernot",
-  "color",
-  "colortbl",
-  "dsfont",
-  "empheq",
-  "enclose",
-  "extpfeil",
-  "mathtools",
-  "mhchem",
-  "physics",
-  "tagformat",
-  "textcomp",
-  "unicode",
-  "units",
-  "upgreek",
-  "verb"
-] as const;
-
 interface MathJaxPageConfig {
   loader: {
     load: string[];
     paths: Record<string, string>;
   };
-  tex: {
-    packages: Record<string, string[]>;
-    require: {
-      allow: Record<string, boolean>;
-      defaultAllow: boolean;
-    };
-  };
-  svg: {
-    fontCache: string;
-  };
-  options: {
-    safeOptions: {
-      allow: Record<string, string>;
-      safeProtocols: Record<string, boolean>;
-    };
-  };
+  tex: { packages: Record<string, string[]> };
+  output: { font: string };
+  svg: { fontCache: string };
+  options: { enableMenu: boolean; enableSpeech: boolean; enableBraille: boolean };
 }
 
 function readMathJaxPageConfig() {
@@ -204,60 +163,18 @@ describe("MathJax render lifecycle", () => {
 });
 
 describe("MathJax page configuration", () => {
-  it("pins MathJax and its external font extensions to 4.1.3", () => {
-    const { config, html } = readMathJaxPageConfig();
-
-    expect(html).toContain("https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-svg.js");
-    expect(config.loader.paths).toEqual({
-      "mathjax-bbm-extension":
-        "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-bbm-font-extension@4.1.3",
-      "mathjax-bboldx-extension":
-        "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-bboldx-font-extension@4.1.3",
-      "mathjax-dsfont-extension":
-        "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-dsfont-font-extension@4.1.3",
-      "mathjax-mhchem-extension":
-        "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-mhchem-font-extension@4.1.3"
-    });
+  it("uses the bundled local SVG renderer and self-contained glyph paths", () => {
+    const { html, config } = readMathJaxPageConfig();
+    expect(html).toContain("./vendor/mathjax/tex-mml-svg-mathjax-tex.js");
+    expect(html).not.toContain("cdn.jsdelivr.net");
+    expect(config.loader.paths.fonts).toBe("./vendor");
+    expect(config.output.font).toBe("mathjax-tex");
+    expect(config.svg.fontCache).toBe("none");
   });
 
-  it("loads only the approved engineering package set through a strict require allowlist", () => {
+  it("keeps dynamic TeX loads and speech services disabled", () => {
     const { config } = readMathJaxPageConfig();
-    const approved = [...APPROVED_TEX_PACKAGES];
-
-    expect(config.loader.load).toEqual(["ui/safe", ...approved.map((name) => `[tex]/${name}`)]);
-    expect(config.tex.packages).toEqual({
-      "[-]": ["autoload", "noundefined"],
-      "[+]": approved
-    });
-    expect(config.tex.require).toEqual({
-      allow: Object.fromEntries(approved.map((name) => [name, true])),
-      defaultAllow: false
-    });
-
-    for (const name of ["action", "html", "texhtml", "setoptions", "noerrors", "all-packages"]) {
-      expect(config.loader.load).not.toContain(`[tex]/${name}`);
-      expect(config.tex.packages["[+]"]).not.toContain(name);
-      expect(config.tex.require.allow[name]).toBeUndefined();
-    }
-  });
-
-  it("keeps SVG glyphs local and blocks unsafe URL protocols", () => {
-    const { config } = readMathJaxPageConfig();
-
-    expect(config.svg.fontCache).toBe("local");
-    expect(config.loader.load).toContain("ui/safe");
-    expect(config.options.safeOptions.allow).toEqual({
-      URLs: "safe",
-      classes: "safe",
-      cssIDs: "safe",
-      styles: "safe"
-    });
-    expect(config.options.safeOptions.safeProtocols).toEqual({
-      http: true,
-      https: true,
-      file: false,
-      javascript: false,
-      data: false
-    });
+    expect(config.tex.packages["[-]"]).toEqual(["autoload", "require"]);
+    expect(config.options).toMatchObject({ enableMenu: false, enableSpeech: false, enableBraille: false });
   });
 });

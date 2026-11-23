@@ -1,6 +1,6 @@
 import { Menu, Notice } from "obsidian";
 import type { SchematicEditorHandle } from "@edahelper/schematic/editor";
-import { schematicContextMenuActions, rasterizeSchematicSvg, writeSchematicImageClipboard } from "@edahelper/schematic/editor";
+import { schematicContextMenuActions, rasterizeSchematicSvg, typesetNotesForExport, writeSchematicImageClipboard } from "@edahelper/schematic/editor";
 import {
   buildSchematicSelectionSvg,
   renderSchematicDocumentSvg,
@@ -73,6 +73,7 @@ async function runExport(
           namespace: `${source.namespace}-export`,
           presentationMode: true,
           includeHidden,
+          noteGraphics: await typesetNotesForExport(content.notes, ownerDocument, content.display?.textFont),
           showGrid: false,
           backgroundColor: null
         });

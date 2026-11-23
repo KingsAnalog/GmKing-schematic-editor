@@ -4,6 +4,7 @@ import {
   buildPlacementCommit,
   buildPlacementPreviewFragment,
   type PlacementCommit,
+  type PlacementComponentProperties,
   type PlacementIdFactory,
   type PlacementRefFactory
 } from "./placementModel";
@@ -23,6 +24,7 @@ export class SchematicPlacementToolController {
   private selectedPlacementItemValue: InstancePaletteItem;
   private activePlacementItemValue: InstancePaletteItem | null;
   private poseValue: PlacementToolPose = { rotation: 0, mirrored: false };
+  private properties?: PlacementComponentProperties;
 
   constructor(defaultItem: InstancePaletteItem = "resistor", options: { activeItem?: InstancePaletteItem | null } = {}) {
     this.selectedPlacementItemValue = defaultItem;
@@ -41,12 +43,13 @@ export class SchematicPlacementToolController {
     return { ...this.poseValue };
   }
 
-  setItem(item: InstancePaletteItem) {
+  setItem(item: InstancePaletteItem, properties?: PlacementComponentProperties) {
     if (item !== this.selectedPlacementItemValue) {
       this.resetPose();
     }
     this.selectedPlacementItemValue = item;
     this.activePlacementItemValue = item;
+    this.properties = properties;
   }
 
   previewItem(item: InstancePaletteItem | null) {
@@ -54,7 +57,8 @@ export class SchematicPlacementToolController {
       this.activePlacementItemValue = null;
       return;
     }
-    this.setItem(item);
+    if (item === this.selectedPlacementItemValue) this.activePlacementItemValue = item;
+    else this.setItem(item);
   }
 
   activeItemIsTemplate() {
@@ -86,13 +90,14 @@ export class SchematicPlacementToolController {
     if (!this.activePlacementItemValue) return null;
     return buildPlacementCommit(this.activePlacementItemValue, point, {
       ...options,
-      ...this.poseValue
+      ...this.poseValue,
+      properties: this.properties
     });
   }
 
   buildPreview(point: Point): SchematicDocument | null {
     if (!this.activePlacementItemValue) return null;
-    return buildPlacementPreviewFragment(this.activePlacementItemValue, point, this.poseValue);
+    return buildPlacementPreviewFragment(this.activePlacementItemValue, point, { ...this.poseValue, properties: this.properties });
   }
 
   private resetPose() {

@@ -127,3 +127,31 @@ export async function renderMathTexInto(
   element.classList.toggle("is-math-error", !rendered);
   return rendered;
 }
+
+/** Produces a vector formula in the target window without attaching an editor. */
+export async function renderMathSvg(doc: Document, tex: string, options: { display: boolean; signal?: AbortSignal }) {
+  const ownerWindow = doc.defaultView;
+  if (!ownerWindow || !(await waitForMathJaxOrAbort(ownerWindow, options.signal))) return null;
+  if (options.signal?.aborted) return null;
+  try {
+    const mathJax = ownerWindow.MathJax;
+    let container: HTMLElement;
+    if (mathJax?.tex2svg) {
+      try {
+        container = mathJax.tex2svg(tex, { display: options.display });
+      } catch (error) {
+        if (!mathJax.tex2svgPromise) throw error;
+        container = await mathJax.tex2svgPromise(tex, { display: options.display });
+      }
+    } else if (mathJax?.tex2svgPromise) {
+      container = await mathJax.tex2svgPromise(tex, { display: options.display });
+    } else {
+      container = doc.createElement("span");
+      await renderMathTexInto(container, tex, options);
+    }
+    if (options.signal?.aborted || container.querySelector('mjx-merror, [data-mjx-error], [data-mml-node="merror"]')) return null;
+    return container.querySelector<SVGSVGElement>("svg");
+  } catch {
+    return null;
+  }
+}

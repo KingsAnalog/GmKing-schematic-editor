@@ -11,7 +11,7 @@ const fixture = contentFromDocument(createSchematicDocument({
       variantId: "pulse", values: { "vsource:pulse:riseTime": "2n" } },
     { id: "R1", type: "resistor", ref: "R1", x: 440, y: 240, rotation: 0, mirrored: false, values: { main: "1k" } }
   ],
-  notes: [{ id: "note", x: 180, y: 340, width: 160, height: 42, format: "plain", text: "Note α 原文" }]
+  notes: [{ id: "note", x: 180, y: 340, width: 160, height: 42, anchor: "upperLeft", text: "Note α 原文" }]
 }));
 const server = await serveDist(fileURLToPath(new URL("../apps/web/dist", import.meta.url)));
 let browser, page, manual;

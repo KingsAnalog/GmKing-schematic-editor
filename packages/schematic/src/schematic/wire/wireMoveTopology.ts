@@ -1,7 +1,10 @@
 import { resolveComponentDef } from "../catalog";
-import { cloneConnections, connectGeometry, pinTouchesConnectedWire } from "../connectionGraph";
+import {
+  cloneConnections, connectGeometry, connectionIdFactory, connectionNodes, pinTouchesConnectedWire,
+  wireNodeAtPoint, type ConnectionPin, type ConnectionWireEnd
+} from "../connectionGraph";
 import { componentPinPoint } from "../connectivity";
-import { pointKey, samePoint } from "../geometry";
+import { orthogonalRoute, pointKey, samePoint } from "../geometry";
 import type { Point, SchematicConnections, SchematicDocument, Wire, WireAppearance } from "../types";
 import { reserveAnchoredWireId, syncAnchoredWire } from "./wireAnchorModel";
 import { wireBodyAppearance } from "./wireDecoration";
@@ -12,7 +15,7 @@ import {
   wireSegmentMoveHasFixedJunction,
   type WireSegmentMoveTransaction
 } from "./wireSegmentMoveModel";
-import { clonePoints, pointOnPath, rerouteWireEndpoint, samePath } from "./wireGeometry";
+import { clonePoints, normalizeWirePath, pointOnPath, rerouteWireEndpoint, samePath } from "./wireGeometry";
 
 interface FrozenEndpointAttachment {
   kind: "endpoint";
@@ -48,6 +51,84 @@ interface FrozenSelectedJunctionAttachment {
 
 export interface FrozenSelectedJunctionMoveTopology {
   attachments: FrozenSelectedJunctionAttachment[];
+}
+
+export interface TranslatedWireAnchor {
+  wire: Wire;
+  fixed: ConnectionPin | ConnectionWireEnd;
+  movingWireId: string;
+}
+
+export function captureTranslatedWireAnchors(
+  document: SchematicDocument,
+  movingWireIds: ReadonlySet<string>,
+  movingComponentIds: ReadonlySet<string>,
+  junctionPoints: ReadonlyMap<string, Point>,
+  junctionTopology: FrozenSelectedJunctionMoveTopology
+): TranslatedWireAnchor[] {
+  if (!movingWireIds.size) return [];
+  const wires = new Map(document.wires.map(wire => [wire.id, wire]));
+  const usedIds = new Set([
+    ...wires.keys(),
+    ...document.components.map(component => component.id),
+    ...document.netLabels.map(label => label.id),
+    ...document.notes.map(note => note.id),
+    ...(document.inductorCouplings ?? []).map(coupling => coupling.id)
+  ]);
+  const following = new Set(junctionTopology.attachments.map(({ junctionId, wireId }) =>
+    JSON.stringify([wireId, pointKey(junctionPoints.get(junctionId)!)])));
+  const anchors: TranslatedWireAnchor[] = [];
+  for (const node of connectionNodes(document).values()) {
+    const moving = node.wires.find(end => movingWireIds.has(end.wireId));
+    if (!moving) continue;
+    const fixed = node.pins.find(pin => !movingComponentIds.has(pin.componentId))
+      ?? node.wires.find(end => !movingWireIds.has(end.wireId)
+        && !following.has(JSON.stringify([end.wireId, pointKey(end.point)])));
+    if (!fixed) continue;
+    const source = wires.get(moving.wireId)!;
+    const layerId = source.layerId;
+    const appearance = wireBodyAppearance(source);
+    anchors.push({
+      fixed,
+      movingWireId: source.id,
+      wire: {
+        id: reserveAnchoredWireId(usedIds, `drag-${source.id}-node-${moving.index}`),
+        routeMode: source.routeMode,
+        points: [node.point],
+        ...(layerId ? { layerId } : {}),
+        ...(appearance ? { appearance } : {})
+      }
+    });
+  }
+  return anchors;
+}
+
+export function projectTranslatedWireAnchors(anchors: readonly TranslatedWireAnchor[], delta: Point): TranslatedWireAnchor[] {
+  if (!delta.x && !delta.y) return [];
+  return anchors.map(({ wire, fixed, movingWireId }) => {
+    const start = wire.points[0];
+    const end = { x: start.x + delta.x, y: start.y + delta.y };
+    const points = wire.routeMode === "freeAngle" ? [start, end] : normalizeWirePath(orthogonalRoute(start, end));
+    return { wire: { ...wire, points }, fixed, movingWireId };
+  });
+}
+
+export function applyTranslatedWireAnchors(document: SchematicDocument, anchors: readonly TranslatedWireAnchor[]) {
+  const fresh = connectionIdFactory(document.connections);
+  for (const { wire, fixed, movingWireId } of anchors) {
+    const start = wire.points[0];
+    const end = wire.points[wire.points.length - 1];
+    const fixedNode = "pinId" in fixed
+      ? document.connections.pins[fixed.componentId]?.[fixed.pinId]
+      : wireNodeAtPoint(document, fixed.wireId, start);
+    const movedNode = wireNodeAtPoint(document, movingWireId, end);
+    if (fixedNode === undefined || movedNode === undefined || fixedNode === movedNode) continue;
+    // Bind both original contacts directly. An extension crossing another net
+    // must not create a connection along its route.
+    document.connections.wires[wire.id] = wire.points.map((_, index) =>
+      index === 0 ? fixedNode : index === wire.points.length - 1 ? movedNode : fresh());
+    document.wires.push(wire);
+  }
 }
 
 export function captureWireMoveTopology(

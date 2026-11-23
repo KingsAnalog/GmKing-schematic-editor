@@ -37,6 +37,7 @@ export interface SchematicAnalysisControllerOptions {
   prepareNetPick(): void;
   focusCanvas(): void;
   setStatus(message: string): void;
+  onActivePickChange?(): void;
   persistWorkspaceState(): void;
   workerClient?: SchematicAnalysisClient;
   findVoltageNetAtPoint?: (document: SchematicDocument, point: Point) => VoltageNetPick | null;
@@ -205,8 +206,10 @@ export class SchematicAnalysisController {
   }
 
   private setActiveNetField(field: AnalysisPortField | null) {
+    const wasPicking = this.hasActivePick();
     this.activeNetField = field;
     setActiveAnalysisPortPick(this.root, field);
+    if (wasPicking !== this.hasActivePick()) this.options.onActivePickChange?.();
   }
 
   private renderResult(result: AnalysisResult) {

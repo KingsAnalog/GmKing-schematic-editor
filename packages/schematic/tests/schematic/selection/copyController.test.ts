@@ -49,7 +49,7 @@ function sourceDocument(): SchematicDocument {
     notes: [
       {
         id: "note-1",
-        format: "plain",
+        anchor: "upperLeft",
         text: "copy note",
         x: 80,
         y: 100,
@@ -86,7 +86,7 @@ describe("SchematicCopyController", () => {
       y: 100,
       width: 120,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "clipboard"
     });
 
@@ -100,10 +100,9 @@ describe("SchematicCopyController", () => {
     expect(controller.prepareNoSourceEntry()).toMatchObject({
       nextMode: "copy",
       hasSource: false,
-      status: "Copy mode: click an object to copy, or Esc cancels."
+      status: "Copy mode: click an object or drag a box to copy. Esc cancels."
     });
     expect(controller.hasSource).toBe(false);
-    expect(controller.awaitingReference).toBe(false);
     expect(controller.anchor).toBeNull();
     expect(controller.sourceNotes).toEqual([]);
   });
@@ -130,7 +129,6 @@ describe("SchematicCopyController", () => {
     result.attachSource();
 
     expect(controller.hasSource).toBe(true);
-    expect(controller.awaitingReference).toBe(false);
     expect(controller.anchor).toEqual({ x: 20, y: 40 });
     expect(controller.sourceNotes).toEqual([]);
   });
@@ -142,11 +140,10 @@ describe("SchematicCopyController", () => {
 
     expect(result).toEqual({ ok: false, status: "Select objects before copying." });
     expect(controller.hasSource).toBe(false);
-    expect(controller.awaitingReference).toBe(false);
     expect(controller.anchor).toBeNull();
   });
 
-  it("prepares a selected-source entry that waits for an explicit reference point", () => {
+  it("prepares a selected-source entry that attaches immediately at the component origin", () => {
     const controller = new SchematicCopyController();
     const selection = fixtureDocument({
       netLabels: [],
@@ -167,26 +164,14 @@ describe("SchematicCopyController", () => {
     expect(result.kind).toBe("source");
     if (result.kind !== "source") return;
     expect(result.entry.intent).toMatchObject({
-      hasSource: false,
-      awaitingReference: true,
+      hasSource: true,
       sourceCount: 1
     });
-    expect(result.entry.state.anchor).toEqual({ x: 0, y: 0 });
-    expect(result.entry.previewPoint).toEqual({ x: 0, y: 0 });
+    expect(result.entry.state.anchor).toEqual({ x: 20, y: 40 });
+    expect(result.entry.previewPoint).toEqual({ x: 41, y: 59 });
     result.entry.attachSource();
-    expect(controller.hasSource).toBe(false);
-    expect(controller.awaitingReference).toBe(true);
-    expect(controller.anchor).toBeNull();
-
-    const reference = controller.setReferencePoint({ x: 41, y: 59 });
-
-    expect(reference.ok).toBe(true);
-    if (!reference.ok) return;
-    expect(reference.state.anchor).toEqual({ x: 40, y: 60 });
-    expect(reference.status).toBe("Copy mode: 1 object attached to cursor. Click to place; Esc cancels.");
     expect(controller.hasSource).toBe(true);
-    expect(controller.awaitingReference).toBe(false);
-    expect(controller.anchor).toEqual({ x: 40, y: 60 });
+    expect(controller.anchor).toEqual({ x: 20, y: 40 });
   });
 
   it("prepares no-source mode when the current selection has no transform bounds", () => {
@@ -211,8 +196,7 @@ describe("SchematicCopyController", () => {
       intent: {
         nextMode: "copy",
         hasSource: false,
-        awaitingReference: false,
-        status: "Copy mode: click an object to copy, or Esc cancels."
+        status: "Copy mode: click an object or drag a box to copy. Esc cancels."
       }
     });
   });
@@ -467,30 +451,13 @@ describe("SchematicCopyController", () => {
     expect(controller.hasSource).toBe(false);
     expect(controller.preparePreview({ x: 140, y: 160 }, factory.options)).toEqual({
       ok: false,
-      status: "Copy mode: click an object to copy, or Esc cancels."
+      status: "Copy mode: click an object or drag a box to copy. Esc cancels."
     });
     expect(controller.preparePlacement({ x: 140, y: 160 }, factory.options)).toEqual({
       ok: false,
-      status: "Copy mode: click an object to copy, or Esc cancels.",
+      status: "Copy mode: click an object or drag a box to copy. Esc cancels.",
       keepSourceArmed: false
     });
   });
 
-  it("reports pending-reference guidance before the selected copy anchor is set", () => {
-    const controller = new SchematicCopyController();
-    const factory = factories();
-
-    controller.attachPendingSource(componentSource());
-
-    expect(controller.awaitingReference).toBe(true);
-    expect(controller.preparePreview({ x: 140, y: 160 }, factory.options)).toEqual({
-      ok: false,
-      status: "Copy mode: click a reference point before placing."
-    });
-    expect(controller.preparePlacement({ x: 140, y: 160 }, factory.options)).toEqual({
-      ok: false,
-      status: "Copy mode: click a reference point before placing.",
-      keepSourceArmed: true
-    });
-  });
 });

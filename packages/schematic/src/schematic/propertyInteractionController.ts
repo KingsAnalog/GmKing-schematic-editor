@@ -318,6 +318,11 @@ export class SchematicPropertyInteractionController {
         { kind: "note-background", color: value }
       ),
       onNoteBackgroundCancel: () => this.cancel("note-background"),
+      onNoteFillEnabledChange: enabled => this.run({ kind: "note-fill-enabled", enabled }),
+      onNoteFillOpacityEditStart: () => this.begin("note-fill-opacity"),
+      onNoteFillOpacityInput: value => this.preview("note-fill-opacity", { kind: "note-fill-opacity", value }),
+      onNoteFillOpacityCommit: value => this.commit("note-fill-opacity", { kind: "note-fill-opacity", value }),
+      onNoteFillOpacityCancel: () => this.cancel("note-fill-opacity"),
       onNetLabelChange: (value) => this.setSelectedNetLabelName(value),
       onNetLabelEditStart: () => this.begin("net-label"),
       onNetLabelInput: (value) => this.preview(

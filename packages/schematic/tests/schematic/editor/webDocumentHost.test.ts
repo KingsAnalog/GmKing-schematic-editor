@@ -151,7 +151,7 @@ describe("SchematicWebDocumentHost", () => {
   it("imports the tab bar clipboard document with all layers and object state", async () => {
     const imported = createEmptySchematicDocument();
     imported.layers!.push({ id: "annotations", name: "Annotations", visible: false, locked: true });
-    imported.notes.push({ id: "note", layerId: "annotations", x: 0, y: 0, width: 160, format: "plain", text: "Imported" });
+    imported.notes.push({ id: "note", layerId: "annotations", x: 0, y: 0, width: 160, anchor: "upperLeft", text: "Imported" });
     imported.layerObjectStates = { note: { visible: false, z: 3 } };
     const fixture = createFixture(undefined, Promise.resolve(imported));
     await fixture.host.init();
@@ -325,7 +325,7 @@ function createFixture(
 describe("clipboard paste entry", () => {
   it("starts placement from the shared public entry without replacing the document", async () => {
     const imported = createEmptySchematicDocument();
-    imported.notes.push({ id: "copied-note", x: 0, y: 0, width: 120, height: 40, format: "plain", text: "pasted" });
+    imported.notes.push({ id: "copied-note", x: 0, y: 0, width: 120, height: 40, anchor: "upperLeft", text: "pasted" });
     const fixture = createFixture(undefined, Promise.resolve(imported));
     await fixture.host.init();
     await fixture.host.pasteFromClipboard();
@@ -341,7 +341,7 @@ describe("clipboard paste entry", () => {
     const paste = fixture.host.pasteFromClipboard();
     await fixture.tabsOptions.onActivate("b");
     const imported = createEmptySchematicDocument();
-    imported.notes.push({ id: "note", x: 0, y: 0, width: 120, height: 40, format: "plain", text: "late" });
+    imported.notes.push({ id: "note", x: 0, y: 0, width: 120, height: 40, anchor: "upperLeft", text: "late" });
     finish(imported);
     await paste;
     expect(fixture.bridge.applyClipboardDocument).not.toHaveBeenCalled();

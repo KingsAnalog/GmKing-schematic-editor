@@ -21,6 +21,7 @@ export type SchematicPropertyEditKind =
   | "wire-digital-label"
   | "net-label"
   | "note-background"
+  | "note-fill-opacity"
   | "note-text-color"
   | "rectangle-width"
   | "rectangle-height"

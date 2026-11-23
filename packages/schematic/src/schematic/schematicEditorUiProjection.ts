@@ -1,3 +1,5 @@
+import { NOTE_ANCHORS } from "./types";
+import { NOTE_ANCHOR_LABELS } from "./notes/noteDialog";
 import { markupUi, type UiBuilder } from "./schematicUiElements";
 import { message, parameterMessage } from "./schematicI18n";
 import { MAX_NETLIST_MODEL_LENGTH } from "./netlist/profiles";
@@ -5,7 +7,6 @@ import { DFF_SETTING_OPTIONS, type DffSettingProperty } from "./dffModel";
 import { FUNCTION_BLOCK_TIME_DOMAIN_OPTIONS } from "./functionBlockModel";
 import { DEFAULT_COMPONENT_COLOR } from "./componentPropertyModel";
 import { MAX_NOTE_FONT_SIZE_PX, MIN_NOTE_FONT_SIZE_PX } from "./notes/noteSizing";
-import { NOTE_WIDTH_INPUT_MAX, NOTE_WIDTH_INPUT_MIN } from "./notes/noteProperties";
 import { PAPER_COLOR_PRESETS, NOTE_BACKGROUND_COLOR_PRESETS } from "../shared/color";
 import { SYMBOL_TEMPLATES } from "./symbolTemplateModel";
 import {
@@ -28,6 +29,30 @@ export const SCHEMATIC_NETWORK_COLOR_PRESETS = SCHEMATIC_COLOR_PRESETS;
 
 export function renderSchematicEditorSidebarProjection() {
   return buildSchematicEditorSidebar(markupUi.el).html;
+}
+
+export function renderPlacementPropertyEditor() {
+  return buildPropertyEditor(markupUi.el, true).html;
+}
+
+function buildPropertyEditor<T extends object>(el: UiBuilder<T>["el"], placement = false) {
+  const heading = placement ? message("sidebar.properties", "Properties") : message("properties.title", "Property Editor");
+  return el("section", {
+    class: "property-editor",
+    "aria-label": heading,
+    [placement ? "data-browser-property-editor" : "data-schematic-property-editor"]: true
+  },
+    el("h2", {}, heading),
+    el("div", { class: "property-empty", "data-property-empty": true }, message("properties.empty", "No object selected.")),
+    el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
+      el("span", {}, message("layer.field", "Layer")),
+      el("select", { "data-property-layer": true })
+    ),
+    netProperties(el),
+    componentProperties(el),
+    couplingProperties(el),
+    noteProperties(el)
+  );
 }
 
 export function buildSymbolTemplateControl<T extends object>(el: UiBuilder<T>["el"]) {
@@ -119,18 +144,7 @@ export function buildSchematicEditorSidebar<T extends object>(
       "aria-label": message("sidebar.properties", "Properties"),
       hidden: true
     },
-      el("section", { class: "property-editor", "aria-label": message("properties.title", "Property Editor"), "data-schematic-property-editor": true },
-        el("h2", {}, message("properties.title", "Property Editor")),
-        el("div", { class: "property-empty", "data-property-empty": true }, message("properties.empty", "No object selected.")),
-        el("label", { class: "property-row", "data-property-layer-row": true, hidden: true },
-          el("span", {}, message("layer.field", "Layer")),
-          el("select", { "data-property-layer": true })
-        ),
-        netProperties(el),
-        componentProperties(el),
-        couplingProperties(el),
-        noteProperties(el)
-      )
+      buildPropertyEditor(el)
     ),
     el("section", {
       id: layersPanelId,
@@ -392,36 +406,7 @@ function componentProperties<T extends object>(el: UiBuilder<T>["el"]) {
       el("span", {}, message("ui.size", "Size")),
       el("div", { class: "property-segmented", role: "group", "aria-label": message("ui.componentSize", "Component size"), "data-property-scale-segmented": true })
     ),
-    el("div", {
-      class: "property-library-shape-fill-fields",
-      "data-property-library-shape-fill-fields": true,
-      hidden: true
-    },
-      el("label", { class: "property-row" },
-        el("span", {}, message("ui.fill", "Fill")),
-        el("input", {
-          class: "property-toggle",
-          type: "checkbox",
-          "aria-label": message("ui.fillShape", "Fill shape"),
-          "data-property-library-shape-fill-enabled": true
-        })
-      ),
-      el("div", { class: "property-row" },
-        el("span", {}, message("shape.fillColor", "Fill color")),
-        propertyColorControl(el, "library-shape-fill")
-      ),
-      el("label", { class: "property-row" },
-        el("span", {}, message("ui.fillOpacity", "Fill opacity")),
-        el("input", {
-          type: "number",
-          min: "0",
-          max: "1",
-          step: "0.05",
-          "aria-label": message("ui.shapeFillOpacity", "Shape fill opacity"),
-          "data-property-library-shape-fill-opacity": true
-        })
-      )
-    ),
+    fillProperties(el, "library-shape-fill"),
     el("div", { class: "property-row", "data-property-variant-row": true, hidden: true },
       el("span", { "data-property-variant-label": true }, message("ui.view", "View")),
       el("div", { class: "property-choice-control" },
@@ -598,19 +583,17 @@ function couplingProperties<T extends object>(el: UiBuilder<T>["el"]) {
 function noteProperties<T extends object>(el: UiBuilder<T>["el"]) {
   return el("div", { class: "property-form", "data-property-note-form": true, hidden: true },
     textFontProperty(el, "note"),
-    el("div", { class: "property-row", "data-property-note-format-row": true, hidden: true },
-      el("span", {}, message("ui.format", "Format")),
-      el("div", { class: "property-choice-control" },
-        el("select", { "data-property-note-format": true, hidden: true },
-          el("option", { value: "plain" }, message("ui.plain", "Plain")),
-          el("option", { value: "markdown" }, "Markdown")
-        ),
-        el("div", {
-          class: "property-segmented",
-          role: "group",
-          "aria-label": message("ui.noteFormat", "Note format"),
-          "data-property-note-format-segmented": true
-        })
+    el("label", { class: "property-row property-note-text", "data-property-note-text-row": true },
+      el("span", {}, message("note.text", "Text")),
+      el("textarea", { "data-property-note-text": true, spellcheck: "false",
+        "aria-label": message("note.text", "Text") })
+    ),
+    el("div", { class: "property-divider", "data-property-note-text-divider": true, "aria-hidden": "true" }),
+    el("label", { class: "property-row" },
+      el("span", {}, message("note.anchor", "Anchor")),
+      el("select", { "data-property-note-anchor": true, "aria-label": message("note.anchor", "Anchor") },
+        el("option", { value: "", disabled: true }, message("ui.mixed", "Mixed")),
+        ...NOTE_ANCHORS.map(anchor => el("option", { value: anchor }, message("note.anchor." + anchor, NOTE_ANCHOR_LABELS[anchor])))
       )
     ),
     el("div", { class: "property-row", "data-property-note-text-color-row": true, hidden: true },
@@ -634,36 +617,6 @@ function noteProperties<T extends object>(el: UiBuilder<T>["el"]) {
         })
       )
     ),
-    el("div", { class: "property-row", "data-property-note-background-row": true, hidden: true },
-      el("span", {}, message("ui.fill", "Fill")),
-      el("div", { class: "property-color-control" },
-        el("div", { class: "property-color-swatches", "data-property-note-background-swatches": true },
-          el("button", {
-            type: "button",
-            class: "property-no-fill-swatch",
-            "data-note-background-swatch": "none",
-            "aria-label": message("ui.noFill", "No fill"),
-            title: message("ui.noFill", "No fill"),
-            "aria-pressed": "false"
-          }),
-          ...NOTE_BACKGROUND_COLOR_PRESETS.map(({ color, name }) =>
-            el("button", {
-              type: "button",
-              "data-note-background-swatch": color,
-              style: `--swatch-color: ${color}`,
-              "aria-label": message("color.noteFill", "Set note fill {color}", { color: parameterMessage(name) }),
-              title: parameterMessage(name)
-            })
-          )
-        ),
-        el("input", {
-          type: "color",
-          "aria-label": message("ui.customNoteFillColor", "Custom note fill color"),
-          title: message("ui.customColor", "Custom color"),
-          "data-property-note-background": true
-        })
-      )
-    ),
     el("label", { class: "property-row", "data-property-note-font-size-row": true, hidden: true },
       el("span", {}, message("ui.size", "Size")),
       el("span", { class: "property-unit-control" },
@@ -677,18 +630,41 @@ function noteProperties<T extends object>(el: UiBuilder<T>["el"]) {
         el("span", {}, "px")
       )
     ),
-    el("label", { class: "property-row", "data-property-note-width-row": true, hidden: true },
-      el("span", {}, message("ui.width", "Width")),
-      el("span", { class: "property-unit-control" },
-        el("input", {
-          type: "number",
-          min: NOTE_WIDTH_INPUT_MIN,
-          max: NOTE_WIDTH_INPUT_MAX,
-          step: "20",
-          "data-property-note-width": true
-        }),
-        el("span", {}, "px")
-      )
+    fillProperties(el, "note-background")
+  );
+}
+
+function fillProperties<T extends object>(el: UiBuilder<T>["el"], target: "library-shape-fill" | "note-background") {
+  const note = target === "note-background";
+  const prefix = note ? "data-property-note-fill" : "data-property-library-shape-fill";
+  return el("div", {
+    class: "property-library-shape-fill-fields",
+    [note ? "data-property-note-background-row" : prefix + "-fields"]: true,
+    hidden: true
+  },
+    el("label", { class: "property-row" },
+      el("span", {}, message("ui.fill", "Fill")),
+      el("input", {
+        class: "property-toggle",
+        type: "checkbox",
+        "aria-label": message("ui.fill", "Fill"),
+        [prefix + "-enabled"]: true
+      })
+    ),
+    el("div", { class: "property-row" },
+      el("span", {}, message("shape.fillColor", "Fill color")),
+      propertyColorControl(el, target)
+    ),
+    el("label", { class: "property-row" },
+      el("span", {}, message("ui.fillOpacity", "Fill opacity")),
+      el("input", {
+        type: "number",
+        min: "0",
+        max: "1",
+        step: "0.05",
+        "aria-label": message("ui.fillOpacity", "Fill opacity"),
+        [prefix + "-opacity"]: true
+      })
     )
   );
 }
@@ -731,22 +707,24 @@ function dffControls<T extends object>(el: UiBuilder<T>["el"]) {
   );
 }
 
-function propertyColorControl<T extends object>(el: UiBuilder<T>["el"], target: "network" | "component" | "coupling" | "library-shape-fill") {
-  const isFill = target === "library-shape-fill";
+function propertyColorControl<T extends object>(el: UiBuilder<T>["el"], target: "network" | "component" | "coupling" | "library-shape-fill" | "note-background") {
+  const isNote = target === "note-background";
+  const isFill = target === "library-shape-fill" || isNote;
   const name = isFill ? "fill" : target === "component" ? "symbol" : target;
   const defaultColor = isFill ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : DEFAULT_COMPONENT_COLOR;
   const defaultLabel = isFill ? message("shape.defaultFillColor", "White (default)") : parameterMessage("Black (default)");
   const customLabel = isFill ? message("shape.customFillColor", "Custom fill color")
     : message(`color.custom.${target}`, `Custom ${target === "network" ? "wire or junction" : name} color`);
-  const swatch = `data-${target}-color-swatch`;
+  const swatch = isNote ? "data-note-background-swatch" : `data-${target}-color-swatch`;
+  const presets = isNote ? NOTE_BACKGROUND_COLOR_PRESETS : PAPER_COLOR_PRESETS;
   return el("div", { class: "property-color-control" },
-    el("div", { class: "property-color-swatches", [`data-property-${target}-color-swatches`]: true },
+    el("div", { class: "property-color-swatches", [isNote ? "data-property-note-background-swatches" : `data-property-${target}-color-swatches`]: true },
       el("button", {
         type: "button", class: "property-default-color-swatch", [swatch]: "default", style: `--swatch-color: ${defaultColor}`,
         "aria-label": isFill ? defaultLabel : message("color.default", "Use black (default) {target} color", { target: parameterMessage(name) }),
         title: defaultLabel, "aria-pressed": "false"
       }),
-      ...PAPER_COLOR_PRESETS.filter(preset => preset.color !== defaultColor).map(preset => el("button", {
+      ...presets.filter(preset => preset.color !== defaultColor).map(preset => el("button", {
         type: "button", [swatch]: preset.color, style: `--swatch-color: ${preset.color}`,
         "aria-label": message("color.set", "Set {target} color {color}", { target: parameterMessage(name), color: parameterMessage(preset.name) }),
         title: parameterMessage(preset.name), "aria-pressed": "false"
@@ -754,7 +732,7 @@ function propertyColorControl<T extends object>(el: UiBuilder<T>["el"], target: 
     ),
     el("input", {
       type: "color", "aria-label": customLabel, title: isFill ? customLabel : message("ui.customColor", "Custom color"),
-      [`data-property-${target}-color`]: true
+      [isNote ? "data-property-note-background" : `data-property-${target}-color`]: true
     })
   );
 }

@@ -88,6 +88,7 @@ export class SchematicWebEditorHostController implements SchematicEditorHandle {
       prepareNetPick: () => editor.hostPrepareAnalysisNetPick(),
       focusCanvas: () => editor.hostFocusCanvas(),
       setStatus: (message) => editor.hostSetStatus(message),
+      onActivePickChange: () => editor.hostRefreshToolCursor(),
       persistWorkspaceState: () => {
         const session = documentHost?.activeSession();
         if (session) {

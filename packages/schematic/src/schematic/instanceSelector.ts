@@ -4,6 +4,7 @@ import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { getSchematicTemplateDef, isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER, schematicTemplateBounds, type SchematicTemplateId } from "./templates";
 import { resolveComponentVisualModel } from "./componentVisualModel";
 import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { RECTANGLE_WIDTH_VALUE_KEY } from "./rectangleComponentModel";
 import { renderComponentSvg } from "./componentSvgRenderer";
 import type { SymbolTemplateId, SymbolTemplateContext } from "./symbolTemplateModel";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
@@ -745,6 +746,8 @@ export function paletteItemPreview(item: InstancePaletteItem, context: SymbolTem
 
 export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplateContext = {}) {
   const base = getComponentDef(type);
+  const values = { ...base.defaultValues };
+  if (type === "rectangle") values[RECTANGLE_WIDTH_VALUE_KEY] = "3";
   const model = resolveComponentVisualModel({
     id: `palette-${type}-preview`,
     type,
@@ -754,7 +757,7 @@ export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplat
     y: 0,
     rotation: 0,
     mirrored: false,
-    values: { ...(base.defaultValues ?? {}) }
+    values
   }, { ...context, preview: true });
   const def = model.def;
   const symbolContent = renderSymbolContentSvg(model.symbolContentLayout);

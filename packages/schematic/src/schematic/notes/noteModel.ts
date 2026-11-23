@@ -1,7 +1,7 @@
 import { noteBackgroundCss, noteTextColor } from "./noteAppearance";
 import { noteCssTransform } from "./noteGeometry";
-import { DEFAULT_MARKDOWN_NOTE_WIDTH, MIN_MARKDOWN_NOTE_HEIGHT, MIN_NOTE_HEIGHT, MIN_NOTE_WIDTH, noteFontSizePx, noteWidthPx, noteHeightPx } from "./noteSizing";
-import type { Point, SchematicNote } from "../types";
+import { MIN_NOTE_HEIGHT, MIN_NOTE_WIDTH, noteFontSizePx, noteWidthPx, noteHeightPx } from "./noteSizing";
+import type { Point, SchematicNote, SchematicNoteAnchor } from "../types";
 
 export interface CopyPreviewNoteView {
   className: string;
@@ -19,37 +19,20 @@ export interface CopyPreviewNoteView {
   };
 }
 
-export function createPlainSchematicNote(id: string, anchor: Point): SchematicNote {
+export function createSchematicNote(id: string, point: Point, draft: { text: string; fontSizePx: number; anchor: SchematicNoteAnchor }): SchematicNote {
   return {
     id,
-    x: anchor.x,
-    y: anchor.y,
+    x: point.x,
+    y: point.y,
     width: MIN_NOTE_WIDTH,
     height: MIN_NOTE_HEIGHT,
-    format: "plain",
-    text: ""
-  };
-}
-
-export function createMarkdownSchematicNote(id: string, anchor: Point): SchematicNote {
-  return {
-    id,
-    x: anchor.x,
-    y: anchor.y,
-    width: DEFAULT_MARKDOWN_NOTE_WIDTH,
-    height: MIN_MARKDOWN_NOTE_HEIGHT,
-    format: "markdown",
-    text: ""
+    ...draft
   };
 }
 
 export function buildCopyPreviewNoteView(note: SchematicNote, options: { screenPoint: Point; zoom: number }): CopyPreviewNoteView {
   return {
-    className: [
-      "schematic-note",
-      note.format === "markdown" ? "is-markdown" : "",
-      "schematic-note-copy-preview"
-    ].filter(Boolean).join(" "),
+    className: "schematic-note schematic-note-copy-preview",
     noteId: note.id,
     textContent: note.text || " ",
     style: {

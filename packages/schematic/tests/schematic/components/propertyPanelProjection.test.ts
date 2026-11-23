@@ -700,54 +700,27 @@ describe("schematic property panel projection", () => {
     });
   });
 
-  it("aggregates Note fields and only exposes Width when every Note is Markdown", () => {
-    const first = note("note-1", {
-      format: "markdown",
-      width: 320,
-      backgroundColor: null,
-      fontSizePx: 12
-    });
-    const second = note("note-2", {
-      format: "markdown",
-      width: 333,
-      backgroundColor: undefined,
-      fontSizePx: 18
-    });
-    const markdownProjection = project(targets({
-      notes: [first, second]
-    })).note;
-
-    expect(markdownProjection).toEqual({
-      backgroundColor: mixed,
-      fontSizePx: mixed,
-      format: uniform("markdown"),
-      widthPx: mixed
-    });
-    second.format = "plain";
-    const mixedFormat = project(targets({ notes: [first, second] })).note;
-    expect(mixedFormat?.format).toEqual(mixed);
-    expect(mixedFormat).not.toHaveProperty("widthPx");
-  });
-
   it("resolves default Note fill and size before aggregating", () => {
     const first = note("note-1", {
-      format: "markdown",
+      anchor: "upperLeft",
       width: 333,
       backgroundColor: undefined,
       fontSizePx: 0
     });
     const second = note("note-2", {
-      format: "markdown",
+      anchor: "upperLeft",
       width: 340,
       backgroundColor: "#ffffe8",
       fontSizePx: 1
     });
 
     expect(project(targets({ notes: [first, second] })).note).toEqual({
-      backgroundColor: uniform("#ffffe8"),
+      backgroundColor: mixed,
+      backgroundEnabled: mixed,
+      backgroundOpacity: uniform(1),
       fontSizePx: uniform(1),
-      format: uniform("markdown"),
-      widthPx: uniform(340)
+      anchor: uniform("upperLeft"),
+      textColor: uniform("#111111")
     });
 
   });

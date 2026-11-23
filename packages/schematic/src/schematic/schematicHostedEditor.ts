@@ -1,6 +1,5 @@
 import type { SchematicContextMenuScope } from "./contextMenuModel";
 import type { SchematicEditorHandle } from "./editorHandle";
-import type { SchematicNoteRuntimeAdapter } from "./notes/noteRuntimeAdapter";
 import type { SchematicSelectionExportInput } from "./selection/selectionExport";
 import type { NetlistDesign } from "./netlist/model";
 import type {
@@ -15,11 +14,6 @@ import type {
 export interface SchematicEditorRuntimeServices {
   readonly ownerDocument: Document;
   readonly ownerWindow: Window & typeof globalThis;
-  readonly cursors?: {
-    delete: string;
-    temporaryDelete: string;
-  };
-  readonly noteRuntimeAdapter?: SchematicNoteRuntimeAdapter;
   idFactory(): string;
   createAbortController(): AbortController;
   requestAnimationFrame(callback: FrameRequestCallback): number;

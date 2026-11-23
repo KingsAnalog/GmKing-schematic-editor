@@ -26,7 +26,6 @@ import type {
   Point,
   SchematicDocument
 } from "./types";
-import type { SchematicNoteRuntimeAdapter } from "./notes/noteRuntimeAdapter";
 import type { SchematicProject } from "./schematicProject";
 
 export interface SchematicDocumentFileLike {
@@ -156,11 +155,6 @@ export interface SchematicEditorHostServices {
   readonly workspace: SchematicWorkspacePort;
   readonly documentFiles: SchematicDocumentFilePort;
   readonly clipboard: SchematicClipboardPort;
-  readonly cursors?: {
-    delete: string;
-    temporaryDelete: string;
-  };
-  readonly noteRuntimeAdapter?: SchematicNoteRuntimeAdapter;
   idFactory(): string;
   createAbortController(): AbortController;
   requestAnimationFrame(callback: FrameRequestCallback): number;

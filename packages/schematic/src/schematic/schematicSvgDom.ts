@@ -5,7 +5,7 @@ const purifiers = new WeakMap<Window, DOMPurify>();
 
 // Preserve opaque document identifiers, including IDs containing colons.
 const metadataAttributes = [
-  "data-note-id", "data-markdown-note-fallback",
+  "data-note-id", "data-mml-node",
   "data-component-id", "data-pin-id", "data-selector", "data-symbol-content-path", "data-symbol-content-run",
   "data-wire-id", "data-wire-endpoint", "data-net-label-id", "data-junction", "data-inductor-coupling-id",
   "data-coupling-core", "data-coupling-arc", "data-coupling-arrows", "data-coupling-label", "data-wire-digital-slash", "data-wire-digital-label"
@@ -13,13 +13,13 @@ const metadataAttributes = [
 
 const drawing = {
   ALLOWED_TAGS: ["svg", "g", "defs", "pattern", "clipPath", "path", "rect", "circle", "line",
-    "polygon", "polyline", "text", "tspan"],
+    "polygon", "polyline", "text", "tspan", "use"],
   ALLOWED_ATTR: ["xmlns", "class", "id", "viewBox", "width", "height", "x", "y", "dx", "dy",
     "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry", "d", "points", "transform",
     "fill", "fill-opacity", "stroke", "stroke-width", "stroke-dasharray", "stroke-linecap",
     "stroke-linejoin", "opacity", "patternUnits", "clip-path", "font-family", "font-size",
     "font-style", "font-weight", "text-decoration", "text-anchor", "dominant-baseline",
-    "xml:space", "focusable", "aria-hidden", ...metadataAttributes],
+    "xml:space", "focusable", "aria-hidden", "color", "overflow", "href", "xlink:href", ...metadataAttributes],
   ADD_URI_SAFE_ATTR: metadataAttributes,
   ALLOW_DATA_ATTR: false,
   ALLOW_ARIA_ATTR: false,
@@ -43,11 +43,11 @@ function purifierFor(doc: Document) {
     purifier = createDOMPurify(view);
     purifier.addHook("uponSanitizeAttribute", (_node, attr) => {
       const { attrName, attrValue } = attr;
-      if (attrName === "fill" || attrName === "stroke" || attrName === "stop-color") {
+      if (attrName === "fill" || attrName === "stroke" || attrName === "stop-color" || attrName === "color") {
         attr.keepAttr = color.test(attrValue) || localPaint.test(attrValue);
       } else if (attrName === "clip-path" || attrName === "filter") {
         attr.keepAttr = localPaint.test(attrValue);
-      } else if (attrName === "href") {
+      } else if (attrName === "href" || attrName === "xlink:href") {
         attr.keepAttr = /^#[\w.-]+$/.test(attrValue);
       }
     });

@@ -8,135 +8,25 @@
     <script vite-ignore src="./editor-preferences.js"></script>
     <script>
       window.MathJax = {
-        loader: {
-          paths: {
-            "mathjax-bbm-extension": "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-bbm-font-extension@4.1.3",
-            "mathjax-bboldx-extension": "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-bboldx-font-extension@4.1.3",
-            "mathjax-dsfont-extension": "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-dsfont-font-extension@4.1.3",
-            "mathjax-mhchem-extension": "https://cdn.jsdelivr.net/npm/@mathjax/mathjax-mhchem-font-extension@4.1.3"
-          },
-          load: [
-            "ui/safe",
-            "[tex]/amscd",
-            "[tex]/bbox",
-            "[tex]/bbm",
-            "[tex]/bboldx",
-            "[tex]/begingroup",
-            "[tex]/boldsymbol",
-            "[tex]/braket",
-            "[tex]/bussproofs",
-            "[tex]/cancel",
-            "[tex]/cases",
-            "[tex]/centernot",
-            "[tex]/color",
-            "[tex]/colortbl",
-            "[tex]/dsfont",
-            "[tex]/empheq",
-            "[tex]/enclose",
-            "[tex]/extpfeil",
-            "[tex]/mathtools",
-            "[tex]/mhchem",
-            "[tex]/physics",
-            "[tex]/tagformat",
-            "[tex]/textcomp",
-            "[tex]/unicode",
-            "[tex]/units",
-            "[tex]/upgreek",
-            "[tex]/verb"
-          ]
-        },
+        loader: { paths: { fonts: "./vendor" } },
+        output: { font: "mathjax-tex" },
         tex: {
-          packages: {
-            "[-]": ["autoload", "noundefined"],
-            "[+]": [
-              "amscd",
-              "bbox",
-              "bbm",
-              "bboldx",
-              "begingroup",
-              "boldsymbol",
-              "braket",
-              "bussproofs",
-              "cancel",
-              "cases",
-              "centernot",
-              "color",
-              "colortbl",
-              "dsfont",
-              "empheq",
-              "enclose",
-              "extpfeil",
-              "mathtools",
-              "mhchem",
-              "physics",
-              "tagformat",
-              "textcomp",
-              "unicode",
-              "units",
-              "upgreek",
-              "verb"
-            ]
-          },
-          require: {
-            allow: {
-              amscd: true,
-              bbox: true,
-              bbm: true,
-              bboldx: true,
-              begingroup: true,
-              boldsymbol: true,
-              braket: true,
-              bussproofs: true,
-              cancel: true,
-              cases: true,
-              centernot: true,
-              color: true,
-              colortbl: true,
-              dsfont: true,
-              empheq: true,
-              enclose: true,
-              extpfeil: true,
-              mathtools: true,
-              mhchem: true,
-              physics: true,
-              tagformat: true,
-              textcomp: true,
-              unicode: true,
-              units: true,
-              upgreek: true,
-              verb: true
-            },
-            defaultAllow: false
-          },
+          packages: { "[-]": ["autoload", "require"] },
           inlineMath: [["\\(", "\\)"]],
           displayMath: [["\\[", "\\]"]]
         },
-        svg: {
-          fontCache: "local"
-        },
+        svg: { fontCache: "none" },
         options: {
-          safeOptions: {
-            allow: {
-              URLs: "safe",
-              classes: "safe",
-              cssIDs: "safe",
-              styles: "safe"
-            },
-            safeProtocols: {
-              http: true,
-              https: true,
-              file: false,
-              javascript: false,
-              data: false
-            }
-          }
+          enableMenu: false,
+          enableEnrichment: false,
+          enableSpeech: false,
+          enableBraille: false,
+          a11y: { speech: false, braille: false }
         },
-        startup: {
-          typeset: false
-        }
+        startup: { typeset: false }
       };
     </script>
-    <script async src="https://cdn.jsdelivr.net/npm/mathjax@4.1.3/tex-svg.js" onload="window.dispatchEvent(new Event('mathjax-ready'))"></script>
+    <script async vite-ignore src="./vendor/mathjax/tex-mml-svg-mathjax-tex.js" onload="window.dispatchEvent(new Event('mathjax-ready'))"></script>
   </head>
   <body>
     <div id="app"></div>

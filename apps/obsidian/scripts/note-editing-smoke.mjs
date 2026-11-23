@@ -29,34 +29,28 @@ try {
   await clickSelector(page, "[data-schematic-session]");
   await evaluate(page, () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await evaluate(page, () => window.noteSmoke.coordinator.activeEditor().execute({ kind: "note" }));
-  await waitFor(page, () => document.activeElement?.matches("[data-note-editor]"), "New Note did not enter editing");
-  await evaluate(page, () => { window.originalNoteInput = document.activeElement; });
-  for (const [text, total] of [["First", "First"], [" second", "First second"], [" third", "First second third"]]) {
-    await page.send("Input.insertText", { text });
-    await waitFor(page, expected => window.noteSmoke.view.state.doc.toString().includes(expected), "Note autosave did not write text", { args: [total] });
-    await evaluate(page, () => new Promise(resolve => setTimeout(resolve, 600)));
-    const state = await evaluate(page, () => ({ ...window.noteSmoke.snapshot(), sameInput: document.activeElement === window.originalNoteInput }));
-    console.log(JSON.stringify({ text: state.text, editing: state.editing, focused: state.focused, caret: state.caret }));
-    if (state.text !== total || state.textarea !== total || !state.editing || !state.focused || !state.sameInput) {
-      throw new Error("Note lost its editing session across a typing pause: " + JSON.stringify(state));
-    }
+  await waitFor(page, () => document.activeElement?.matches("[data-note-text]"), "Note dialog did not focus its text field");
+  await page.send("Input.insertText", { text: "First note" });
+  await clickSelector(page, "[data-schematic-note-dialog] button[type=submit]");
+  const point = await evaluate(page, () => {
+    const paper = document.querySelector("[data-schematic-paper]").getBoundingClientRect();
+    return { x: paper.left + 150, y: paper.top + 150 };
+  });
+  for (const type of ["mousePressed", "mouseReleased"]) {
+    await page.send("Input.dispatchMouseEvent", { type, ...point, button: "left", clickCount: 1 });
   }
-  await evaluate(page, () => document.querySelector("[data-note-editor]").setSelectionRange(6, 12));
-  await page.send("Input.insertText", { text: "第二段" });
-  await waitFor(page, () => window.noteSmoke.view.state.doc.toString().includes("First 第二段 third"), "Middle-of-text edit was not saved");
-  await evaluate(page, () => new Promise(resolve => setTimeout(resolve, 600)));
-  const middle = await evaluate(page, () => window.noteSmoke.snapshot());
-  if (!middle.editing || !middle.focused || middle.caret !== 9) throw new Error("Autosave lost the middle caret: " + JSON.stringify(middle));
-  await page.send("Input.insertText", { text: "!" });
-  await clickSelector(page, "#outside");
-  const done = await evaluate(page, () => window.noteSmoke.snapshot());
-  if (done.editing) throw new Error("An intentional outside click did not finish Note editing");
-  if (done.text !== "First 第二段! third") throw new Error("Outside click did not save the pending text");
+  await waitFor(page, () => window.noteSmoke.view.state.doc.toString().includes("First note"), "Placing the note did not update the fence");
+  await evaluate(page, () => {
+    const input = document.querySelector("[data-property-note-text]");
+    input.value = "更新 Second note";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await waitFor(page, () => window.noteSmoke.view.state.doc.toString().includes("更新 Second note"), "Properties did not save the text");
   await evaluate(page, () => window.noteSmoke.coordinator.activeEditor().execute({ kind: "undo" }));
-  await waitFor(page, () => window.noteSmoke.coordinator.activeEditor().getContent().notes[0].text === "First 第二段 third", "CodeMirror Undo failed");
+  await waitFor(page, () => window.noteSmoke.coordinator.activeEditor().getContent().notes[0].text === "First note", "CodeMirror Undo failed");
   await evaluate(page, () => window.noteSmoke.coordinator.activeEditor().execute({ kind: "redo" }));
-  await waitFor(page, () => window.noteSmoke.coordinator.activeEditor().getContent().notes[0].text === "First 第二段! third", "CodeMirror Redo failed");
-  console.log("[obsidian-note] repeated typing, autosave, focus, caret, outside blur and Undo/Redo passed");
+  await waitFor(page, () => window.noteSmoke.coordinator.activeEditor().getContent().notes[0].text === "更新 Second note", "CodeMirror Redo failed");
+  console.log("[obsidian-note] dialog placement, Properties, and CodeMirror Undo/Redo passed");
   await checkStaticPreview(page);
 } finally {
   page?.close();
@@ -88,7 +82,7 @@ async function checkStaticPreview(page) {
     if (version !== "A") await open(version === "B" ? "A" : "B");
     await evaluate(page, version => {
       window.noteSmoke.coordinator.activeEditor().transact(draft => {
-        draft.notes = [{ id: "preview-note", x: 100, y: 100, width: 200, height: 40, format: "plain", text: `Preview ${version}` }];
+        draft.notes = [{ id: "preview-note", x: 100, y: 100, width: 200, height: 40, anchor: "upperLeft", text: `Preview ${version}` }];
         if (version === "B") draft.wires = [
           { id: "left", routeMode: "orthogonal", points: [{ x: 0, y: 0 }, { x: 40, y: 0 }], appearance: { variant: "signal", startMarker: "arrow" } },
           { id: "right", routeMode: "orthogonal", points: [{ x: 80, y: 0 }, { x: 40, y: 0 }] },

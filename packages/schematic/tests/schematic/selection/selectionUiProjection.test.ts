@@ -189,7 +189,7 @@ describe("schematic selection UI projection", () => {
   it("projects a selected Note while preserving its summary", () => {
     const note = {
       ...fixtureNote("note-1", 120, 160),
-      format: "markdown" as const,
+      anchor: "upperLeft" as const,
       width: 333
     };
     const document = { ...emptyDoc(), notes: [note] };
@@ -208,9 +208,12 @@ describe("schematic selection UI projection", () => {
       hasSelection: true,
       note: {
         backgroundColor: uniform("#fff6bf"),
+        backgroundEnabled: uniform(true),
+        backgroundOpacity: uniform(1),
         fontSizePx: uniform(14),
-        format: uniform("markdown"),
-        widthPx: uniform(340)
+        anchor: uniform("upperLeft"),
+        text: "rewrite note",
+        textColor: uniform("#111111")
       }
     });
     expect(result.summary).toEqual({
@@ -383,19 +386,20 @@ describe("schematic selection UI projection", () => {
       separator: "space",
       parts: [
         { text: "Copy" },
-        { text: "click an object", muted: true }
+        { text: "click an object or drag a box", muted: true }
       ]
     });
     expect(projection({
-      mode: "copy",
-      copy: { hasSource: false, awaitingReference: true }
+      mode: "move",
+      moveBehavior: "stretch",
+      moveHasSource: true
     }).summary).toEqual({
       kind: "labeled",
       title: "Tool:",
       separator: "space",
       parts: [
-        { text: "Copy" },
-        { text: "click reference", muted: true }
+        { text: "Stretch move" },
+        { text: "click to place", muted: true }
       ]
     });
     expect(projection({

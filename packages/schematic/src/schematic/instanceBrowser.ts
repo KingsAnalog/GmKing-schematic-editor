@@ -1,4 +1,7 @@
 import { paletteItemPreview, type InstancePaletteItem } from "./instanceSelector";
+import { InstanceBrowserProperties } from "./instanceBrowserProperties";
+import type { PlacementComponentProperties } from "./placementModel";
+import type { SchematicDocument } from "./types";
 import {
   DEFAULT_DEVICE_ITEM,
   DEVICE_LIBRARIES,
@@ -14,7 +17,8 @@ import type { SymbolTemplateId } from "./symbolTemplateModel";
 
 interface InstanceBrowserEvents {
   symbolTemplate: () => SymbolTemplateId | undefined;
-  onPick: (item: InstancePaletteItem) => void;
+  netlistProcess: () => SchematicDocument["netlistProcess"];
+  onPick: (item: InstancePaletteItem, properties?: PlacementComponentProperties) => void;
   onClose?: () => void;
 }
 
@@ -40,6 +44,7 @@ export class InstanceBrowser {
   private symbolPreview: HTMLElement | null = null;
   private symbolName: HTMLElement | null = null;
   private symbolMeta: HTMLElement | null = null;
+  private properties: InstanceBrowserProperties | null = null;
   private countLabel: HTMLElement | null = null;
   private placeButton: HTMLButtonElement | null = null;
   private libraryId: DeviceLibraryId = "all";
@@ -110,12 +115,16 @@ export class InstanceBrowser {
     cellColumn.append(cellInput, cellList);
 
     const symbolColumn = element(doc, "section", "instance-browser-column browser-symbol");
-    symbolColumn.append(element(doc, "h3", undefined, message("browser.symbol", "Symbol")));
+    const symbolHeading = element(doc, "header", "browser-symbol-heading");
     const symbolPreview = element(doc, "div", "browser-symbol-preview");
     symbolPreview.dataset.browserSymbol = "";
     const symbolName = element(doc, "div", "browser-symbol-name");
     const symbolMeta = element(doc, "div", "browser-symbol-meta");
-    symbolColumn.append(symbolPreview, symbolName, symbolMeta);
+    const properties = element(doc, "div", "browser-instance-properties");
+    properties.dataset.browserProperties = "";
+    properties.hidden = true;
+    symbolHeading.append(symbolName, symbolMeta);
+    symbolColumn.append(symbolHeading, symbolPreview, properties);
 
     columns.append(libraryColumn, cellColumn, symbolColumn);
 
@@ -142,6 +151,7 @@ export class InstanceBrowser {
     this.placeButton = place;
 
     const { signal } = this.lifecycle;
+    this.properties = new InstanceBrowserProperties(properties, symbolPreview, this.events.netlistProcess, signal);
     backdrop.addEventListener("click", () => this.close(), { signal });
     close.addEventListener("click", () => this.close(), { signal });
     place.addEventListener("click", () => this.pick(), { signal });
@@ -176,6 +186,7 @@ export class InstanceBrowser {
 
   destroy() {
     this.lifecycle.abort();
+    this.properties?.destroy();
     this.layer?.remove();
     this.layer = null;
     this.mounted = false;
@@ -218,6 +229,7 @@ export class InstanceBrowser {
     if (!this.layer || !this.openState) return;
     this.openState = false;
     this.layer.hidden = true;
+    this.properties?.show(undefined, this.events.symbolTemplate());
     const focus = this.previousFocus;
     this.previousFocus = null;
     if (focus && focus.isConnected) focus.focus({ preventScroll: true });
@@ -339,9 +351,10 @@ export class InstanceBrowser {
   }
 
   private renderSymbol(item: InstancePaletteItem | undefined) {
-    if (this.symbolPreview) {
+    const symbolTemplate = this.events.symbolTemplate();
+    if (!this.properties?.show(item, symbolTemplate) && this.symbolPreview) {
       this.symbolPreview.innerHTML = item
-        ? paletteItemPreview(item, { symbolTemplate: this.events.symbolTemplate() })
+        ? paletteItemPreview(item, { symbolTemplate })
         : "";
     }
     if (this.symbolName) this.symbolName.textContent = item ? deviceItemName(item) : "";
@@ -381,7 +394,8 @@ export class InstanceBrowser {
   private pick() {
     const item = this.filteredCells()[this.cellIndex];
     if (!item) return;
+    const properties = this.properties?.take();
     this.close();
-    this.events.onPick(item);
+    this.events.onPick(item, properties);
   }
 }

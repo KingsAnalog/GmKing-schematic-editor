@@ -1,6 +1,7 @@
+import { DEFAULT_NOTE_ANCHOR } from "./notes/noteGeometry";
 import { COMPONENT_SCALES, componentScale, supportsComponentScale } from "./componentScaleModel";
 import { componentSupportsProperty } from "./componentValueSchema";
-import { noteBackgroundColor, noteTextColor } from "./notes/noteAppearance";
+import { noteBackgroundColor, noteFillStyle, noteTextColor } from "./notes/noteAppearance";
 import { VOLTAGE_SOURCE_TYPES, voltageSourceType, voltageSourceFields, voltageSourceFieldValue, voltageSourcePairCount } from "./voltageSourceModel";
 import {
   getComponentDef,
@@ -16,8 +17,7 @@ import {
   parseMosViewVariantId
 } from "./mosViewModel";
 import {
-  noteFontSizePx,
-  noteWidthPx
+  noteFontSizePx
 } from "./notes/noteSizing";
 import {
   aggregateValues,
@@ -61,7 +61,8 @@ import { rectangleSettings } from "./rectangleComponentModel";
 import {
   isLibraryShapeType,
   isOpenLibraryShapeType,
-  libraryShapeStyle
+  libraryShapeStyle,
+  supportsLibraryShapeStyle
 } from "./libraryShapeStyleModel";
 import {
   FILTER_KIND_OPTIONS,
@@ -213,11 +214,14 @@ function buildComponentInput(
     }
   };
 
-  if (components.every(component => isLibraryShapeType(component.type))) {
+  const hasFill = components.every(component => supportsLibraryShapeStyle(component.type, "fillEnabled"));
+  if (input.libraryShape || hasFill) {
     const styles = components.map(libraryShapeStyle);
     input.libraryShapeStyle = {
-      strokeWidth: aggregateValues(styles.map(style => style.strokeWidth)),
-      lineStyle: aggregateValues(styles.map(style => style.lineStyle)),
+      ...(input.libraryShape ? {
+        strokeWidth: aggregateValues(styles.map(style => style.strokeWidth)),
+        lineStyle: aggregateValues(styles.map(style => style.lineStyle))
+      } : {}),
       ...(components.every(component => component.type === "rectangle")
         ? { cornerRadius: aggregateValues(styles.map(style => style.cornerRadius)) }
         : {}),
@@ -227,7 +231,7 @@ function buildComponentInput(
         startArrowSize: aggregateValues(styles.map(style => style.startArrowSize)),
         endArrowSize: aggregateValues(styles.map(style => style.endArrowSize))
       } : {}),
-      ...(components.every(component => !isOpenLibraryShapeType(component.type)) ? {
+      ...(hasFill ? {
         fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
         fillColor: aggregateValues(styles.map(style => style.fillColor)),
         fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))
@@ -433,17 +437,16 @@ function buildInductorCouplingInput(
 }
 
 function buildNoteInput(notes: readonly SchematicNote[]): SchematicPropertyPanelNoteInput {
-  const formats = notes.map((note) => note.format ?? "plain");
-  const input: SchematicPropertyPanelNoteInput = {
+  const fills = notes.map(noteFillStyle);
+  return {
     backgroundColor: aggregateValues(notes.map(noteBackgroundColor)),
+    backgroundEnabled: aggregateValues(fills.map(fill => fill.fillEnabled)),
+    backgroundOpacity: aggregateValues(fills.map(fill => fill.fillOpacity)),
+    textColor: aggregateValues(notes.map(noteTextColor)),
     fontSizePx: aggregateValues(notes.map(noteFontSizePx)),
-    format: aggregateValues(formats)
+    anchor: aggregateValues(notes.map(note => note.anchor ?? DEFAULT_NOTE_ANCHOR)),
+    ...(notes.length === 1 ? { text: notes[0].text } : {})
   };
-  if (formats.every(format => format === "plain")) input.textColor = aggregateValues(notes.map(noteTextColor));
-  if (formats.every((format) => format === "markdown")) {
-    input.widthPx = aggregateValues(notes.map(noteWidthPx));
-  }
-  return input;
 }
 
 function buildWireInput(

@@ -34,9 +34,9 @@
     "netLabels": [{"id": "input-label", "name": "IN", "layerId": "layer-1", "attachment": {"wireId": "input-wire-segment-1", "point": {"x": 270, "y": 130}}}, {"id": "output-label", "name": "OUT", "layerId": "layer-2", "attachment": {"wireId": "output-branch", "point": {"x": 630, "y": 130}}}],
     "layers": [{"id": "layer-1", "name": "主电路", "visible": true, "locked": false}, {"id": "layer-2", "name": "输出与标注", "visible": true, "locked": false}, {"id": "layer-3", "name": "参考层", "visible": true, "locked": true}],
     "notes": [
-      {"x": 570, "y": 205, "width": 205, "layerId": "layer-2", "format": "plain", "id": "output-note",
+      {"x": 570, "y": 205, "width": 205, "layerId": "layer-2", "anchor": "upperLeft", "id": "output-note",
         "text": "RC 低通滤波器\nR1 = 10 kΩ，C1 = 100 nF\n截止频率约 159 Hz"},
-      {"x": 570, "y": 350, "width": 190, "layerId": "layer-3", "format": "plain", "id": "locked-note",
+      {"x": 570, "y": 350, "width": 190, "layerId": "layer-3", "anchor": "upperLeft", "id": "locked-note",
         "text": "参考层（已锁定）\n用于验证编辑与图层改派限制"}
     ]
   }

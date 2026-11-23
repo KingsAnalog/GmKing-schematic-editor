@@ -15,7 +15,7 @@
         <h1>Schematic Editor Help</h1>
         <section>
           <h2>Place components and shapes</h2>
-          <p>Open <strong>Library</strong> to browse symbols and shapes. Press <kbd>I</kbd> to search for a component. Select an item and click the canvas to place it. Select an item on the canvas to edit its settings in <strong>Properties</strong>.</p>
+          <p>Open <strong>Library</strong> to browse symbols and shapes. Press <kbd>I</kbd> to search for a component. The right column shows its name, symbol, and editable properties. Set any parameters, choose <strong>Place</strong>, then click the canvas. You can also edit an existing object in the main <strong>Properties</strong> panel.</p>
         </section>
         <section>
           <h2>Connect and label nets</h2>
@@ -24,7 +24,14 @@
         </section>
         <section>
           <h2>Arrange the drawing</h2>
-          <p>Use <strong>Layers</strong> to show, hide, or lock layers. Use <strong>Properties → Layer</strong> to move a selected object to a different layer. Press <kbd>R</kbd> to rotate, <kbd>Ctrl+R</kbd> to mirror across X, or <kbd>Shift+R</kbd> to mirror across Y.</p>
+          <p>Use <strong>Layers</strong> to show, hide, or lock layers. Use <strong>Properties → Layer</strong> to move a selected object to a different layer. Press <kbd>Ctrl+R</kbd> to mirror across X or <kbd>Shift+R</kbd> to mirror across Y.</p>
+          <p>Press <kbd>R</kbd> to rotate the selection 90° in place. With an empty selection, press <kbd>R</kbd>, click a component to rotate it, then click the destination. Repeat for other components or press <kbd>Esc</kbd> to exit.</p>
+          <p>Press <kbd>M</kbd> to move with attached wires, <kbd>Shift+M</kbd> to move while leaving unselected wires in place, or <kbd>C</kbd> to copy. If objects are selected, click the destination to place them and finish. With an empty selection, click an object or drag a box from blank canvas to pick a group, then click its destination. You can keep picking and placing until you press <kbd>Esc</kbd>. Copying a subcircuit symbol on its sheet creates another instance of the same child sheet.</p>
+        </section>
+        <section>
+          <h2>Add a note</h2>
+          <p>Choose <strong>Note</strong> or press <kbd>Shift+N</kbd>. Enter text, set the font size, and choose one of the nine anchors. Press <kbd>Enter</kbd> to confirm, then click a snapped point on the canvas. <kbd>Shift+Enter</kbd> adds a line while entering text.</p>
+          <p>Use <code>\(…\)</code> for inline TeX and <code>\[…\]</code> for display TeX. Select a placed note to edit its text and anchor in <strong>Properties</strong>. SVG and PNG exports include the typeset formulas.</p>
         </section>
         <section>
           <h2>Build a hierarchical schematic</h2>
@@ -39,7 +46,7 @@
         </section>
         <section>
           <h2>Work with an AI Agent</h2>
-          <p>Run <code>npm run agent:connector</code> from the Schematic Editor source folder. In the editor, choose <strong>AI → Hand off to AI → Copy text</strong> and paste the prompt into your local Agent. Allow local network access if the browser asks. Pairing uses a two-minute, single-use code.</p>
+          <p>Run <code>npm run agent:connector</code> from the Schematic Editor source folder. In the editor, choose <strong>AI → Hand off to AI → Copy text</strong> and paste the prompt into your local Agent. Allow local network access if the browser asks. Pairing uses a two-minute, single-use code. A paired session lasts up to two hours.</p>
           <p>When paired, the green bar shows <strong>AI connected</strong>. You can edit normally. AI transactions use the latest project revision and enter the same Undo history. <strong>Suspend</strong> pauses AI access. <strong>Disconnect</strong> and <strong>Reclaim editing</strong> both revoke the session. The connector only listens on this computer.</p>
         </section>
         <section>
@@ -56,7 +63,7 @@
         <h1>Schematic Editor 使用说明</h1>
         <section>
           <h2>放置元件和图形</h2>
-          <p>打开<strong>器件库</strong>浏览符号和图形，或按 <kbd>I</kbd> 搜索元件。选择项目后点击画布放置。在画布上选中对象后，可以在<strong>属性</strong>面板中编辑。</p>
+          <p>打开<strong>器件库</strong>浏览符号和图形，或按 <kbd>I</kbd> 搜索元件。右栏依次显示器件名称、符号和可编辑属性。设置参数后选择<strong>放置</strong>，再点击画布。在画布上选中对象后，也可以在<strong>属性</strong>面板中编辑。</p>
         </section>
         <section>
           <h2>连接导线并命名网络</h2>
@@ -65,7 +72,14 @@
         </section>
         <section>
           <h2>整理图纸</h2>
-          <p>在<strong>图层</strong>中管理图层的可见性和锁定状态，通过<strong>属性 → 图层</strong>调整所选对象所属的图层。按 <kbd>R</kbd> 旋转，按 <kbd>Ctrl+R</kbd> 沿 X 轴镜像，按 <kbd>Shift+R</kbd> 沿 Y 轴镜像。</p>
+          <p>在<strong>图层</strong>中管理图层的可见性和锁定状态，通过<strong>属性 → 图层</strong>调整所选对象所属的图层。按 <kbd>Ctrl+R</kbd> 沿 X 轴镜像，按 <kbd>Shift+R</kbd> 沿 Y 轴镜像。</p>
+          <p>按 <kbd>R</kbd> 将选中的对象就地旋转 90°。没有选中对象时，按 <kbd>R</kbd> 后先点击器件旋转，再点击目标位置放置。可以继续旋转其他器件，或按 <kbd>Esc</kbd> 退出。</p>
+          <p>按 <kbd>M</kbd> 移动对象并拉伸相连导线，按 <kbd>Shift+M</kbd> 仅移动对象，按 <kbd>C</kbd> 复制。已选中对象时，点击目标位置即可放置并退出。没有选中对象时，先点击对象，再点击目标位置，可以连续拾取和放置，直到按 <kbd>Esc</kbd> 结束。</p>
+        </section>
+        <section>
+          <h2>添加注释</h2>
+          <p>点击<strong>注释</strong>或按 <kbd>Shift+N</kbd>，输入文本并选择字号和九个定位点之一。按 <kbd>Enter</kbd> 确认，再点击画布上的吸附点放置。输入时可用 <kbd>Shift+Enter</kbd> 换行。</p>
+          <p>用 <code>\(…\)</code> 插入行内 TeX，用 <code>\[…\]</code> 单独显示公式。选中已放置的注释，在<strong>属性</strong>中修改文本和定位点。SVG 和 PNG 导出会保留公式排版。</p>
         </section>
         <section>
           <h2>创建层次原理图</h2>
@@ -80,7 +94,7 @@
         </section>
         <section>
           <h2>与 AI Agent 协作</h2>
-          <p>在 Schematic Editor 源码目录运行 <code>npm run agent:connector</code>。在编辑器选择 <strong>AI → 交给 AI 修改 → 复制文本</strong>，将提示词粘贴给本机 Agent。若浏览器询问，请允许本地网络访问。配对码两分钟内可以使用一次。</p>
+          <p>在 Schematic Editor 源码目录运行 <code>npm run agent:connector</code>。在编辑器选择 <strong>AI → 交给 AI 修改 → 复制文本</strong>，将提示词粘贴给本机 Agent。若浏览器询问，请允许本地网络访问。配对码两分钟内可以使用一次，配对成功后会话最长持续两小时。</p>
           <p>配对后，顶部绿条显示<strong>AI 已连接</strong>，仍可正常手工编辑。AI 事务按最新项目修订号提交，与手工操作使用同一个撤销历史。<strong>暂停连接</strong>会暂停 AI 访问。<strong>取消连接</strong>和<strong>收回编辑权</strong>都会撤销会话。连接器只监听本机。</p>
         </section>
         <section>

@@ -1,7 +1,7 @@
-import type { ToolMode } from "./toolState";
+import { COPY_PICK_STATUS, type ToolMode } from "./toolState";
 import type { Point } from "./types";
 
-export const POINTER_CLICK_COPY_EMPTY_STATUS = "Copy mode: click an object to copy, or Esc cancels.";
+export const POINTER_CLICK_COPY_EMPTY_STATUS = COPY_PICK_STATUS;
 export const POINTER_CLICK_COMPONENT_ANALYSIS_BLOCKED_STATUS =
   "Voltage-node pick is wire-based. Click a wire or wire node; component pins are reserved for current picks.";
 
@@ -25,7 +25,6 @@ export type PointerClickRoutingInput = {
   readonly mode: ToolMode;
   readonly target: PointerClickTarget;
   readonly copyHasSource: boolean;
-  readonly copyAwaitingReference?: boolean;
   readonly analysisPickActive: boolean;
   readonly deleteMode: boolean;
   readonly selectionModified?: boolean;
@@ -35,7 +34,6 @@ export type PointerClickRoutingIntent =
   | { kind: "ignore" }
   | { kind: "status"; message: string }
   | { kind: "clear-selection" }
-  | { kind: "set-copy-reference"; point: Point }
   | { kind: "place-copy"; point: Point }
   | { kind: "place-active-item"; point: Point }
   | { kind: "wire-blank-click"; point: Point }
@@ -71,6 +69,7 @@ export function decideSchematicPointerClick(input: PointerClickRoutingInput): Po
 function decideInductorCouplingPointerClick(input: PointerClickRoutingInput): PointerClickRoutingIntent {
   const { mode, target } = input;
   if (target.kind !== "inductor-coupling") return ignoreIntent();
+  if (mode === "copy" && input.copyHasSource) return placeCopyIntent(target.point);
   if (mode === "copy") return statusIntent("Select both inductors to copy their coupling.");
   if (input.deleteMode) return deleteTargetsIntent([target.id]);
   if (mode === "select") return selectTargetIntent(target.id);
@@ -82,7 +81,6 @@ function decideBlankPointerClick(input: PointerClickRoutingInput): PointerClickR
   if (target.kind !== "blank") return ignoreIntent();
 
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point);
     return input.copyHasSource ? placeCopyIntent(target.point) : statusIntent(POINTER_CLICK_COPY_EMPTY_STATUS);
   }
   if (mode === "place") return placeActiveItemIntent(target.point);
@@ -97,7 +95,7 @@ function decidePreviewPointerClick(input: PointerClickRoutingInput): PointerClic
   const { mode, target } = input;
   if (target.kind !== "preview") return ignoreIntent();
 
-  if (mode === "copy") return input.copyAwaitingReference ? setCopyReferenceIntent(target.point) : placeCopyIntent(target.point);
+  if (mode === "copy" && input.copyHasSource) return placeCopyIntent(target.point);
   if (mode === "place" && target.surface === "element") return placeActiveItemIntent(target.point);
   if (mode === "wire" && target.surface === "link") return wireBlankClickIntent(target.point);
   return ignoreIntent();
@@ -108,7 +106,6 @@ function decideJunctionPointerClick(input: PointerClickRoutingInput): PointerCli
   if (target.kind !== "junction") return ignoreIntent();
 
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point ?? target.placementPoint);
     if (input.copyHasSource) return placeCopyIntent(target.placementPoint);
     if (target.point && target.id) return beginCopyIntent([target.id], target.point);
     return ignoreIntent();
@@ -126,7 +123,6 @@ function decideComponentPointerClick(input: PointerClickRoutingInput): PointerCl
   if (target.kind !== "component") return ignoreIntent();
 
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point);
     return input.copyHasSource ? placeCopyIntent(target.point) : beginCopyIntent([target.id], target.point);
   }
   if (mode === "place") return ignoreIntent();
@@ -143,7 +139,6 @@ function decideWirePointerClick(input: PointerClickRoutingInput): PointerClickRo
   if (target.kind !== "wire") return ignoreIntent();
 
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point);
     if (input.copyHasSource) return placeCopyIntent(target.point);
     return target.id ? beginCopyIntent([target.id], target.point) : ignoreIntent();
   }
@@ -159,7 +154,6 @@ function decideNetLabelPointerClick(input: PointerClickRoutingInput): PointerCli
   const { mode, target } = input;
   if (target.kind !== "net-label") return ignoreIntent();
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point);
     return input.copyHasSource ? placeCopyIntent(target.point) : beginCopyIntent([target.id], target.point);
   }
   if (input.deleteMode) return deleteTargetsIntent([target.id]);
@@ -173,7 +167,6 @@ function decidePinPointerClick(input: PointerClickRoutingInput): PointerClickRou
   if (target.kind !== "pin") return ignoreIntent();
 
   if (mode === "copy") {
-    if (input.copyAwaitingReference) return setCopyReferenceIntent(target.point);
     return input.copyHasSource ? placeCopyIntent(target.point) : beginCopyIntent([target.componentId], target.point);
   }
   if (mode === "wire") return wirePinClickIntent(target.point);
@@ -193,10 +186,6 @@ function statusIntent(message: string): PointerClickRoutingIntent {
 
 function componentAnalysisBlockedStatusIntent(): PointerClickRoutingIntent {
   return statusIntent(POINTER_CLICK_COMPONENT_ANALYSIS_BLOCKED_STATUS);
-}
-
-function setCopyReferenceIntent(point: Point): PointerClickRoutingIntent {
-  return { kind: "set-copy-reference", point };
 }
 
 function placeCopyIntent(point: Point): PointerClickRoutingIntent {

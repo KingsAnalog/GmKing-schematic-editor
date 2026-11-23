@@ -127,7 +127,12 @@ try {
   const expiredSession = await beginPairing();
   const expiringPair = await rpc({ method: "pair", code: expiredSession.code });
   assert(expiringPair.ok);
-  await evaluate(page, () => window.advanceAgentClock(2_000_000));
+  const lifetime = 2 * 60 * 60_000;
+  const remaining = expiringPair.expiresAt - await evaluate(page, () => Date.now());
+  assert(remaining <= lifetime && remaining > lifetime - 5000, "Session must have a two-hour lifetime");
+  await evaluate(page, duration => window.advanceAgentClock(121_000 + duration - 60_000), lifetime);
+  assert((await rpc({ method: "snapshot", token: expiringPair.token })).ok, "Session expired before two hours");
+  await evaluate(page, duration => window.advanceAgentClock(121_000 + duration + 5000), lifetime);
   await waitFor(page, () => document.querySelector("[data-agent-banner]").hidden, "Paired session did not expire");
   assert(["PAGE_OFFLINE", "SESSION_EXPIRED", "SESSION_CLOSED"].includes(
     (await rpc({ method: "snapshot", token: expiringPair.token })).code));

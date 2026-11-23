@@ -26,7 +26,7 @@
 }
 
 .schematic-editor-block .schematic-static-svg,
-.schematic-editor-block .schematic-static-svg svg {
+.schematic-editor-block .schematic-static-svg > svg {
   display: block;
   width: 100%;
   height: 100%;

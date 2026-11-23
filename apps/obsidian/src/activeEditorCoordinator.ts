@@ -1,4 +1,3 @@
-import { createSchematicSvgElement } from "@edahelper/schematic/viewer";
 import { Notice } from "obsidian";
 import { isolateHistory, redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { Transaction } from "@codemirror/state";
@@ -26,7 +25,7 @@ import {
   type SchematicBlockSession
 } from "./sessionField";
 import { suppressSchematicHoverLabels } from "./hoverLabelSuppression";
-import { renderSchematicBlockSvg, SCHEMATIC_HEIGHT_LIMIT_PROPERTY, updateSchematicBlockHeight } from "./blockSizing";
+import { renderSchematicBlockPreview, renderSchematicBlockSvg, SCHEMATIC_HEIGHT_LIMIT_PROPERTY, updateSchematicBlockHeight } from "./blockSizing";
 
 interface ActiveSession {
   session: SchematicBlockSessionAccessor;
@@ -661,10 +660,7 @@ export class SchematicActiveEditorCoordinator {
     }
     const container = root.ownerDocument.createElement("div");
     container.className = "schematic-static-svg";
-    const rendering = renderSchematicBlockSvg(session.projection.content, `${session.id}-static`);
-    updateSchematicBlockHeight(root, rendering);
-    container.replaceChildren(createSchematicSvgElement(container.ownerDocument, rendering.svg));
-    root.appendChild(container);
+    renderSchematicBlockPreview(root, container, session.projection.content, `${session.id}-static`);
   }
 
   private clearPendingAutoActivation() {

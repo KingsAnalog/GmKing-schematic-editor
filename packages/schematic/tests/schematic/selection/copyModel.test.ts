@@ -15,13 +15,35 @@ import type { SchematicDocument } from "../../../src/schematic/types";
 import { component } from "../support/testHelpers";
 
 describe("schematic copy model", () => {
+  it("allocates a new reference for a renamed sheet instance and preserves its child and port bindings", () => {
+    const block = component("sheetBlock", "Amplifier", 0, 0);
+    block.values = {
+      "sheet:target": "amplifier",
+      "sheet:name": "Amplifier",
+      "sheet:ports": JSON.stringify([{ id: "input", name: "IN", direction: "left", type: "input", order: 0, slot: 0 }])
+    };
+    const document = fixtureDocument({ components: [block], wires: [], netLabels: [], notes: [] });
+    const source = copySourceFromDocument(document);
+    const copied = instantiateCopyAt({ source, anchor: { x: 0, y: 0 } }, { x: 200, y: 0 }, {
+      preview: false,
+      nextComponentRef: () => "X1",
+      createId: () => "instance-copy"
+    });
+    applyCopyPlacementToDocument(document, copied);
+    expect(copied.components[0]).toMatchObject({
+      type: "sheetBlock", id: "instance-copy", ref: "X1", x: 200, values: block.values
+    });
+    expect(document.connections.pins["instance-copy"].input).toBeDefined();
+    expect(document.connections.pins["instance-copy"].input).not.toBe(document.connections.pins[block.id].input);
+  });
+
   it("keeps copied layer ownership and relative order in the same document", () => {
     const lower = component("resistor", "R1", 0, 0);
     const upper = component("resistor", "R2", 40, 0);
     upper.values["layer:id"] = "layer-2";
     const document = fixtureDocument({
       components: [upper, lower], wires: [], netLabels: [], junctions: [], junctionAppearances: [],
-      notes: [{ id: "note", x: 120, y: 0, width: 100, format: "plain", text: "Test", layerId: "layer-2" }],
+      notes: [{ id: "note", x: 120, y: 0, width: 100, anchor: "upperLeft" as const, text: "Test", layerId: "layer-2" }],
       layers: [
         { id: "layer-1", name: "Base", visible: true, locked: false },
         { id: "layer-2", name: "Signals", visible: true, locked: false }
@@ -101,7 +123,7 @@ describe("schematic copy model", () => {
       y: 80,
       width: 100,
       height: 40,
-      format: "plain" as const,
+      anchor: "upperLeft" as const,
       text: "copy note",
       backgroundColor: "#ffffe8",
       fontSizePx: 16
@@ -150,7 +172,7 @@ describe("schematic copy model", () => {
           ]
         }
       ],
-      notes: [{ id: "note-1", x: 20, y: 80, width: 100, height: 40, format: "plain", text: "copy note" }],
+      notes: [{ id: "note-1", x: 20, y: 80, width: 100, height: 40, anchor: "upperLeft" as const, text: "copy note" }],
       junctionPoints: [{ x: 40, y: 0 }],
       junctionKeys: new Set(["40,0"]),
 
@@ -253,7 +275,7 @@ describe("schematic copy model", () => {
       components: [component("capacitor", "C1", 20, 20)],
       wires: [{ id: "existing-wire", routeMode: "orthogonal", points: [{ x: 0, y: 0 }, { x: 20, y: 0 }] }],
       junctions: [],
-      notes: [{ id: "existing-note", x: 0, y: 40, width: 80, height: 40, format: "plain", text: "old note" }],
+      notes: [{ id: "existing-note", x: 0, y: 40, width: 80, height: 40, anchor: "upperLeft" as const, text: "old note" }],
 
     }, { joinAt: [{ x: 39, y: 1 }] });
     const copied = fixtureDocument({
@@ -261,7 +283,7 @@ describe("schematic copy model", () => {
       junctionAppearances: [],
       components: [component("resistor", "R2", 80, 80)],
       wires: [{ id: "copied-wire", routeMode: "orthogonal" as const, points: [{ x: 40, y: 0 }, { x: 80, y: 0 }] }],
-      notes: [{ id: "copied-note", x: 60, y: 100, width: 100, height: 40, format: "plain" as const, text: "copy note" }],
+      notes: [{ id: "copied-note", x: 60, y: 100, width: 100, height: 40, anchor: "upperLeft" as const, text: "copy note" }],
     });
 
     const result = applyCopyPlacementToDocument(doc, copied);

@@ -138,14 +138,10 @@ describe("schematic editor public facade", () => {
     expect(editorSource).not.toContain('from "./schematicTabShell"');
   });
 
-  it("creates new Notes as Plain text by default", () => {
-    const createNote = editorMethodSource("createNoteAtCurrentPoint");
-
-    expect(editorSource).toContain("createPlainSchematicNoteDocumentOp,");
-    expect(createNote).toContain(
-      "const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor, layer.id);"
-    );
-    expect(createNote).toContain("this.beginNoteEditing(noteId);");
+  it("opens the Note dialog and commits only after canvas placement", () => {
+    expect(editorMethodSource("openNotePlacement")).toContain("this.noteDialog.open");
+    expect(editorMethodSource("placeNote")).toContain("createSchematicNoteDocumentOp");
+    expect(editorMethodSource("bindNoteLayerInteractions")).not.toContain("dblclick");
   });
 
   it("uses canonical-document commit coordinators without the retired runtime store bridge", () => {
@@ -276,13 +272,11 @@ describe("schematic editor public facade", () => {
     expect(renderDocument).not.toContain("extractNetlist(");
   });
 
-  it("keeps Note size and width previews in one group session with one commit history intent", () => {
+  it("keeps Note font size previews in one group session with one commit history intent", () => {
     const constructor = findClassConstructor(findClassDeclaration(editorAst, "SchematicEditor"));
     const begin = editorMethodSource("beginSelectedNotePropertyBatch");
     const setFontSize = editorMethodSource("setSelectedNoteFontSize");
-    const setWidth = editorMethodSource("setSelectedNoteWidth");
     const cancelFontSize = editorMethodSource("cancelNoteFontSizePropertyEdit");
-    const cancelWidth = editorMethodSource("cancelNoteWidthPropertyEdit");
     const commitResult = editorMethodSource("commitNotePropertyResult");
     const commitDocument = editorMethodSource("commitChangedNoteDocument");
 
@@ -291,16 +285,12 @@ describe("schematic editor public facade", () => {
       "onNoteFontSizeInput: (value) => this.setSelectedNoteFontSize(value, { commit: false })",
       "onNoteFontSizeCommit: (value) => this.setSelectedNoteFontSize(value, { commit: true })",
       "onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit()",
-      "onNoteWidthEditStart: () => this.beginNoteWidthPropertyEdit()",
-      "onNoteWidthInput: (value) => this.setSelectedNoteWidth(value, { commit: false })",
-      "onNoteWidthCommit: (value) => this.setSelectedNoteWidth(value, { commit: true })",
-      "onNoteWidthCancel: () => this.cancelNoteWidthPropertyEdit()"
     ].forEach((callback) => expect(constructor.getText(editorAst)).toContain(callback));
 
     expect(begin).toContain("if (this.selectionSession.selectedIds.size !== 0) return false;");
     expect(begin).toContain("Array.from(this.selectionSession.selectedNoteIds)");
 
-    [setFontSize, setWidth].forEach((setter) => {
+    [setFontSize].forEach((setter) => {
       expect(setter).toContain("this.notePropertyBatchSession.input(value);");
       expect(setter).toContain(
         "this.commitNotePropertyResult(this.notePropertyBatchSession.commit(value));"
@@ -310,7 +300,7 @@ describe("schematic editor public facade", () => {
       expect(setter).not.toContain("this.persistWorkspaceState");
     });
 
-    [cancelFontSize, cancelWidth].forEach((cancel) => {
+    [cancelFontSize].forEach((cancel) => {
       expect(cancel).toContain("this.notePropertyBatchSession.cancel();");
       expect(cancel).not.toContain("this.commitNotePropertyResult");
       expect(cancel).not.toContain("this.consumeHistoryIntent");
@@ -389,7 +379,6 @@ describe("schematic editor public facade", () => {
       "  private async close(id: string)",
       "  private async restoreRecentlyClosed()"
     );
-    const cacheCopyMarkdownPreviewContent = editorMethodSource("cacheCopyMarkdownPreviewContent");
     const reset = editorMethodSource("resetToEmptySchematic");
     const clearCellGeometry = editorMethodSource("clearCellGeometryInteraction");
 
@@ -438,13 +427,6 @@ describe("schematic editor public facade", () => {
       "if (displaced) this.options.bridge.destroySession(displaced.value);"
     );
     expect(closeDocumentSession).toContain("this.tabs.hideCloseSnackbar();");
-    expect(cacheCopyMarkdownPreviewContent).toContain("notesByMarkdown.has(note.text)");
-    expect(cacheCopyMarkdownPreviewContent).toContain("this.noteLayer.renderDetachedMarkdown(note.text)");
-    expect(cacheCopyMarkdownPreviewContent).toContain("generation !== this.copyMarkdownPreviewGeneration");
-    expect(cacheCopyMarkdownPreviewContent).toContain(
-      "this.lastPointerPoint ?? this.copyController.anchor"
-    );
-    expect(cacheCopyMarkdownPreviewContent).not.toContain("this.document.notes.forEach");
     expect(reset.indexOf('this.transientToolSession.transition("select", "reset");')).toBeLessThan(
       reset.indexOf("const result = resetSchematicDocument(this.document);")
     );
@@ -644,7 +626,7 @@ describe("schematic editor public facade", () => {
     const elementLookup = indexOfRequired(handler, "const element = this.noteElementFromEvent(event);");
     const elementGuard = indexOfRequired(handler, "if (!element) return;");
     const noteIdLookup = indexOfRequired(handler, "const noteId = element.dataset.noteId;");
-    const noteIdGuard = indexOfRequired(handler, "if (!noteId) return;");
+    const noteIdGuard = indexOfRequired(handler, "if (!noteId || this.noteDraft) return;");
     const stopPropagation = indexOfRequired(handler, "event.stopPropagation();");
     expect(elementLookup).toBeLessThan(elementGuard);
     expect(elementGuard).toBeLessThan(noteIdLookup);
@@ -652,18 +634,14 @@ describe("schematic editor public facade", () => {
     expect(noteIdGuard).toBeLessThan(stopPropagation);
 
     const deleteMode = indexOfRequired(handler, "if (this.isDeleteToolMode()) {");
-    const copyMode = indexOfRequired(handler, 'if (this.transientToolSession.mode === "copy") {');
-    const editGuard = indexOfRequired(handler, "if (this.noteInteractionController.isEditing(noteId)) return;");
-    const defaultPreventDefault = indexOfRequired(handler, "event.preventDefault();", editGuard);
+    const clickPlacementMode = indexOfRequired(handler, 'if (mode === "copy" || isMoveOrRotateMode(mode)) {');
+    const defaultPreventDefault = indexOfRequired(handler, "event.preventDefault();", clickPlacementMode);
     const defaultFocusCanvas = indexOfRequired(handler, "this.focusCanvas();", defaultPreventDefault);
     const noteLookup = indexOfRequired(handler, "const note = this.noteById(noteId);", defaultFocusCanvas);
     expect(stopPropagation).toBeLessThan(deleteMode);
-    expect(stopPropagation).toBeLessThan(copyMode);
-    expect(stopPropagation).toBeLessThan(editGuard);
+    expect(stopPropagation).toBeLessThan(clickPlacementMode);
     expect(stopPropagation).toBeLessThan(defaultPreventDefault);
-    expect(deleteMode).toBeLessThan(copyMode);
-    expect(copyMode).toBeLessThan(editGuard);
-    expect(editGuard).toBeLessThan(defaultPreventDefault);
+    expect(deleteMode).toBeLessThan(clickPlacementMode);
     expect(defaultPreventDefault).toBeLessThan(defaultFocusCanvas);
     expect(defaultFocusCanvas).toBeLessThan(noteLookup);
 
@@ -689,60 +667,6 @@ describe("schematic editor public facade", () => {
     expect(pointerMoveListener).toBeLessThan(pointerUpListener);
   });
 
-  it("uses the ordinary Note double-click path for formulas", () => {
-    const bindings = sliceSourceBetween(
-      editorSource,
-      "private bindNoteLayerInteractions()",
-      "private bindPaperElementViewportCanvasDomInteractions"
-    );
-    expect(bindings.match(/addEventListener\("dblclick"/g)).toHaveLength(1);
-    expect(bindings).not.toContain("handleNoteFormulaDoubleClickCapture");
-
-    const pointerDown = sliceSourceBetween(
-      editorSource,
-      "private handleNotePointerDown(event: PointerEvent)",
-      "private handleDeleteModeNotePointerDown"
-    );
-    expect(pointerDown).not.toContain("schematic-markdown-math");
-
-    const doubleClick = sliceSourceBetween(
-      editorSource,
-      "private handleNoteDoubleClick(event: MouseEvent)",
-      "private handleNoteBlur"
-    );
-    expect(doubleClick).toContain("this.beginNoteEditing(noteId);");
-    expect(doubleClick).not.toContain("openMarkdownFormulaEditor");
-    expect(editorSource).not.toContain("pendingFormulaDoubleClickTarget");
-  });
-
-  it("keeps Note editing active while focus moves into any Note property control", () => {
-    const blurHandler = editorMethodSource("handleNoteBlur");
-    expect(blurHandler).toContain('const notePropertySelector = "[data-property-note-form]";');
-    expect(blurHandler).toContain("nextTarget.closest(notePropertySelector)");
-    expect(blurHandler).toContain("activeElement.closest(notePropertySelector)");
-    expect(blurHandler).not.toContain("formatControlSelector");
-  });
-
-  it("keeps CodeMirror input and focus transitions inside the active formula session", () => {
-    const inputHandler = editorMethodSource("handleNoteInput");
-    const blurHandler = editorMethodSource("handleNoteBlur");
-
-    expect(inputHandler).toContain(
-      'if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) return;'
-    );
-    expect(inputHandler.indexOf("[data-math-source-editor]")).toBeLessThan(
-      inputHandler.indexOf("this.updateNoteFromElement(noteId);")
-    );
-    expect(blurHandler).toContain(
-      'if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) {'
-    );
-    expect(blurHandler).toContain(
-      "if (element && nextTarget instanceof this.host.ownerWindow.Node && element.contains(nextTarget)) return;"
-    );
-    expect(blurHandler).toContain(
-      "if (this.noteInteractionController.isEditing(noteId)) this.finishNoteEditing(noteId);"
-    );
-  });
 });
 
 function sliceSourceBetween(source: string, startSentinel: string, endSentinel: string) {

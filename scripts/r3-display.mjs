@@ -28,7 +28,7 @@ try {
       { id: "bridge", routeMode: "orthogonal", points: [{ x: 230, y: 70 }, { x: 230, y: 250 }] }
     ],
     netLabels: [{ id: "label", name: "输出", attachment: { wireId: "flat", point: { x: 130, y: 160 } } }],
-    notes: [{ id: "note", x: 150, y: 265, width: 125, height: 42, format: "plain", text: "控制字形" }]
+    notes: [{ id: "note", x: 150, y: 265, width: 125, height: 42, anchor: "upperLeft", text: "控制字形" }]
   }));
   await evaluate(page, (key, document) => {
     localStorage.setItem("schematic-workspace", JSON.stringify({

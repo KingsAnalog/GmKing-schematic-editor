@@ -476,14 +476,17 @@ try {
   }
 
   await clickSelector(page, "[data-sidebar-tab='library']");
-  const palettePreviews = await evaluate(page, () => Object.fromEntries(["rectangle", "triangle"].map(type => {
+  const palettePreviews = await evaluate(page, () => Object.fromEntries(["rectangle", "triangle", "polygon"].map(type => {
     const svg = document.querySelector(`[data-library-item='${type}'] .palette-symbol-preview`);
     return [type, {
       viewBox: svg?.getAttribute("viewBox"),
-      preserveAspectRatio: svg?.getAttribute("preserveAspectRatio")
+      preserveAspectRatio: svg?.getAttribute("preserveAspectRatio"),
+      outlineWidth: svg?.querySelector("path")?.getBoundingClientRect().width
     }];
   })));
-  if (palettePreviews.rectangle?.viewBox !== "-4 -4 88 48" || palettePreviews.triangle?.viewBox !== "-4 -4 88 88"
+  const rectangleWidthRatio = palettePreviews.rectangle.outlineWidth / palettePreviews.polygon.outlineWidth;
+  if (palettePreviews.rectangle?.viewBox !== "-4 -4 68 48" || palettePreviews.triangle?.viewBox !== "-4 -4 88 88"
+    || !(rectangleWidthRatio >= 0.95 && rectangleWidthRatio <= 1.15)
     || Object.values(palettePreviews).some(preview => preview.preserveAspectRatio !== "xMidYMid meet")) {
     throw new Error("library shape previews are clipped or distorted: " + JSON.stringify(palettePreviews));
   }

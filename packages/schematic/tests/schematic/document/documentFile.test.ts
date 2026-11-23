@@ -90,7 +90,7 @@ function documentFixture(): SchematicDocument {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "**gain**",
       backgroundColor: null,
       fontSizePx: 16
@@ -198,7 +198,7 @@ describe("single schematic document file codec", () => {
     expect(wireLines[0]).toContain('"id": "horizontal"},');
     expect(wireLines[0].length).toBeGreaterThan(120);
     expect(noteLines).toEqual([
-      '      {"x": 20, "y": 120, "width": 180, "height": 60, "format": "markdown", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",',
+      '      {"x": 20, "y": 120, "width": 180, "height": 60, "anchor": "upperLeft", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",',
       '        "text": "**gain**"}'
     ]);
     expect(lines.length).toBeLessThan(spacious.trimEnd().split("\n").length);
@@ -409,7 +409,7 @@ describe("single schematic document file codec", () => {
     const compacted = serializeSchematicDocumentFile(withoutHeight);
 
     expect(compacted).toContain(
-      '      {"x": 20, "y": 120, "width": 180, "format": "markdown", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",\n'
+      '      {"x": 20, "y": 120, "width": 180, "anchor": "upperLeft", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",\n'
       + '        "text": "**gain**"}'
     );
 
@@ -481,7 +481,7 @@ describe("single schematic document file codec", () => {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "**gain**",
       backgroundColor: null,
       fontSizePx: 16
@@ -725,16 +725,16 @@ describe("single schematic document file codec", () => {
     ["unknown connection field", (file: SchematicFile) => {
       Object.assign(file.schematic.connections, { unexpected: true });
     }],
-    ["unknown note format", (file: SchematicFile) => {
+    ["unknown note anchor", (file: SchematicFile) => {
       file.schematic.notes.push({
         id: "note",
         x: 0,
         y: 0,
         width: 80,
-        format: "plain",
+        anchor: "upperLeft",
         text: ""
       });
-      (file.schematic.notes[0] as { format: string }).format = "html";
+      (file.schematic.notes[0] as { anchor: string }).anchor = "invalid";
     }]
   ])("rejects %s", (_name, mutate) => {
     const file = emptyFile();
@@ -882,7 +882,7 @@ describe("single schematic document file codec", () => {
       x: 0,
       y: 0,
       width: 180,
-      format: "plain",
+      anchor: "upperLeft",
       text: "x".repeat(MAX_SCHEMATIC_FILE_BYTES)
     });
     expectFileError(() => serializeSchematicDocumentFile(oversized), "file-too-large");

@@ -107,6 +107,16 @@ export function selectionTransformBounds(input: Pick<SchematicSelectionProjectio
   return unionRects(rects);
 }
 
+export function selectionPlacementAnchor(selection: SchematicSelectionProjection, pickupPoint?: Point): Point | null {
+  const bounds = selection.transformBounds;
+  if (!bounds) return null;
+  if (selection.count === 1) {
+    const item = selection.components[0] ?? selection.notes[0];
+    if (item) return snapPoint(item);
+  }
+  return snapPoint(pickupPoint ?? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 });
+}
+
 export function singleEditableSelectedNetLabel(document: SchematicDocument, selection: SchematicSelectionState) {
   if (selection.selectedIds.size !== 1 || selection.selectedNoteIds.size !== 0) return null;
   const id = selection.selectedIds.values().next().value;

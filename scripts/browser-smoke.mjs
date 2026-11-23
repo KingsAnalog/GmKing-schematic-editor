@@ -534,7 +534,7 @@ async function checkBlankCanvasPaste(page) {
     const source = {
       format: "adc-helper/schematic",
       schematic: { components: [], wires: [], connections: { wires: {}, pins: {} }, junctionAppearances: [], netLabels: [],
-        notes: [{ id: "clipboard-note", x: 0, y: 0, width: 120, height: 40, format: "plain", text: "Pasted from clipboard" }] }
+        notes: [{ id: "clipboard-note", x: 0, y: 0, width: 120, height: 40, anchor: "upperLeft", text: "Pasted from clipboard" }] }
     };
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { readText: async () => JSON.stringify(source) } });
     return JSON.stringify(JSON.parse(localStorage.getItem("adc-helper-schematic:smoke")).state.document);
@@ -662,7 +662,7 @@ async function checkNoteAppearance(page, url) {
   const { createSchematicDocument, contentFromDocument } = await import("../packages/schematic/dist/schematic/document/documentModel.js");
   const content = contentFromDocument(createSchematicDocument({
     wires: [{ id: "colors-wire", points: [{ x: 60, y: 220 }, { x: 400, y: 220 }], routeMode: "orthogonal" }],
-    notes: [{ id: "colors-note", x: 180, y: 160, width: 200, height: 40, fontSizePx: 18, format: "plain", text: "Colored note" }]
+    notes: [{ id: "colors-note", x: 180, y: 160, width: 200, height: 40, fontSizePx: 18, anchor: "upperLeft", text: "Colored note" }]
   }));
   await evaluate(page, content => {
     const key = "adc-helper-schematic:smoke";
@@ -694,9 +694,10 @@ async function checkNoteAppearance(page, url) {
     document.querySelector("[data-property-note-text-color]").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
   });
   await waitFor(page, () => getComputedStyle(document.querySelector("[data-note-id='colors-note']")).color === "rgb(255, 0, 0)", "Text-color cancel did not restore red");
+  await clickSelector(page, "[data-property-note-fill-enabled]");
   await clickSelector(page, "[data-note-background-swatch='#ff0000']");
   await waitFor(page, () => getComputedStyle(document.querySelector("[data-note-id='colors-note']")).backgroundColor === "rgb(255, 0, 0)", "Red Note fill did not render");
-  await clickSelector(page, "[data-note-background-swatch='none']");
+  await clickSelector(page, "[data-property-note-fill-enabled]");
   const point = await evaluate(page, () => {
     const rect = document.querySelector("[model-id='colors-wire']").getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -705,10 +706,12 @@ async function checkNoteAppearance(page, url) {
   await clickSelector(page, "[data-network-color-swatch='#ff0000']");
   await waitFor(page, () => {
     const saved = JSON.parse(localStorage.getItem("adc-helper-schematic:smoke")).state.document;
-    return saved.notes[0].textColor === "#ff0000" && saved.notes[0].backgroundColor === null && saved.wires[0].appearance?.color === "#ff0000";
+    return saved.notes[0].textColor === "#ff0000" && saved.notes[0].backgroundEnabled === false
+      && saved.notes[0].backgroundColor === "#ff0000" && saved.wires[0].appearance?.color === "#ff0000";
   }, "Note and wire colors were not saved");
   const saved = await readSmokeDocument(page);
-  if (saved.notes[0].textColor !== "#ff0000" || saved.notes[0].backgroundColor !== null || saved.wires[0].appearance.color !== "#ff0000") {
+  if (saved.notes[0].textColor !== "#ff0000" || saved.notes[0].backgroundEnabled !== false
+    || saved.notes[0].backgroundColor !== "#ff0000" || saved.wires[0].appearance.color !== "#ff0000") {
     throw new SmokeError("Note and wire colors were not saved", saved);
   }
   await navigate(page, url);

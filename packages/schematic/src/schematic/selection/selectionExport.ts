@@ -22,19 +22,12 @@ export interface SchematicSelectionExportInput extends SymbolTemplateContext {
   netLabelStatuses?: Readonly<Record<string, NetLabelStatus>>;
   notes: SchematicNote[];
   layerObjectOrder?: readonly string[];
+  noteGraphics?: SchematicSvgScene["noteGraphics"];
   presentationMode?: boolean;
   padding?: number;
-  renderedNoteHtml?: Readonly<Record<string, string>>;
-  renderedNoteText?: Readonly<Record<string, string>>;
-  renderedNoteTextStyles?: Readonly<Record<string, RenderedNoteTextStyle>>;
   namespace?: string;
   showGrid?: boolean;
   backgroundColor?: string | null;
-}
-
-export interface RenderedNoteTextStyle {
-  fontWeight?: number;
-  fontStyle?: "italic";
 }
 
 export interface SchematicSelectionSvgExport {
@@ -59,11 +52,10 @@ export function buildSchematicSelectionSvg(input: SchematicSelectionExportInput)
     showGrid: input.showGrid,
     backgroundColor: input.backgroundColor
   };
-  const rendered = renderSchematicSvgScene(input, { ...options, portableNotes: false });
+  const rendered = renderSchematicSvgScene(input, options);
   if (!rendered) return null;
-  const clipboard = renderSchematicSvgScene(input, { ...options, portableNotes: true });
   return {
     ...rendered,
-    clipboardSvg: clipboard?.svg
+    clipboardSvg: rendered.svg
   };
 }
