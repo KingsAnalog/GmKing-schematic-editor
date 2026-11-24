@@ -9,7 +9,7 @@ const html = await readFile(new URL("index.html", dist), "utf8");
 const appPath = html.match(/<script type="module"[^>]*src="\.\/([^"]+)"/)?.[1];
 const libraryPath = html.match(/<link rel="modulepreload"[^>]*href="\.\/(assets\/jointjs-[^"]+\.js)"/)?.[1];
 assert(appPath && libraryPath, "Editor and JointJS preload must use relative fingerprinted filenames");
-assert(!html.includes("tex-mml-svg-mathjax-tex.js"), "MathJax must stay off the startup request path");
+assert(!html.includes("vendor/mathjax/"), "MathJax must stay off the startup request path");
 
 const original = await readFile(new URL(libraryPath, dist), "utf8");
 const result = await build({

@@ -204,7 +204,7 @@ try {
     document.querySelector("[data-sidebar-tab='properties']").click();
   });
   await waitFor(page, () => {
-    const controls = [...document.querySelectorAll("[data-property-library-shape-arrow]")];
+    const controls = [...document.querySelector("[data-schematic-property-editor]").querySelectorAll("[data-property-library-shape-arrow]")];
     return controls.length === 4 && controls.every(control => {
       const { width, left, right } = control.getBoundingClientRect();
       return width > 0 && left >= 0 && right <= innerWidth;

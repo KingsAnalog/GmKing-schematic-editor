@@ -54,7 +54,7 @@ describe("Obsidian bundle boundary", () => {
 
     const css = result.outputFiles?.find((output) => output.path.endsWith(".css"))?.text;
     expect(css).toBeDefined();
-    expect(css).toContain(".schematic-editor-root .schematic-paper.is-delete-mode");
+    expect(css).toContain(".schematic-editor-root .schematic-paper:is([data-schematic-tool-cursor]");
     expect(css).toContain(".schematic-editor-root .schematic-note-dialog");
     expect(css).toContain(".schematic-editor-root .schematic-note-anchor");
     expect(css).toContain(".schematic-editor-root .instance-query-overlay");

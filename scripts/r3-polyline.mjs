@@ -98,7 +98,7 @@ try {
   await setArrow("startArrowSize", "large");
   assert.notEqual(await arrowPath(), open);
   assert.equal(await evaluate(page, () => document.querySelectorAll(
-    '[data-property-library-shape-arrow] option[value="asmeFilled"]'
+    '[data-schematic-property-editor] [data-property-library-shape-arrow] option[value="asmeFilled"]'
   ).length), 2);
   await setArrow("endArrow", "asmeFilled");
   const both = await arrowPath();
@@ -191,7 +191,7 @@ try {
     document.querySelector("[data-sidebar-tab='properties']").click();
   });
   await waitFor(page, () => {
-    const arrows = [...document.querySelectorAll("[data-property-library-shape-arrow]")];
+    const arrows = [...document.querySelector("[data-schematic-property-editor]").querySelectorAll("[data-property-library-shape-arrow]")];
     return arrows.length === 4 && arrows.every(input => {
       const box = input.getBoundingClientRect();
       return box.width > 0 && box.left >= 0 && box.right <= 375;

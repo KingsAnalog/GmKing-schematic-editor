@@ -202,7 +202,8 @@ try {
     document.querySelector("[data-sidebar-tab='properties']").click();
   });
   await waitFor(page, () => {
-    const controls = [...document.querySelectorAll("[data-library-shape-fill-color-swatch], [data-property-library-shape-fill-color]")];
+    const controls = [...document.querySelector("[data-schematic-property-editor]")
+      .querySelectorAll("[data-library-shape-fill-color-swatch], [data-property-library-shape-fill-color]")];
     return controls.length > 1 && controls.every(control => {
       const { width, left, right } = control.getBoundingClientRect();
       return width > 0 && left >= 0 && right <= innerWidth;

@@ -119,7 +119,9 @@ export function persistSchematicDocumentSnapshot(
     cacheSchematicDocumentSnapshot(id, cloned, target);
     return cloneSchematicDocumentSnapshot(cloned);
   }
-  target.setItem(schematicDocumentStorageKey(id), serializeSchematicDocumentSnapshotEnvelope(cloned));
+  const key = schematicDocumentStorageKey(id);
+  const serialized = serializeSchematicDocumentSnapshotEnvelope(cloned);
+  if (readStorageItem(target, key) !== serialized) target.setItem(key, serialized);
   cacheSchematicDocumentSnapshot(id, cloned, target);
   return cloneSchematicDocumentSnapshot(cloned);
 }

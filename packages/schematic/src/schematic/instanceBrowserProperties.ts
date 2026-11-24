@@ -1,26 +1,29 @@
 import { getComponentDef } from "./catalog";
 import { syncDeviceModelFields, syncMosParameterFields } from "./componentNetlistFields";
-import { renderComponentSvg } from "./componentSvgRenderer";
+import { deviceItemName } from "./deviceLibrary";
 import { assignRestoredSchematicDocument, createEmptySchematicDocument, createSchematicDocument } from "./document/documentModel";
 import { isLibraryShapeType } from "./libraryShapeStyleModel";
 import { isNetlistModelText, NETLIST_MODEL_VALUE_KEY } from "./netlist/profiles";
-import { buildPlacedComponent, type PlacementComponentProperties } from "./placementModel";
+import { buildPlacedComponent, buildPlacementPreviewFragment, type PlacementComponentProperties, type PlacementProperties } from "./placementModel";
 import { SchematicPropertyInteractionController } from "./propertyInteractionController";
 import { SchematicPropertyPanelController } from "./propertyPanelController";
 import { buildSchematicPropertyPanelInput } from "./propertyPanelProjection";
-import { renderPlacementPropertyEditor } from "./schematicEditorUiProjection";
+import { createPlacementPropertyEditor } from "./schematicEditorUiProjection";
+import { createSchematicSvgElement } from "./schematicSvgDom";
 import { localizeSchematicStatus } from "./schematicUiText";
+import { renderSchematicSvgScene } from "./svgRenderer";
 import type { InstancePaletteItem } from "./instanceSelector";
 import type { SymbolTemplateId } from "./symbolTemplateModel";
 import { isSchematicTemplateId } from "./templates";
 import type { ComponentInstance, SchematicDocument } from "./types";
-import { componentVisualBounds } from "./view-geometry";
 
 export class InstanceBrowserProperties {
   private readonly draft = createEmptySchematicDocument();
   private readonly interaction: SchematicPropertyInteractionController;
   private readonly panel: SchematicPropertyPanelController;
   private readonly status: HTMLOutputElement;
+  private readonly componentPicker: HTMLSelectElement;
+  private item?: InstancePaletteItem;
 
   constructor(
     private readonly root: HTMLElement,
@@ -28,8 +31,9 @@ export class InstanceBrowserProperties {
     private readonly process: () => SchematicDocument["netlistProcess"],
     signal: AbortSignal
   ) {
-    root.innerHTML = renderPlacementPropertyEditor();
-    const panelRoot = root.querySelector<HTMLElement>("[data-browser-property-editor]")!;
+    const panelRoot = createPlacementPropertyEditor(root.ownerDocument);
+    root.replaceChildren(panelRoot);
+    this.componentPicker = panelRoot.querySelector<HTMLSelectElement>("[data-browser-template-component]")!;
     this.status = root.ownerDocument.createElement("output");
     this.status.className = "property-error";
     this.status.hidden = true;
@@ -38,7 +42,7 @@ export class InstanceBrowserProperties {
     const view = root.ownerDocument.defaultView!;
     this.interaction = new SchematicPropertyInteractionController({
       document: this.draft,
-      selection: () => ({ selectedIds: this.draft.components.map(component => component.id), selectedNoteIds: [] }),
+      selection: () => ({ selectedIds: this.component ? [this.component.id] : [], selectedNoteIds: [] }),
       moveBehavior: () => "moveOnly",
       render: () => this.renderPreview(),
       restorePreview: () => this.sync(),
@@ -56,6 +60,10 @@ export class InstanceBrowserProperties {
     });
     this.panel = new SchematicPropertyPanelController(panelRoot, this.interaction.callbacks({}));
     this.panel.bind();
+    this.componentPicker.addEventListener("change", () => {
+      this.interaction.flush();
+      this.sync();
+    }, { signal });
     root.addEventListener("change", event => this.changeNetlistField(event.target), { signal });
     root.addEventListener("keydown", event => {
       const field = (event.target as Element | null)?.closest("[data-property-mos-param], [data-property-model-input]");
@@ -67,37 +75,45 @@ export class InstanceBrowserProperties {
   }
 
   private get component(): ComponentInstance | null {
-    return this.draft.components[0] ?? null;
+    return this.draft.components[this.componentPicker.selectedIndex < 0 ? 0 : this.componentPicker.selectedIndex] ?? null;
   }
 
   show(item: InstancePaletteItem | undefined, symbolTemplate: SymbolTemplateId | undefined) {
-    const type = item && !isSchematicTemplateId(item) && !isLibraryShapeType(item) ? item : undefined;
-    if (type !== (this.component?.type ?? undefined)) {
+    if (item !== this.item) {
       this.interaction.dispose();
-      const components = type ? [buildPlacedComponent(type, { x: 0, y: 0 }, {
-        id: "browser-draft",
-        ref: getComponentDef(type).hotLabel,
-        rotation: 0,
-        mirrored: false
-      })] : [];
-      assignRestoredSchematicDocument(this.draft, createSchematicDocument({ components, symbolTemplate }));
+      this.item = item;
+      const template = isSchematicTemplateId(item);
+      const next = template
+        ? buildPlacementPreviewFragment(item, { x: 0, y: 0 }, { rotation: 0, mirrored: false })
+        : createSchematicDocument({ components: item ? [buildPlacedComponent(item, { x: 0, y: 0 }, {
+          id: "browser-draft",
+          ref: getComponentDef(item).hotLabel,
+          rotation: 0,
+          mirrored: false
+        })] : [] });
+      assignRestoredSchematicDocument(this.draft, next);
+      this.componentPicker.replaceChildren(...(template ? this.draft.components.map((component, index) => {
+        const option = this.root.ownerDocument.createElement("option");
+        option.textContent = `${index + 1}. ${deviceItemName(component.type)}`;
+        return option;
+      }) : []));
+      this.componentPicker.closest("label")!.hidden = !template;
       this.status.hidden = true;
       this.root.scrollTop = 0;
     }
     this.draft.symbolTemplate = symbolTemplate ?? this.draft.symbolTemplate;
     this.root.hidden = !this.component;
     if (this.component) this.sync();
-    return !!this.component;
+    else this.preview.replaceChildren();
   }
 
-  take(): PlacementComponentProperties | undefined {
+  take(): PlacementProperties | undefined {
     const active = this.root.ownerDocument.activeElement as HTMLElement | null;
     if (active && this.root.contains(active)) active.blur();
     this.interaction.flush();
-    const component = this.component;
-    if (!component) return undefined;
-    const { type, values, variantId, scale, appearance } = component;
-    return { type, values: { ...values }, variantId, scale, appearance: appearance && { ...appearance } };
+    const components = this.draft.components.map(({ type, values, variantId, scale, appearance }): PlacementComponentProperties =>
+      ({ type, values: { ...values }, variantId, scale, appearance: appearance && { ...appearance } }));
+    return isSchematicTemplateId(this.item) ? { type: this.item, components } : components[0];
   }
 
   destroy() {
@@ -113,7 +129,14 @@ export class InstanceBrowserProperties {
       hasSelection: true,
       targets: { components: [component], wires: [], inductorCouplings: [], junctionPoints: [], netLabels: [], notes: [] }
     });
-    if (input.component) input.component.cellType = undefined;
+    if (input.component) {
+      input.component.cellType = undefined;
+      if (isLibraryShapeType(component.type)) {
+        // The drawing points determine the final dimensions of a library shape.
+        input.component.rectangle = undefined;
+        input.component.scale = undefined;
+      }
+    }
     this.panel.sync(input);
     syncMosParameterFields(this.root, component, true);
     syncDeviceModelFields(this.root, component, this.process(), true);
@@ -142,13 +165,21 @@ export class InstanceBrowserProperties {
   }
 
   private renderPreview() {
-    const component = this.component;
-    if (!component) return;
-    const { x, y, width, height } = componentVisualBounds(component);
-    const padding = 8;
-    const viewBox = [x - padding, y - padding, width + 2 * padding, height + 2 * padding].join(" ");
-    this.preview.innerHTML = `<svg class="browser-draft-symbol" viewBox="${viewBox}" aria-hidden="true">${renderComponentSvg(component, {
-      presentationMode: true, symbolTemplate: this.draft.symbolTemplate
-    })}</svg>`;
+    const image = renderSchematicSvgScene({
+      components: this.draft.components,
+      wires: this.draft.wires,
+      symbolTemplate: this.draft.symbolTemplate,
+      junctionPoints: [],
+      netLabels: [],
+      notes: []
+    }, { namespace: "browser-draft", presentationMode: true, padding: 8 });
+    if (!image) {
+      this.preview.replaceChildren();
+      return;
+    }
+    const svg = createSchematicSvgElement(this.preview.ownerDocument, image.svg);
+    svg.classList.add("browser-draft-symbol");
+    svg.setAttribute("aria-hidden", "true");
+    this.preview.replaceChildren(svg);
   }
 }

@@ -45,7 +45,7 @@ describe("MathJax window ownership", () => {
     expect(script()).toBeNull();
     const first = load();
     expect(load()).toBe(first);
-    expect(script().src).toBe("https://example.test/tools/schematic/vendor/mathjax/tex-mml-svg-mathjax-tex.js");
+    expect(script().src).toMatch(/^https:\/\/example\.test\/tools\/schematic\/vendor\/mathjax\/tex-svg-mathjax-tex-4\.1\.3-[0-9a-f]{12}\.js$/);
     expect(ownerWindow.MathJax).toMatchObject({
       loader: { paths: { fonts: "./vendor" } },
       output: { font: "mathjax-tex" },
