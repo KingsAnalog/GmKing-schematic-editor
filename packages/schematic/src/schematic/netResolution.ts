@@ -1,5 +1,7 @@
 import { buildConnectivity, type ConnectivityResult } from "./connectivity";
+import { netMembers, parseBusName } from "./busName";
 import { pointKey, snapPoint } from "./geometry";
+import { blockPorts, PORT_TERMINAL, sheetPorts } from "./hierarchyPins";
 import { pointOnPath } from "./wire/wireGeometry";
 import type {
   NetLabel,
@@ -16,6 +18,7 @@ export interface ResolvedNetLabel {
   status: NetLabelStatus;
   physicalRoot?: string;
   netName?: string;
+  netNames?: readonly string[];
   message?: string;
 }
 
@@ -36,6 +39,9 @@ export interface NetResolution {
   wireNetNames: Map<string, string>;
   junctionNetNames: Map<string, string>;
   pinNetNames: Map<string, string>;
+  pinMembers: Map<string, string[]>;
+  busWireIds: ReadonlySet<string>;
+  widthMismatches: { pin: NetlistPin; expected: number; actual: number }[];
   labelStates: Map<string, ResolvedNetLabel>;
   hasReferenceGround: boolean;
 }
@@ -72,6 +78,13 @@ export function validateNetLabelName(value: string) {
       message: "Use letters, digits, _, or ! < > [ ] : + -. Whitespace is not allowed."
     };
   }
+  if (/[<>]/.test(name)) {
+    const bus = parseBusName(name);
+    if (!bus) {
+      return { valid: false as const, name, message: "Use a bus name like OUT<7:0> or OUT<3>. A bus may contain up to 256 bits." };
+    }
+    return { valid: true as const, name: bus.name };
+  }
   return { valid: true as const, name };
 }
 
@@ -87,230 +100,189 @@ export function resolveSchematicNets(
   document: SchematicContent,
   connectivity: ConnectivityResult = buildConnectivity(document)
 ): NetResolution {
-  const physicalRoots = Array.from(connectivity.groups.keys());
-  const electrical = new RootUnionFind(physicalRoots);
-  const groundRoots = new Set(
-    connectivity.pins
-      .filter((pin) => pin.componentType === "gnd" || pin.pinRole === "gnd")
-      .map((pin) => connectivity.rootOf(pin.nodeKey))
-  );
-  unionAll(electrical, groundRoots);
-
-  const labels = document.netLabels ?? [];
+  type Pin = ConnectivityResult["pins"][number];
+  interface Lane { id: string; root?: string; point?: Point }
+  type ActiveLabel = { label: NetLabel; name: string; bits: readonly string[] };
+  const allWires = new Map(document.wires.map(wire => [wire.id, wire]));
+  const wires = document.wires.filter(wire => !wire.temporarilyDeleted);
   const labelStates = new Map<string, ResolvedNetLabel>();
-  const activeLabelsByRoot = new Map<string, Array<{ label: NetLabel; name: string }>>();
-  const wireById = new Map<string, SchematicContent["wires"][number]>();
-  document.wires.forEach((wire) => {
-    if (!wireById.has(wire.id)) wireById.set(wire.id, wire);
-  });
-  const activeWireRoots = document.wires
-    .filter((wire) => !wire.temporarilyDeleted)
-    .map((wire) => ({ wire, physicalRoot: connectivity.rootOfWire(wire.id) ?? undefined }));
-  const physicalRootByActiveWireId = new Map<string, string>();
-  activeWireRoots.forEach(({ wire, physicalRoot }) => {
-    if (physicalRoot && !physicalRootByActiveWireId.has(wire.id)) {
-      physicalRootByActiveWireId.set(wire.id, physicalRoot);
-    }
-  });
-  labels.forEach((label) => {
-    const wire = wireById.get(label.attachment.wireId);
-    const point = snapPoint(label.attachment.point);
-    const physicalRoot = wire && !wire.temporarilyDeleted && pointOnPath(point, wire.points)
-      ? physicalRootByActiveWireId.get(wire.id)
-      : undefined;
-    if (!physicalRoot) {
-      labelStates.set(label.id, {
-        label,
-        status: "inactive",
-        message: wire?.temporarilyDeleted
-          ? "The supporting wire is temporarily deleted."
-          : "The label is not attached to an active wire."
-      });
-      return;
+  const labelsByRoot = new Map<string, ActiveLabel[]>();
+  for (const label of document.netLabels ?? []) {
+    const wire = allWires.get(label.attachment.wireId);
+    const root = wire && !wire.temporarilyDeleted && pointOnPath(snapPoint(label.attachment.point), wire.points)
+      ? connectivity.rootOfWire(wire.id) : null;
+    if (!root) {
+      labelStates.set(label.id, { label, status: "inactive", message: wire?.temporarilyDeleted
+        ? "The supporting wire is temporarily deleted." : "The label is not attached to an active wire." });
+      continue;
     }
     const validation = validateNetLabelName(label.name);
     if (!validation.valid) {
-      labelStates.set(label.id, {
-        label,
-        status: "conflict",
-        physicalRoot,
-        message: validation.message
-      });
-      return;
+      labelStates.set(label.id, { label, physicalRoot: root, status: "conflict", message: validation.message });
+      continue;
     }
-    const rootLabels = activeLabelsByRoot.get(physicalRoot);
-    if (rootLabels) rootLabels.push({ label, name: validation.name });
-    else activeLabelsByRoot.set(physicalRoot, [{ label, name: validation.name }]);
-  });
+    append(labelsByRoot, root, { label, name: validation.name, bits: netMembers(validation.name) });
+  }
 
-  const validNameByRoot = new Map<string, string>();
-  activeLabelsByRoot.forEach((rootLabels, root) => {
-    const winnerName = groundRoots.has(root) ? "0" : rootLabels[0]?.name;
-    if (winnerName !== undefined) validNameByRoot.set(root, winnerName);
-    rootLabels.forEach(({ label, name }) => {
-      if (name === winnerName) {
-        labelStates.set(label.id, { label, status: "valid", physicalRoot: root });
-      } else {
-        labelStates.set(label.id, {
-          label,
-          status: "conflict",
-          physicalRoot: root,
-          message: groundRoots.has(root)
-            ? `Ground is always named 0; ${name} is ignored.`
-            : `${winnerName} is the earlier label on this physical net; ${name} is ignored.`
+  const declaredPins = new Map<string, { width: number; name: string; formalBits?: readonly string[] }>();
+  for (const port of sheetPorts(document.components)) {
+    const bus = parseBusName(port.name);
+    declaredPins.set(pinKey(port.id, PORT_TERMINAL), {
+      width: bus?.bits.length ?? 1, name: bus?.name ?? port.name, formalBits: bus?.bits
+    });
+  }
+  for (const component of document.components) {
+    if (component.type !== "sheetBlock" || component.temporarilyDeleted) continue;
+    for (const port of blockPorts(component)) {
+      declaredPins.set(pinKey(component.id, port.id), { width: netMembers(port.name).length, name: port.name });
+    }
+  }
+
+  const pinsByRoot = new Map<string, Pin[]>();
+  for (const pin of connectivity.pins) append(pinsByRoot, connectivity.rootOf(pin.nodeKey), pin);
+  const laneNames = new Map<string, string[]>();
+  const lanes: Lane[] = [];
+  const lanesByRoot = new Map<string, string[]>();
+  const lanesByPin = new Map<string, string[]>();
+  const bundleLabels = new Map<string, string>();
+  const widthMismatches: NetResolution["widthMismatches"] = [];
+  for (const root of connectivity.groups.keys()) {
+    const rootPins = pinsByRoot.get(root) ?? [];
+    const rootLabels = labelsByRoot.get(root) ?? [];
+    const grounded = rootPins.some(pin => pin.componentType === "gnd" || pin.pinRole === "gnd");
+    const firstDeclaredBus = rootPins.map(pin => declaredPins.get(pinKey(pin.componentId, pin.pinId)))
+      .find(declaration => declaration && declaration.width > 1);
+    const width = grounded ? 1 : firstDeclaredBus?.width ?? rootLabels[0]?.bits.length ?? 1;
+    const laneIds = Array.from({ length: width }, () => {
+      const id = String(lanes.length);
+      lanes.push({ id, root });
+      return id;
+    });
+    lanesByRoot.set(root, laneIds);
+
+    const winner = rootLabels.find(entry => entry.bits.length === width && (!grounded || entry.name === "0"));
+    const bundleName = winner?.name ?? firstDeclaredBus?.name;
+    if (width > 1 && bundleName) bundleLabels.set(root, bundleName);
+    if (grounded) append(laneNames, laneIds[0], "0");
+    winner?.bits.forEach((name, index) => append(laneNames, laneIds[index], name));
+    for (const entry of rootLabels) {
+      const valid = entry.name === winner?.name;
+      labelStates.set(entry.label.id, {
+        label: entry.label, status: valid ? "valid" : "conflict", physicalRoot: root,
+        message: valid ? undefined : grounded ? `Ground is always named 0; ${entry.name} is ignored.`
+          : entry.bits.length !== width ? `Label ${entry.name} has ${entry.bits.length} bit(s); this wire carries ${width}.`
+          : `${winner?.name} is the earlier label on this physical net; ${entry.name} is ignored.`
+      });
+    }
+
+    for (const pin of rootPins) {
+      const key = pinKey(pin.componentId, pin.pinId);
+      const declaration = declaredPins.get(key);
+      const expected = declaration?.width ?? 1;
+      let pinLanes = laneIds;
+      if (expected !== width) {
+        widthMismatches.push({ pin, expected, actual: width });
+        pinLanes = Array.from({ length: expected }, () => {
+          const id = String(lanes.length);
+          lanes.push({ id, point: pin.point });
+          return id;
         });
       }
-    });
-  });
-
-  const firstRootByExplicitName = new Map<string, string>();
-  const firstGroundRoot = groundRoots.values().next().value;
-  if (firstGroundRoot) firstRootByExplicitName.set("0", firstGroundRoot);
-  validNameByRoot.forEach((name, root) => {
-    const existing = firstRootByExplicitName.get(name);
-    if (existing) electrical.union(existing, root);
-    else firstRootByExplicitName.set(name, root);
-  });
-
-  const rootsByElectricalGroup = new Map<string, string[]>();
-  const electricalGroupByPhysicalRoot = new Map<string, string>();
-  physicalRoots.forEach((root) => {
-    const group = electrical.find(root);
-    electricalGroupByPhysicalRoot.set(root, group);
-    const roots = rootsByElectricalGroup.get(group);
-    if (roots) roots.push(root);
-    else rootsByElectricalGroup.set(group, [root]);
-  });
-  const electricalGroupForRoot = (root: string) =>
-    electricalGroupByPhysicalRoot.get(root) ?? electrical.find(root);
-  const firstPointByElectricalGroup = new Map<string, Point>();
-  rootsByElectricalGroup.forEach((roots, group) => {
-    firstPointByElectricalGroup.set(group, firstPointForRoots(roots, connectivity));
-  });
-  const firstPointForGroup = (group: string) =>
-    firstPointByElectricalGroup.get(group)
-    ?? { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
-  const sortedGroups = Array.from(rootsByElectricalGroup.entries())
-    .sort(([firstGroup], [secondGroup]) =>
-      comparePoints(firstPointForGroup(firstGroup), firstPointForGroup(secondGroup))
-    )
-    .map(([, roots]) => roots);
-
-  const pinsByElectricalGroup = new Map<string, NetlistPin[]>();
-  connectivity.pins.forEach((pin) => {
-    const physicalRoot = connectivity.rootOf(pin.nodeKey);
-    const group = electricalGroupForRoot(physicalRoot);
-    const pins = pinsByElectricalGroup.get(group);
-    if (pins) pins.push(pin);
-    else pinsByElectricalGroup.set(group, [pin]);
-  });
-
-  const wireIdsByElectricalGroup = new Map<string, string[]>();
-  activeWireRoots.forEach(({ wire, physicalRoot }) => {
-    if (!physicalRoot) return;
-    const group = electricalGroupForRoot(physicalRoot);
-    const wireIds = wireIdsByElectricalGroup.get(group);
-    if (wireIds) wireIds.push(wire.id);
-    else wireIdsByElectricalGroup.set(group, [wire.id]);
-  });
-
-  const explicitNames = new Set<string>();
-  const groupExplicitNames = new Map<string, string>();
-  sortedGroups.forEach((roots) => {
-    const group = electricalGroupForRoot(roots[0]);
-    const name = roots.some((root) => groundRoots.has(root))
-      ? "0"
-      : roots.map((root) => validNameByRoot.get(root)).find((candidate): candidate is string => candidate !== undefined);
-    if (!name) return;
-    groupExplicitNames.set(group, name);
-    explicitNames.add(name);
-  });
-
-  const nameByElectricalGroup = new Map<string, string>();
-  const usedNames = new Set(explicitNames);
-  let pureWireIndex = 0;
-  sortedGroups.forEach((roots) => {
-    const group = electricalGroupForRoot(roots[0]);
-    const explicitName = groupExplicitNames.get(group);
-    if (explicitName) {
-      nameByElectricalGroup.set(group, explicitName);
-      return;
+      lanesByPin.set(key, pinLanes);
+      declaration?.formalBits?.forEach((name, index) => append(laneNames, pinLanes[index], name));
     }
-    const pins = pinsByElectricalGroup.get(group) ?? [];
-    let baseName = automaticPinName(pins);
-    if (!baseName) baseName = `NET_${++pureWireIndex}`;
-    const name = uniqueName(baseName, usedNames);
-    usedNames.add(name);
-    nameByElectricalGroup.set(group, name);
-  });
+  }
 
-  const nameByPhysicalRoot = new Map<string, string>();
-  physicalRoots.forEach((root) => {
-    const group = electricalGroupForRoot(root);
-    nameByPhysicalRoot.set(root, nameByElectricalGroup.get(group) ?? root);
-  });
+  const connected = new RootUnionFind(lanes.map(lane => lane.id));
+  const firstLaneByName = new Map<string, string>();
+  for (const [lane, names] of laneNames) {
+    for (const name of names) {
+      const first = firstLaneByName.get(name);
+      if (first === undefined) firstLaneByName.set(name, lane);
+      else connected.union(first, lane);
+    }
+  }
+  const groups = new Map<string, Lane[]>();
+  for (const lane of lanes) append(groups, connected.find(lane.id), lane);
+  const pinsByGroup = new Map<string, Pin[]>();
+  for (const pin of connectivity.pins) {
+    const ids = lanesByPin.get(pinKey(pin.componentId, pin.pinId)) ?? [];
+    for (const group of new Set(ids.map(id => connected.find(id)))) append(pinsByGroup, group, pin);
+  }
+  const wireIdsByRoot = new Map<string, string[]>();
+  for (const { id } of wires) {
+    const root = connectivity.rootOfWire(id);
+    if (root) append(wireIdsByRoot, root, id);
+  }
+  const labelIdsByGroup = new Map<string, string[]>();
+  for (const [id, state] of labelStates) {
+    if (state.status !== "valid" || state.physicalRoot === undefined) continue;
+    for (const group of new Set(lanesByRoot.get(state.physicalRoot)?.map(lane => connected.find(lane)))) {
+      append(labelIdsByGroup, group, id);
+    }
+  }
 
-  const wireNetNames = new Map<string, string>();
-  activeWireRoots.forEach(({ wire, physicalRoot }) => {
-    const name = physicalRoot ? nameByPhysicalRoot.get(physicalRoot) : undefined;
-    if (name) wireNetNames.set(wire.id, name);
-  });
-  const junctionNetNames = new Map<string, string>();
-  connectivity.junctions.forEach((point) => {
-    const names = new Set(connectivity.rootsAtPoint(point).map((root) => nameByPhysicalRoot.get(root)).filter(Boolean));
-    if (names.size === 1) junctionNetNames.set(pointKey(point), Array.from(names)[0] as string);
-  });
-  const pinNetNames = new Map<string, string>();
-  connectivity.pins.forEach((pin) => {
-    const name = nameByPhysicalRoot.get(connectivity.rootOf(pin.nodeKey));
-    if (name) pinNetNames.set(pinKey(pin.componentId, pin.pinId), name);
-  });
-
-  labelStates.forEach((state, id) => {
-    if (!state.physicalRoot) return;
-    labelStates.set(id, { ...state, netName: nameByPhysicalRoot.get(state.physicalRoot) });
-  });
-
-  const validLabelIdsByElectricalGroup = new Map<string, string[]>();
-  labels.forEach((label) => {
-    const state = labelStates.get(label.id);
-    if (state?.status !== "valid" || !state.physicalRoot) return;
-    const group = electricalGroupForRoot(state.physicalRoot);
-    const labelIds = validLabelIdsByElectricalGroup.get(group);
-    if (labelIds) labelIds.push(label.id);
-    else validLabelIdsByElectricalGroup.set(group, [label.id]);
-  });
-
+  const sortedGroups = [...groups].map(([id, members]) => {
+    const roots = [...new Set(members.flatMap(lane => lane.root === undefined ? [] : [lane.root]))];
+    const firstPoint = members.reduce((first, lane) => lane.point && comparePoints(lane.point, first) < 0 ? lane.point : first,
+      firstPointForRoots(roots, connectivity));
+    return { id, members, roots, firstPoint };
+  }).sort((a, b) => comparePoints(a.firstPoint, b.firstPoint));
+  const usedNames = new Set(firstLaneByName.keys());
   const nets = new Map<string, ResolvedNet>();
-  sortedGroups.forEach((roots) => {
-    const group = electricalGroupForRoot(roots[0]);
-    const name = nameByPhysicalRoot.get(roots[0]);
-    if (!name) return;
-    const points = uniquePoints(roots.flatMap((root) => connectivity.groups.get(root) ?? []));
-    const pins = pinsByElectricalGroup.get(group) ?? [];
-    const wireIds = wireIdsByElectricalGroup.get(group) ?? [];
-    const labelIds = validLabelIdsByElectricalGroup.get(group) ?? [];
-    nets.set(name, {
-      name,
-      physicalRoots: roots,
-      points,
-      pins,
-      wireIds,
-      labelIds,
-      explicit: groupExplicitNames.has(group)
-    });
-  });
+  const nameByLane = new Map<string, string>();
+  let pureWireIndex = 0;
+  for (const { id, members, roots } of sortedGroups) {
+    const aliases = members.flatMap(lane => laneNames.get(lane.id) ?? []);
+    const explicit = aliases.includes("0") ? "0" : aliases[0];
+    const pins = pinsByGroup.get(id) ?? [];
+    const name = explicit ?? uniqueName(automaticPinName(pins) || `NET_${++pureWireIndex}`, usedNames);
+    usedNames.add(name);
+    for (const lane of members) nameByLane.set(lane.id, name);
+    const points = uniquePoints([...roots.flatMap(root => connectivity.groups.get(root) ?? []),
+      ...members.flatMap(lane => lane.point ? [lane.point] : [])]);
+    nets.set(name, { name, physicalRoots: roots, points, pins,
+      wireIds: roots.flatMap(root => wireIdsByRoot.get(root) ?? []),
+      labelIds: labelIdsByGroup.get(id) ?? [], explicit: explicit !== undefined });
+  }
 
-  return {
-    connectivity,
-    nets,
-    nameByPhysicalRoot,
-    wireNetNames,
-    junctionNetNames,
-    pinNetNames,
-    labelStates,
-    hasReferenceGround: nets.has("0")
+  const membersFor = (ids: readonly string[] = []) => ids.map(id => nameByLane.get(id)!);
+  const displayNameFor = (root: string) => {
+    const names = membersFor(lanesByRoot.get(root));
+    return names.length > 1 ? bundleLabels.get(root) ?? names.join(", ") : names[0];
   };
+  const nameByPhysicalRoot = new Map<string, string>();
+  const wireNetNames = new Map<string, string>();
+  const busWireIds = new Set<string>();
+  for (const [root, ids] of lanesByRoot) {
+    const name = displayNameFor(root);
+    if (name) nameByPhysicalRoot.set(root, name);
+    for (const wire of wireIdsByRoot.get(root) ?? []) {
+      if (name) wireNetNames.set(wire, name);
+      if (ids.length > 1) busWireIds.add(wire);
+    }
+  }
+  const junctionNetNames = new Map<string, string>();
+  for (const point of connectivity.junctions) {
+    const names = new Set(connectivity.rootsAtPoint(point)
+      .filter(root => lanesByRoot.get(root)?.length === 1).map(root => nameByPhysicalRoot.get(root)).filter(Boolean));
+    if (names.size === 1) junctionNetNames.set(pointKey(point), Array.from(names)[0]!);
+  }
+  const pinMembers = new Map<string, string[]>();
+  const pinNetNames = new Map<string, string>();
+  for (const [key, ids] of lanesByPin) {
+    const names = membersFor(ids);
+    pinMembers.set(key, names);
+    if (names.length === 1) pinNetNames.set(key, names[0]);
+  }
+  for (const state of labelStates.values()) {
+    if (!state.physicalRoot) continue;
+    state.netName = displayNameFor(state.physicalRoot);
+    state.netNames = membersFor(lanesByRoot.get(state.physicalRoot));
+  }
+
+  return { connectivity, nets, nameByPhysicalRoot, wireNetNames, junctionNetNames, pinNetNames,
+    pinMembers, busWireIds, widthMismatches, labelStates, hasReferenceGround: nets.has("0") };
 }
 
 export function netNameForJunction(resolution: NetResolution, point: Point) {
@@ -319,6 +291,16 @@ export function netNameForJunction(resolution: NetResolution, point: Point) {
 
 export function netNameForPin(resolution: NetResolution, componentId: string, pinId: string) {
   return resolution.pinNetNames.get(pinKey(componentId, pinId)) ?? "";
+}
+
+export function netMembersForPin(resolution: NetResolution, componentId: string, pinId: string) {
+  return resolution.pinMembers.get(pinKey(componentId, pinId)) ?? [];
+}
+
+function append<T>(map: Map<string, T[]>, key: string, item: T) {
+  const entries = map.get(key);
+  if (entries) entries.push(item);
+  else map.set(key, [item]);
 }
 
 function automaticPinName(pins: NetlistPin[]) {
@@ -348,14 +330,6 @@ function uniqueName(baseName: string, usedNames: Set<string>) {
   let suffix = 2;
   while (usedNames.has(`${baseName}_${suffix}`)) suffix += 1;
   return `${baseName}_${suffix}`;
-}
-
-function unionAll(unionFind: RootUnionFind, roots: Iterable<string>) {
-  let first: string | undefined;
-  for (const root of roots) {
-    if (first === undefined) first = root;
-    else unionFind.union(first, root);
-  }
 }
 
 function firstPointForRoots(roots: string[], connectivity: ConnectivityResult) {

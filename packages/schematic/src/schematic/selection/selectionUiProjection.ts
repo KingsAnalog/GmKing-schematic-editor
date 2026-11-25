@@ -23,7 +23,6 @@ export interface SchematicSelectionUiProjectionInput {
     targets: SchematicPropertySelectionTargets;
     hasSelection: boolean;
     resolution?: NetResolution;
-    labelTool?: SchematicPropertyPanelInput["labelTool"];
     couplingPickSourceId?: string | null;
   };
   activePlacementItem: PlacementProjectionItem | null;
@@ -33,8 +32,8 @@ export interface SchematicSelectionUiProjectionInput {
   };
   copy: {
     hasSource: boolean;
-    awaitingReference?: boolean;
   };
+  moveHasSource?: boolean;
   moveBehavior: SelectionMoveBehavior;
 }
 
@@ -51,7 +50,6 @@ export function buildSchematicSelectionUiProjection(input: SchematicSelectionUiP
     targets: input.propertyPanel.targets,
     hasSelection: input.propertyPanel.hasSelection,
     resolution: input.propertyPanel.resolution,
-    labelTool: input.propertyPanel.labelTool,
     couplingPickSourceId: input.propertyPanel.couplingPickSourceId
   });
 
@@ -63,7 +61,8 @@ export function buildSchematicSelectionUiProjection(input: SchematicSelectionUiP
       selection: input.selection,
       placement: buildPlacementSummaryPlacement(input.activePlacementItem),
       wire: input.wire,
-      copy: input.copy
+      copy: input.copy,
+      move: { behavior: input.moveBehavior, hasSource: !!input.moveHasSource }
     }),
     status: buildSchematicSelectionStatus({
       selection: input.selection,

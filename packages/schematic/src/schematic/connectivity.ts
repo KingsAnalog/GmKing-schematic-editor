@@ -1,6 +1,7 @@
 import { resolveComponentDef } from "./catalog";
 import { componentPinNetlistRole } from "./pinConfigurationModel";
 import { connectionNodes } from "./connectionGraph";
+import { junctionId } from "./junctionIdentity";
 import {
   pointKey,
   pointOnSegment,
@@ -58,6 +59,8 @@ export interface ConnectivityResult {
   junctions: Point[];
   presentationJunctions: Point[];
   diagnostics: string[];
+  junctionNodes: ReadonlyMap<string, Point>;
+  junctionMembers: ReadonlyMap<string, ReadonlySet<string>>;
   rootOf(nodeKey: string): string;
   rootOfWire(wireId: string): string | null;
   rootsAtPoint(point: Point): string[];
@@ -110,6 +113,8 @@ function buildEndpointConnectivity(document: SchematicContent): ConnectivityResu
     });
   }));
   const junctions: Point[] = [], presentationPoints: Point[] = [];
+  const junctionNodes = new Map<string, Point>();
+  const junctionMembers = new Map<string, Set<string>>();
   connectionNodes(document).forEach(node => {
     const members = [
       ...node.wires.map(end => `w:${end.wireId}:${end.index}`),
@@ -132,14 +137,23 @@ function buildEndpointConnectivity(document: SchematicContent): ConnectivityResu
     const aligned = [...node.wires, ...node.pins].every(member => samePoint(member.point, node.point));
     if (!aligned) return;
     if (wireArms.size >= 3) junctions.push(node.point);
-    if (allArms.size >= 3) presentationPoints.push(node.point);
+    if (allArms.size >= 3) {
+      junctionNodes.set(node.id, node.point);
+      presentationPoints.push(node.point);
+      const id = junctionId(node.point);
+      const members = junctionMembers.get(id) ?? new Set<string>();
+      // Prefer the physical conductors. Pin-only junctions follow their parent components.
+      const owners = node.wires.length ? node.wires.map(wire => wire.wireId) : node.pins.map(pin => pin.componentId);
+      owners.forEach(owner => members.add(owner));
+      junctionMembers.set(id, members);
+    }
   });
   const rootOfWire = (id: string) => wires.has(id) ? uf.find(`w:${id}:0`) : null;
   return {
     pins, groups: collectGroups(nodePoints, uf),
     junctions: uniquePoints(junctions).sort((a, b) => a.x - b.x || a.y - b.y),
     presentationJunctions: uniquePoints([...junctions, ...presentationPoints]).sort((a, b) => a.x - b.x || a.y - b.y),
-    diagnostics: [], rootOf: key => uf.find(key), rootOfWire,
+    diagnostics: [], junctionNodes, junctionMembers, rootOf: key => uf.find(key), rootOfWire,
     rootsAtPoint: point => [...new Set([
       ...[...wires.values()].filter(wire => wireSegments(wire).some(segment => pointOnSegment(point, segment.start, segment.end))).map(wire => rootOfWire(wire.id)!),
       ...pins.filter(pin => samePoint(pin.point, point)).map(pin => uf.find(pin.nodeKey))

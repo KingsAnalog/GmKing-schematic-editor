@@ -13,7 +13,7 @@ function withNote(content: SchematicContent, id: string, text: string) {
     y: 0,
     width: 120,
     height: 40,
-    format: "plain",
+    anchor: "upperLeft",
     text
   });
   return next;

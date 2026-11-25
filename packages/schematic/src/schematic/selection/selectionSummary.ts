@@ -1,6 +1,7 @@
 import type { ComponentInstance, NetLabel, Point, SchematicNote, Wire, WireVariant } from "../types";
+import type { ToolMode } from "../toolState";
 
-export type SelectionSummaryMode = "select" | "place" | "wire" | "label" | "delete" | "temp-delete" | "copy";
+export type SelectionSummaryMode = ToolMode;
 export type SelectionMoveBehavior = "stretch" | "moveOnly";
 
 export type SchematicSelectionSummaryPlacement =
@@ -40,8 +41,8 @@ export interface SchematicSelectionSummaryInput {
   };
   copy?: {
     hasSource: boolean;
-    awaitingReference?: boolean;
   };
+  move?: { behavior: SelectionMoveBehavior; hasSource: boolean };
 }
 
 export interface SchematicSelectionStatusInput {
@@ -52,7 +53,12 @@ export interface SchematicSelectionStatusInput {
 export function buildSchematicSelectionSummary(input: SchematicSelectionSummaryInput): SchematicSelectionSummary {
   if (input.mode === "place") return buildPlacementSummary(input.placement ?? { kind: "invalid" });
   if (input.mode === "wire") return buildWireToolSummary(input.wire ?? { variant: "signal", routePointCount: 0 });
-  if (input.mode === "copy") return buildCopyToolSummary(!!input.copy?.hasSource, !!input.copy?.awaitingReference);
+  if (input.mode === "copy") return toolSummary("Copy", input.copy?.hasSource ? "click to place" : "click an object or drag a box");
+  if (input.mode === "rotate") return toolSummary("Rotate", input.move?.hasSource ? "click to place" : "click a component");
+  if (input.mode === "move") {
+    return toolSummary(input.move?.behavior === "moveOnly" ? "Move only" : "Stretch move",
+      input.move?.hasSource ? "click to place" : "click an object or drag a box");
+  }
   if (input.mode === "label") return toolSummary("Label", "enter a name, then click a wire");
   if (input.mode === "delete") return toolSummary("Delete", "click or drag a box");
   if (input.mode === "temp-delete") return toolSummary("Temporary Delete", "click or drag a box");
@@ -129,11 +135,6 @@ function buildWireToolSummary(wire: { variant: WireVariant; routePointCount: num
     ? `${wire.routePointCount} route point${wire.routePointCount === 1 ? "" : "s"}`
     : "waiting for start";
   return toolSummary(wire.variant === "wide" ? "Wide wire" : "Wire", routeText);
-}
-
-function buildCopyToolSummary(hasSource: boolean, awaitingReference = false): SchematicSelectionSummary {
-  if (awaitingReference) return toolSummary("Copy", "click reference");
-  return toolSummary("Copy", hasSource ? "click to place" : "click an object");
 }
 
 function toolSummary(name: string, detail: string): SchematicSelectionSummary {

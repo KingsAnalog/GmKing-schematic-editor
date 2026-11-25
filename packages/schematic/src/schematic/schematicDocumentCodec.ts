@@ -1,6 +1,7 @@
 import { supportsComponentScale } from "./componentScaleModel";
 import stringify from "json-stringify-pretty-compact";
 import { resolveSymbolTemplate } from "./symbolTemplateModel";
+import { PROCESS_IDS } from "./netlist/profiles";
 import { COMPONENT_CATALOG, isValidComponentVariant, resolveComponentDef } from "./catalog";
 import { cloneConnections } from "./connectionGraph";
 import { pointKey, snapPoint, transformPin } from "./geometry";
@@ -12,6 +13,9 @@ import {
 } from "./document/documentModel";
 import { normalizeWirePath } from "./wire/wireGeometry";
 import { isHexColor } from "../shared/color";
+import { defaultLayers } from "./layers";
+import { SCHEMATIC_TEXT_FONTS } from "./schematicFont";
+import { NOTE_ANCHORS } from "./types";
 import type {
   ComponentAppearance,
   ComponentInstance,
@@ -23,6 +27,8 @@ import type {
   SchematicContent,
   SchematicConnections,
   SchematicDocument,
+  SchematicLayer,
+  SchematicLayerObjectStates,
   SchematicNote,
   Wire,
   WireAppearance
@@ -41,13 +47,17 @@ const SCHEMATIC_JSON_ITEM_FIELD_INDENT = " ".repeat(SCHEMATIC_JSON_INDENT * 4);
 const ENVELOPE_KEYS = ["format", "schematic"] as const;
 const SCHEMATIC_KEYS = [
   "symbolTemplate",
+  "display",
+  "netlistProcess",
   "components",
   "wires",
   "inductorCouplings",
   "connections",
   "junctionAppearances",
   "netLabels",
-  "notes"
+  "notes",
+  "layers",
+  "layerObjectStates"
 ] as const;
 
 export type SchematicDocumentFileSource = {
@@ -79,10 +89,13 @@ export class SchematicDocumentFileError extends Error {
 
 export function createSchematicFile(document: SchematicDocumentFileSource): SchematicFile {
   const inductorCouplings = document.inductorCouplings ?? [];
+  const layerObjectStates = snapshotLayerObjectStates(document.layerObjectStates);
   return {
     format: SCHEMATIC_FILE_FORMAT,
     schematic: {
       symbolTemplate: resolveSymbolTemplate(document.symbolTemplate).id,
+      ...(document.display ? { display: { ...document.display } } : {}),
+      ...(document.netlistProcess !== undefined ? { netlistProcess: document.netlistProcess } : {}),
       components: document.components.map(snapshotComponent),
       wires: document.wires.map(snapshotWire),
       ...(inductorCouplings.length > 0
@@ -91,7 +104,9 @@ export function createSchematicFile(document: SchematicDocumentFileSource): Sche
       connections: cloneConnections(document.connections),
       junctionAppearances: document.junctionAppearances.map(snapshotJunctionAppearance),
       netLabels: document.netLabels.map(snapshotNetLabel),
-      notes: document.notes.map(snapshotNote)
+      notes: document.notes.map(snapshotNote),
+      layers: (document.layers ?? defaultLayers()).map(snapshotLayer),
+      ...(layerObjectStates ? { layerObjectStates } : {})
     }
   };
 }
@@ -114,6 +129,8 @@ function formatSchematicFileJson(file: SchematicFile) {
     `  "format": ${JSON.stringify(file.format)},`,
     '  "schematic": {',
     `    "symbolTemplate": ${JSON.stringify(file.schematic.symbolTemplate)},`,
+    ...(file.schematic.display ? [`    "display": ${stringifyInline(file.schematic.display)},`] : []),
+    ...(file.schematic.netlistProcess ? [`    "netlistProcess": ${JSON.stringify(file.schematic.netlistProcess)},`] : []),
     ...formatSchematicComponents(file.schematic.components),
     ...formatSchematicWires(file.schematic.wires),
     ...(file.schematic.inductorCouplings
@@ -122,6 +139,10 @@ function formatSchematicFileJson(file: SchematicFile) {
     `    "connections": ${stringifyInline(file.schematic.connections)},`,
     formatInlineSchematicCollection("junctionAppearances", file.schematic.junctionAppearances, true),
     formatInlineSchematicCollection("netLabels", file.schematic.netLabels, true),
+    ...(file.schematic.layerObjectStates
+      ? [formatInlineSchematicCollection("layerObjectStates", file.schematic.layerObjectStates, true)]
+      : []),
+    formatInlineSchematicCollection("layers", file.schematic.layers ?? defaultLayers(), true),
     ...formatSchematicNotes(file.schematic.notes),
     "  }",
     "}"
@@ -187,6 +208,7 @@ function formatSchematicWires(wires: readonly Wire[]) {
       const fields = [
         `"points": ${stringifyInline(wire.points)}`,
         `"routeMode": ${JSON.stringify(wire.routeMode)}`,
+        ...(wire.layerId === undefined ? [] : [`"layerId": ${JSON.stringify(wire.layerId)}`]),
         ...(wire.appearance !== undefined
           ? [`"appearance": ${stringifyInline(wire.appearance)}`]
           : []),
@@ -218,13 +240,17 @@ function formatSchematicNotes(notes: readonly SchematicNote[]) {
         `"x": ${JSON.stringify(note.x)}`,
         `"y": ${JSON.stringify(note.y)}`,
         `"width": ${JSON.stringify(note.width)}`,
+        ...(note.layerId === undefined ? [] : [`"layerId": ${JSON.stringify(note.layerId)}`]),
         ...(note.height !== undefined ? [`"height": ${JSON.stringify(note.height)}`] : []),
         ...(note.rotation !== undefined ? [`"rotation": ${JSON.stringify(note.rotation)}`] : []),
-        `"format": ${JSON.stringify(note.format)}`,
+        ...(note.anchor ? [`"anchor": ${JSON.stringify(note.anchor)}`] : []),
         ...(note.backgroundColor !== undefined
           ? [`"backgroundColor": ${JSON.stringify(note.backgroundColor)}`]
           : []),
+        ...(note.backgroundEnabled !== undefined ? [`"backgroundEnabled": ${JSON.stringify(note.backgroundEnabled)}`] : []),
+        ...(note.backgroundOpacity !== undefined ? [`"backgroundOpacity": ${JSON.stringify(note.backgroundOpacity)}`] : []),
         ...(note.textColor !== undefined ? [`"textColor": ${JSON.stringify(note.textColor)}`] : []),
+        ...(note.fontFamily === undefined ? [] : [`"fontFamily": ${JSON.stringify(note.fontFamily)}`]),
         ...(note.fontSizePx !== undefined
           ? [`"fontSizePx": ${JSON.stringify(note.fontSizePx)}`]
           : []),
@@ -296,7 +322,12 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     );
   }
   const source = requireObject(envelope.schematic, "$.schematic");
-  requireExactKeys(source, SCHEMATIC_KEYS, "$.schematic", ["inductorCouplings", "symbolTemplate"]);
+  requireExactKeys(
+    source,
+    SCHEMATIC_KEYS,
+    "$.schematic",
+    ["inductorCouplings", "symbolTemplate", "display", "netlistProcess", "layers", "layerObjectStates"]
+  );
   let symbolTemplate;
   try {
     symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
@@ -324,19 +355,43 @@ function decodeSchematicFile(value: unknown): SchematicContent {
     .map((label, index) => decodeNetLabel(label, `$.schematic.netLabels[${index}]`));
   const notes = requireArray(source.notes, "$.schematic.notes")
     .map((note, index) => decodeNote(note, `$.schematic.notes[${index}]`));
+  const layers = hasOwn(source, "layers")
+    ? requireArray(source.layers, "$.schematic.layers")
+        .map((layer, index) => decodeLayer(layer, `$.schematic.layers[${index}]`))
+    : defaultLayers();
+  const layerObjectStates = hasOwn(source, "layerObjectStates")
+    ? decodeLayerObjectStates(source.layerObjectStates)
+    : undefined;
 
   assertUniqueObjectIds({ components, wires, inductorCouplings, netLabels, notes });
+  assertUniqueLayerIds(layers);
   assertValidInductorCouplings(inductorCouplings, components);
   assertValidLabelAttachments(netLabels, wires);
   return {
     symbolTemplate,
+    ...(hasOwn(source, "display") ? { display: decodeDisplaySettings(source.display) } : {}),
+    ...(hasOwn(source, "netlistProcess") ? {
+      netlistProcess: requireEnum(source.netlistProcess, PROCESS_IDS, "$.schematic.netlistProcess")
+    } : {}),
     components,
     wires,
     connections,
     ...(inductorCouplings.length > 0 ? { inductorCouplings } : {}),
     junctionAppearances,
     netLabels,
-    notes
+    notes,
+    layers,
+    ...(layerObjectStates ? { layerObjectStates } : {})
+  };
+}
+
+function decodeDisplaySettings(value: unknown): SchematicContent["display"] {
+  const path = "$.schematic.display";
+  const source = requireObject(value, path);
+  requireExactKeys(source, ["wireCrossings", "textFont"], path, ["wireCrossings", "textFont"]);
+  return {
+    ...(hasOwn(source, "wireCrossings") ? { wireCrossings: requireEnum(source.wireCrossings, ["plain", "hop"] as const, `${path}.wireCrossings`) } : {}),
+    ...(hasOwn(source, "textFont") ? { textFont: requireEnum(source.textFont, SCHEMATIC_TEXT_FONTS, `${path}.textFont`) } : {})
   };
 }
 
@@ -443,9 +498,9 @@ function decodeWire(value: unknown, path: string): Wire {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "points", "routeMode", "appearance", "temporarilyDeleted"],
+    ["id", "points", "routeMode", "appearance", "temporarilyDeleted", "layerId"],
     path,
-    ["appearance", "temporarilyDeleted"]
+    ["appearance", "temporarilyDeleted", "layerId"]
   );
   const points = requireArray(source.points, `${path}.points`)
     .map((point, index) => decodePoint(point, `${path}.points[${index}]`));
@@ -470,6 +525,7 @@ function decodeWire(value: unknown, path: string): Wire {
     points,
     routeMode
   };
+  if (hasOwn(source, "layerId")) wire.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
   if (hasOwn(source, "appearance")) wire.appearance = decodeWireAppearance(source.appearance, `${path}.appearance`);
   if (hasOwn(source, "temporarilyDeleted")) {
     wire.temporarilyDeleted = requireBoolean(source.temporarilyDeleted, `${path}.temporarilyDeleted`);
@@ -531,8 +587,9 @@ function decodeInductorCoupling(value: unknown, path: string): InductorCoupling 
     "showArc",
     "showCore",
     "arcFlipped",
-    "appearance"
-  ], path, ["appearance"]);
+    "appearance",
+    "layerId"
+  ], path, ["appearance", "layerId"]);
   const labelMode = requireEnum(
     source.labelMode,
     ["coefficient", "ratio"] as const,
@@ -548,7 +605,8 @@ function decodeInductorCoupling(value: unknown, path: string): InductorCoupling 
     showLabel: requireBoolean(source.showLabel, `${path}.showLabel`),
     showArc: requireBoolean(source.showArc, `${path}.showArc`),
     showCore: requireBoolean(source.showCore, `${path}.showCore`),
-    arcFlipped: requireBoolean(source.arcFlipped, `${path}.arcFlipped`)
+    arcFlipped: requireBoolean(source.arcFlipped, `${path}.arcFlipped`),
+    ...(hasOwn(source, "layerId") ? { layerId: requireNonEmptyString(source.layerId, `${path}.layerId`) } : {})
   };
   if (hasOwn(source, "appearance")) {
     coupling.appearance = decodeComponentAppearance(source.appearance, `${path}.appearance`);
@@ -567,12 +625,14 @@ function decodeJunctionAppearance(value: unknown, path: string): JunctionAppeara
 
 function decodeNetLabel(value: unknown, path: string): NetLabel {
   const source = requireObject(value, path);
-  requireExactKeys(source, ["id", "name", "attachment"], path);
+  requireExactKeys(source, ["id", "name", "attachment", "layerId", "fontFamily"], path, ["layerId", "fontFamily"]);
   const attachment = requireObject(source.attachment, `${path}.attachment`);
   requireExactKeys(attachment, ["wireId", "point"], `${path}.attachment`);
   return {
     id: requireNonEmptyString(source.id, `${path}.id`),
     name: requireNonEmptyString(source.name, `${path}.name`),
+    ...(hasOwn(source, "fontFamily") ? { fontFamily: requireEnum(source.fontFamily, SCHEMATIC_TEXT_FONTS, `${path}.fontFamily`) } : {}),
+    ...(hasOwn(source, "layerId") ? { layerId: requireNonEmptyString(source.layerId, `${path}.layerId`) } : {}),
     attachment: {
       wireId: requireString(attachment.wireId, `${path}.attachment.wireId`),
       point: decodePoint(attachment.point, `${path}.attachment.point`)
@@ -584,9 +644,9 @@ function decodeNote(value: unknown, path: string): SchematicNote {
   const source = requireObject(value, path);
   requireExactKeys(
     source,
-    ["id", "x", "y", "width", "height", "rotation", "format", "text", "backgroundColor", "textColor", "fontSizePx"],
+    ["id", "x", "y", "width", "height", "rotation", "anchor", "text", "backgroundColor", "backgroundEnabled", "backgroundOpacity", "textColor", "fontSizePx", "layerId", "fontFamily"],
     path,
-    ["height", "rotation", "backgroundColor", "textColor", "fontSizePx"]
+    ["height", "rotation", "anchor", "backgroundColor", "backgroundEnabled", "backgroundOpacity", "textColor", "fontSizePx", "layerId", "fontFamily"]
   );
   const width = requireFiniteNumber(source.width, `${path}.width`);
   if (width <= 0) invalid(`${path}.width`, "a positive finite number");
@@ -595,9 +655,11 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     x: requireFiniteNumber(source.x, `${path}.x`),
     y: requireFiniteNumber(source.y, `${path}.y`),
     width,
-    format: requireEnum(source.format, ["plain", "markdown"] as const, `${path}.format`),
     text: requireString(source.text, `${path}.text`)
   };
+  if (hasOwn(source, "anchor")) note.anchor = requireEnum(source.anchor, NOTE_ANCHORS, path + ".anchor");
+  if (hasOwn(source, "layerId")) note.layerId = requireNonEmptyString(source.layerId, `${path}.layerId`);
+  if (hasOwn(source, "fontFamily")) note.fontFamily = requireEnum(source.fontFamily, SCHEMATIC_TEXT_FONTS, `${path}.fontFamily`);
   if (hasOwn(source, "height")) {
     const height = requireFiniteNumber(source.height, `${path}.height`);
     if (height <= 0) invalid(`${path}.height`, "a positive finite number");
@@ -607,6 +669,14 @@ function decodeNote(value: unknown, path: string): SchematicNote {
     note.backgroundColor = source.backgroundColor === null
       ? null
       : requireColor(source.backgroundColor, `${path}.backgroundColor`);
+  }
+  if (hasOwn(source, "backgroundEnabled")) {
+    note.backgroundEnabled = requireBoolean(source.backgroundEnabled, `${path}.backgroundEnabled`);
+  }
+  if (hasOwn(source, "backgroundOpacity")) {
+    const opacity = requireFiniteNumber(source.backgroundOpacity, `${path}.backgroundOpacity`);
+    if (opacity < 0 || opacity > 1) invalid(`${path}.backgroundOpacity`, "a number from 0 to 1");
+    note.backgroundOpacity = opacity;
   }
   if (hasOwn(source, "textColor")) note.textColor = requireColor(source.textColor, `${path}.textColor`);
   if (hasOwn(source, "fontSizePx")) {
@@ -747,6 +817,7 @@ function snapshotWire(wire: Wire): Wire {
     id: wire.id,
     points: wire.points.map(snapshotPoint),
     routeMode: wire.routeMode,
+    ...(wire.layerId === undefined ? {} : { layerId: wire.layerId }),
     ...(wire.appearance !== undefined
       ? { appearance: snapshotWireAppearance(wire.appearance) }
       : {}),
@@ -768,6 +839,7 @@ function snapshotInductorCoupling(coupling: InductorCoupling): InductorCoupling 
     showArc: coupling.showArc,
     showCore: coupling.showCore,
     arcFlipped: coupling.arcFlipped,
+    ...(coupling.layerId === undefined ? {} : { layerId: coupling.layerId }),
     ...(coupling.appearance !== undefined
       ? { appearance: snapshotComponentAppearance(coupling.appearance) }
       : {})
@@ -798,6 +870,8 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
   return {
     id: label.id,
     name: label.name,
+    ...(label.fontFamily === undefined ? {} : { fontFamily: label.fontFamily }),
+    ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
     attachment: {
       wireId: label.attachment.wireId,
       point: snapshotPoint(label.attachment.point)
@@ -805,17 +879,80 @@ function snapshotNetLabel(label: NetLabel): NetLabel {
   };
 }
 
+function snapshotLayerObjectStates(
+  states: SchematicLayerObjectStates | undefined
+): SchematicLayerObjectStates | undefined {
+  const entries = Object.entries(states ?? {}).flatMap(([id, state]) => {
+    const snapshot = {
+      ...(state.visible === false ? { visible: false } : {}),
+      ...(state.z !== undefined ? { z: state.z } : {})
+    };
+    return Object.keys(snapshot).length > 0 ? [[id, snapshot] as const] : [];
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function decodeLayerObjectStates(value: unknown): SchematicLayerObjectStates | undefined {
+  const path = "$.schematic.layerObjectStates";
+  const source = requireObject(value, path);
+  const entries = Object.entries(source).map(([id, item]) => {
+    const at = `${path}.${id}`;
+    if (!id.trim() || id === "__proto__" || id === "prototype" || id === "constructor") {
+      invalid(at, "safe, non-empty object ids");
+    }
+    const state = requireObject(item, at);
+    requireExactKeys(state, ["visible", "z"], at, ["visible", "z"]);
+    return [id, {
+      ...(hasOwn(state, "visible") ? { visible: requireBoolean(state.visible, `${at}.visible`) } : {}),
+      ...(hasOwn(state, "z") ? { z: requireFiniteNumber(state.z, `${at}.z`) } : {})
+    }] as const;
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function snapshotLayer(layer: SchematicLayer): SchematicLayer {
+  return {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible !== false,
+    locked: layer.locked === true
+  };
+}
+
+function decodeLayer(value: unknown, path: string): SchematicLayer {
+  const source = requireObject(value, path);
+  requireExactKeys(source, ["id", "name", "visible", "locked"], path);
+  return {
+    id: requireNonEmptyString(source.id, `${path}.id`),
+    name: requireNonEmptyString(source.name, `${path}.name`),
+    visible: requireBoolean(source.visible, `${path}.visible`),
+    locked: requireBoolean(source.locked, `${path}.locked`)
+  };
+}
+
+function assertUniqueLayerIds(layers: readonly SchematicLayer[]) {
+  const ids = new Set<string>();
+  layers.forEach((layer, index) => {
+    if (ids.has(layer.id)) invalid(`$.schematic.layers[${index}].id`, "a unique layer id");
+    ids.add(layer.id);
+  });
+}
+
 function snapshotNote(note: SchematicNote): SchematicNote {
   return {
     id: note.id,
+    ...(note.fontFamily === undefined ? {} : { fontFamily: note.fontFamily }),
+    ...(note.layerId === undefined ? {} : { layerId: note.layerId }),
     x: note.x,
     y: note.y,
     width: note.width,
     ...(note.height !== undefined ? { height: note.height } : {}),
     ...(note.rotation !== undefined ? { rotation: note.rotation } : {}),
-    format: note.format,
+    ...(note.anchor ? { anchor: note.anchor } : {}),
     text: note.text,
     ...(note.backgroundColor !== undefined ? { backgroundColor: note.backgroundColor } : {}),
+    ...(note.backgroundEnabled !== undefined ? { backgroundEnabled: note.backgroundEnabled } : {}),
+    ...(note.backgroundOpacity !== undefined ? { backgroundOpacity: note.backgroundOpacity } : {}),
     ...(note.textColor !== undefined ? { textColor: note.textColor } : {}),
     ...(note.fontSizePx !== undefined ? { fontSizePx: note.fontSizePx } : {})
   };

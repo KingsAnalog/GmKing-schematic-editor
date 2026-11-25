@@ -14,7 +14,7 @@ import { buildSchematicSelectionSvg } from "../../../src/schematic/selection/sel
 import { renderSchematicDocumentSvg } from "../../../src/schematic/documentSvgRenderer";
 
 function makeNote(overrides: Partial<SchematicNote> = {}): SchematicNote {
-  return { id: "note", x: 100, y: 200, width: 30, height: 10, format: "plain", text: "V1", fontSizePx: 9, ...overrides };
+  return { id: "note", x: 100, y: 200, width: 30, height: 10, anchor: "upperLeft", text: "V1", fontSizePx: 9, ...overrides };
 }
 
 describe("note size and rotation across editing, storage and rendering", () => {
@@ -24,8 +24,8 @@ describe("note size and rotation across editing, storage and rendering", () => {
     expect(noteSizeFromMeasuredContent({ width: 840, height: 200 }, 200)).toEqual({ width: 850, height: 220 });
   });
 
-  it.each(["plain", "markdown"] as const)("rotates a single %s note without moving its grid anchor, and restores after four turns", (format) => {
-    const note = makeNote({ format, width: format === "markdown" ? 160 : 30, height: format === "markdown" ? 40 : 10 });
+  it.each(["lowerLeft", "centerCenter", "upperRight"] as const)("rotates a %s note around its grid anchor and restores after four turns", (anchor) => {
+    const note = makeNote({ anchor });
     const document = fixtureDocument({ notes: [note] });
     const before = structuredClone(document.notes[0]);
     for (const rotation of [90, 180, 270, 0]) {
@@ -46,10 +46,10 @@ describe("note size and rotation across editing, storage and rendering", () => {
     expect(collectSelectionBoxHits(document, { x: 111, y: 201 }, { x: 129, y: 209 }).noteIds).toEqual([]);
     const exported = buildSchematicSelectionSvg({ ...document, junctionPoints: [], padding: 0 })!;
     expect(exported.bounds).toEqual(bounds);
-    expect(exported.svg).toContain('transform="rotate(90 100 200)"');
-    expect(exported.clipboardSvg).toContain('transform="rotate(90 100 200)"');
+    expect(exported.svg).toContain('transform="translate(100 200) rotate(90) translate(0 0)"');
+    expect(exported.clipboardSvg).toContain('transform="translate(100 200) rotate(90) translate(0 0)"');
     expect(exported.clipboardSvg).toContain('font-size="9"');
-    expect(exported.clipboardSvg).toContain('>V1</tspan>');
+    expect(exported.clipboardSvg).toContain('>V1</text>');
     expect(renderSchematicDocumentSvg(document, { namespace: "note", padding: 0 }).viewBox).toEqual(bounds);
   });
 

@@ -52,6 +52,6 @@ function contentWithNote(id: string): SchematicContent {
 
     junctionAppearances: [],
     netLabels: [],
-    notes: [{ id, x: 0, y: 0, width: 120, height: 40, format: "plain", text: id }]
+    notes: [{ id, x: 0, y: 0, width: 120, height: 40, anchor: "upperLeft", text: id }]
   });
 }

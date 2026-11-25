@@ -1,8 +1,10 @@
+import { mirrorComponentOrientation } from "./geometry";
 import type { InstancePaletteItem } from "./instanceSelector";
 import {
   buildPlacementCommit,
   buildPlacementPreviewFragment,
   type PlacementCommit,
+  type PlacementProperties,
   type PlacementIdFactory,
   type PlacementRefFactory
 } from "./placementModel";
@@ -22,6 +24,7 @@ export class SchematicPlacementToolController {
   private selectedPlacementItemValue: InstancePaletteItem;
   private activePlacementItemValue: InstancePaletteItem | null;
   private poseValue: PlacementToolPose = { rotation: 0, mirrored: false };
+  private properties?: PlacementProperties;
 
   constructor(defaultItem: InstancePaletteItem = "resistor", options: { activeItem?: InstancePaletteItem | null } = {}) {
     this.selectedPlacementItemValue = defaultItem;
@@ -40,12 +43,13 @@ export class SchematicPlacementToolController {
     return { ...this.poseValue };
   }
 
-  setItem(item: InstancePaletteItem) {
+  setItem(item: InstancePaletteItem, properties?: PlacementProperties) {
     if (item !== this.selectedPlacementItemValue) {
       this.resetPose();
     }
     this.selectedPlacementItemValue = item;
     this.activePlacementItemValue = item;
+    this.properties = properties;
   }
 
   previewItem(item: InstancePaletteItem | null) {
@@ -53,7 +57,8 @@ export class SchematicPlacementToolController {
       this.activePlacementItemValue = null;
       return;
     }
-    this.setItem(item);
+    if (item === this.selectedPlacementItemValue) this.activePlacementItemValue = item;
+    else this.setItem(item);
   }
 
   activeItemIsTemplate() {
@@ -71,15 +76,7 @@ export class SchematicPlacementToolController {
 
   mirrorPreview(axis: "x" | "y"): PlacementPreviewTransformResult {
     if (this.activeItemIsTemplate()) return { kind: "template", pose: this.pose };
-    this.poseValue = axis === "x"
-      ? {
-          ...this.poseValue,
-          mirrored: !this.poseValue.mirrored
-        }
-      : {
-          rotation: (360 - this.poseValue.rotation) % 360,
-          mirrored: !this.poseValue.mirrored
-        };
+    mirrorComponentOrientation(this.poseValue, axis);
     return { kind: "updated", pose: this.pose };
   }
 
@@ -93,13 +90,14 @@ export class SchematicPlacementToolController {
     if (!this.activePlacementItemValue) return null;
     return buildPlacementCommit(this.activePlacementItemValue, point, {
       ...options,
-      ...this.poseValue
+      ...this.poseValue,
+      properties: this.properties
     });
   }
 
   buildPreview(point: Point): SchematicDocument | null {
     if (!this.activePlacementItemValue) return null;
-    return buildPlacementPreviewFragment(this.activePlacementItemValue, point, this.poseValue);
+    return buildPlacementPreviewFragment(this.activePlacementItemValue, point, { ...this.poseValue, properties: this.properties });
   }
 
   private resetPose() {

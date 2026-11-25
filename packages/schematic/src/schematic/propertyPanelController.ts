@@ -1,4 +1,7 @@
+import { NOTE_ANCHORS } from "./types";
 import { COMPONENT_SCALES, type ComponentScale } from "./componentScaleModel";
+import { componentName, messageText, parameterLabel, schematicLanguage, uiFormat } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
 import { DEFAULT_NOTE_TEXT_COLOR } from "./notes/noteAppearance";
 import {
   type MosArrowView,
@@ -9,13 +12,23 @@ import type {
   ComponentType,
   GainPolarity,
   OperatorPinMode,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   WireEndpointMarker,
   WireLineWidth
 } from "./types";
 import { DEFAULT_COMPONENT_COLOR } from "./componentPropertyModel";
 import { DEFAULT_NETWORK_COLOR } from "./networkColorModel";
 import type { RectangleProperty } from "./rectangleComponentModel";
+import {
+  isLibraryShapeLineStyle,
+  isLibraryShapeArrowType,
+  isLibraryShapeArrowSize,
+  DEFAULT_LIBRARY_SHAPE_STYLE,
+  LIBRARY_SHAPE_ARROW_FIELDS,
+  LIBRARY_SHAPE_LINE_STYLE_OPTIONS,
+  type LibraryShapeStyleProperty,
+  type LibraryShapeStyleValue
+} from "./libraryShapeStyleModel";
 import type { TriangleEdge } from "./triangleComponentModel";
 import {
   isFilterKind,
@@ -106,6 +119,11 @@ export interface SchematicPropertyPanelControllerCallbacks {
   onComponentValueInput?: (value: string) => void;
   onComponentValueCommit?: (value: string) => void;
   onComponentValueCancel?: () => void;
+  onLibraryShapeStyleChange?: (property: LibraryShapeStyleProperty, value: LibraryShapeStyleValue) => void;
+  onLibraryShapeStyleEditStart?: (property: LibraryShapeStyleProperty) => void;
+  onLibraryShapeStyleInput?: (property: LibraryShapeStyleProperty, value: string) => void;
+  onLibraryShapeStyleCommit?: (property: LibraryShapeStyleProperty, value: string) => void;
+  onLibraryShapeStyleCancel?: (property: LibraryShapeStyleProperty) => void;
   onRectanglePropertyEditStart?: (property: RectangleProperty) => void;
   onRectanglePropertyInput?: (property: RectangleProperty, value: string) => void;
   onRectanglePropertyCommit?: (property: RectangleProperty, value: string) => void;
@@ -153,22 +171,22 @@ export interface SchematicPropertyPanelControllerCallbacks {
   onNoteBackgroundInput?: (value: string) => void;
   onNoteBackgroundCommit?: (value: string) => void;
   onNoteBackgroundCancel?: () => void;
+  onNoteFillEnabledChange?: (enabled: boolean) => void;
+  onNoteFillOpacityEditStart?: () => void;
+  onNoteFillOpacityInput?: (value: string) => void;
+  onNoteFillOpacityCommit?: (value: string) => void;
+  onNoteFillOpacityCancel?: () => void;
+  onNoteAnchorChange?: (value: SchematicNoteAnchor) => void;
+  onNoteTextChange?: (value: string) => void;
   onNoteFontSizeEditStart?: () => void;
   onNoteFontSizeInput?: (value: string) => void;
   onNoteFontSizeCommit?: (value: string) => void;
-  onNoteFormatChange?: (value: SchematicNoteFormat) => void;
-  onNoteWidthEditStart?: () => void;
-  onNoteWidthInput?: (value: string) => void;
-  onNoteWidthCommit?: (value: string) => void;
   onNoteFontSizeCancel?: () => void;
-  onNoteWidthCancel?: () => void;
   onNetLabelChange?: (value: string) => void;
   onNetLabelEditStart?: () => void;
   onNetLabelInput?: (value: string) => void;
   onNetLabelCommit?: (value: string) => void;
   onNetLabelCancel?: () => void;
-  onLabelToolInput?: (value: string) => void;
-  onLabelToolSubmit?: (value: string) => void;
 }
 
 type PropertyPanelElements = {
@@ -205,17 +223,26 @@ type PropertyPanelElements = {
   wireDigitalSlashInput: HTMLInputElement | null;
   wireDigitalLabelRow: HTMLElement | null;
   wireDigitalLabelInput: HTMLInputElement | null;
-  labelToolForm: HTMLElement | null;
-  labelToolInput: HTMLInputElement | null;
-  labelToolError: HTMLElement | null;
   cellRow: HTMLElement;
   cellSelect: HTMLSelectElement;
+  identityFields: HTMLElement | null;
   refInput: HTMLInputElement;
   labelVisibilityInput: HTMLInputElement;
   valueVisibilityRow: HTMLElement | null;
   valueVisibilityInput: HTMLInputElement | null;
   componentColorRow: HTMLElement;
   componentColorInput: HTMLInputElement;
+  libraryShapeStrokeFields: HTMLElement | null;
+  libraryShapeStrokeWidthInput: HTMLInputElement | null;
+  libraryShapeLineStyleSelect: HTMLSelectElement | null;
+  libraryShapeCornerRadiusRow: HTMLElement | null;
+  libraryShapeCornerRadiusInput: HTMLInputElement | null;
+  libraryShapeArrowSelects: NodeListOf<HTMLSelectElement>;
+  libraryShapeFillFields: HTMLElement | null;
+  libraryShapeFillEnabledInput: HTMLInputElement | null;
+  libraryShapeFillColorInput: HTMLInputElement | null;
+  libraryShapeFillColorSwatches: NodeListOf<HTMLButtonElement>;
+  libraryShapeFillOpacityInput: HTMLInputElement | null;
   gainPolarityRow: HTMLElement;
   gainPolarityControl: HTMLElement;
   gainPolarityButtons: NodeListOf<HTMLButtonElement>;
@@ -269,13 +296,14 @@ type PropertyPanelElements = {
   noteTextColorSwatches: NodeListOf<HTMLButtonElement>;
   noteBackgroundRow: HTMLElement;
   noteBackgroundInput: HTMLInputElement;
+  noteFillEnabledInput: HTMLInputElement;
+  noteFillOpacityInput: HTMLInputElement;
   noteFontSizeRow: HTMLElement;
   noteFontSizeInput: HTMLInputElement;
-  noteFormatRow: HTMLElement;
-  noteFormatSelect: HTMLSelectElement;
-  noteFormatSegmented: HTMLElement;
-  noteWidthRow: HTMLElement;
-  noteWidthInput: HTMLInputElement;
+  noteAnchor: HTMLSelectElement;
+  noteTextRow: HTMLElement;
+  noteTextDivider: HTMLElement;
+  noteText: HTMLTextAreaElement;
   noteSwatches: NodeListOf<HTMLButtonElement>;
   componentColorSwatches: NodeListOf<HTMLButtonElement>;
 };
@@ -298,21 +326,32 @@ const PROPERTY_EDIT_SELECTOR = [
   "[data-property-ref]",
   "[data-property-value]",
   "[data-property-note-font-size]",
-  "[data-property-note-width]",
   "[data-property-net-label]",
   "[data-property-wire-digital-label]",
   "[data-property-component-color]",
   "[data-property-network-color]",
   "[data-property-note-background]",
+  "[data-property-note-fill-opacity]",
   "[data-property-note-text-color]",
   "[data-property-rectangle]",
-  "[data-property-triangle-pins]"
+  "[data-property-triangle-pins]",
+  "[data-property-library-shape-stroke-width]",
+  "[data-property-library-shape-corner-radius]",
+  "[data-property-library-shape-fill-color]",
+  "[data-property-library-shape-fill-opacity]"
 ].join(", ");
 
 export class SchematicPropertyPanelController {
   private bound = false;
   private readonly dirtyTextInputs = new WeakSet<HTMLInputElement>();
   private readonly dirtyColorInputs = new WeakSet<HTMLInputElement>();
+  private componentIdentity: {
+    container: HTMLElement;
+    refRow: HTMLElement;
+    labelRow: HTMLElement;
+    refInput: HTMLInputElement;
+    labelVisibilityInput: HTMLInputElement;
+  } | null = null;
 
   constructor(
     private readonly root: Element,
@@ -350,10 +389,6 @@ export class SchematicPropertyPanelController {
       this.syncNote(elements, input.note);
       return;
     }
-    if (input.labelTool) {
-      this.syncLabelTool(elements, input.labelTool);
-      return;
-    }
     if (input.network) {
       this.syncNetwork(elements, input.network);
       return;
@@ -364,12 +399,6 @@ export class SchematicPropertyPanelController {
       return;
     }
     this.syncEmpty(elements, input.hasSelection);
-  }
-
-  focusLabelToolInput() {
-    const input = this.root.querySelector<HTMLInputElement>("[data-property-label-tool-input]");
-    input?.focus({ preventScroll: true });
-    input?.select();
   }
 
   private elements(): PropertyPanelElements | null {
@@ -406,17 +435,31 @@ export class SchematicPropertyPanelController {
     const wireDigitalSlashInput = this.root.querySelector<HTMLInputElement>("[data-property-wire-digital-slash]");
     const wireDigitalLabelRow = this.root.querySelector<HTMLElement>("[data-property-wire-digital-label-row]");
     const wireDigitalLabelInput = this.root.querySelector<HTMLInputElement>("[data-property-wire-digital-label]");
-    const labelToolForm = this.root.querySelector<HTMLElement>("[data-property-label-tool-form]");
-    const labelToolInput = this.root.querySelector<HTMLInputElement>("[data-property-label-tool-input]");
-    const labelToolError = this.root.querySelector<HTMLElement>("[data-property-label-tool-error]");
     const cellRow = this.root.querySelector<HTMLElement>("[data-property-cell-row]");
     const cellSelect = this.root.querySelector<HTMLSelectElement>("[data-property-cell]");
-    const refInput = this.root.querySelector<HTMLInputElement>("[data-property-ref]");
-    const labelVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-label-visible]");
+    const identityFields = this.root.querySelector<HTMLElement>("[data-property-component-identity-fields]");
+    const cachedIdentity = this.componentIdentity?.container === identityFields
+      ? this.componentIdentity
+      : null;
+    const refInput = this.root.querySelector<HTMLInputElement>("[data-property-ref]")
+      ?? cachedIdentity?.refInput ?? null;
+    const labelVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-label-visible]")
+      ?? cachedIdentity?.labelVisibilityInput ?? null;
     const valueVisibilityRow = this.root.querySelector<HTMLElement>("[data-property-value-visibility-row]");
     const valueVisibilityInput = this.root.querySelector<HTMLInputElement>("[data-property-value-visible]");
     const componentColorRow = this.root.querySelector<HTMLElement>("[data-property-component-color-row]");
     const componentColorInput = this.root.querySelector<HTMLInputElement>("[data-property-component-color]");
+    const libraryShapeStrokeFields = this.root.querySelector<HTMLElement>("[data-property-library-shape-stroke-fields]");
+    const libraryShapeStrokeWidthInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-stroke-width]");
+    const libraryShapeLineStyleSelect = this.root.querySelector<HTMLSelectElement>("[data-property-library-shape-line-style]");
+    const libraryShapeCornerRadiusRow = this.root.querySelector<HTMLElement>("[data-property-library-shape-corner-radius-row]");
+    const libraryShapeCornerRadiusInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-corner-radius]");
+    const libraryShapeArrowSelects = this.root.querySelectorAll<HTMLSelectElement>("[data-property-library-shape-arrow]");
+    const libraryShapeFillFields = this.root.querySelector<HTMLElement>("[data-property-library-shape-fill-fields]");
+    const libraryShapeFillEnabledInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-enabled]");
+    const libraryShapeFillColorInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-color]");
+    const libraryShapeFillColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-library-shape-fill-color-swatch]");
+    const libraryShapeFillOpacityInput = this.root.querySelector<HTMLInputElement>("[data-property-library-shape-fill-opacity]");
     const gainPolarityRow = this.root.querySelector<HTMLElement>("[data-property-gain-polarity-row]");
     const gainPolarityControl = this.root.querySelector<HTMLElement>("[data-property-gain-polarity]");
     const gainPolarityButtons = this.root.querySelectorAll<HTMLButtonElement>("[data-property-gain-polarity-value]");
@@ -471,19 +514,26 @@ export class SchematicPropertyPanelController {
     const noteTextColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-note-text-color-swatch]");
     const noteBackgroundRow = this.root.querySelector<HTMLElement>("[data-property-note-background-row]");
     const noteBackgroundInput = this.root.querySelector<HTMLInputElement>("[data-property-note-background]");
+    const noteFillEnabledInput = this.root.querySelector<HTMLInputElement>("[data-property-note-fill-enabled]");
+    const noteFillOpacityInput = this.root.querySelector<HTMLInputElement>("[data-property-note-fill-opacity]");
     const noteFontSizeRow = this.root.querySelector<HTMLElement>("[data-property-note-font-size-row]");
     const noteFontSizeInput = this.root.querySelector<HTMLInputElement>("[data-property-note-font-size]");
-    const noteFormatRow = this.root.querySelector<HTMLElement>("[data-property-note-format-row]");
-    const noteFormatSelect = this.root.querySelector<HTMLSelectElement>("[data-property-note-format]");
-    const noteFormatSegmented = this.root.querySelector<HTMLElement>("[data-property-note-format-segmented]");
-    const noteWidthRow = this.root.querySelector<HTMLElement>("[data-property-note-width-row]");
-    const noteWidthInput = this.root.querySelector<HTMLInputElement>("[data-property-note-width]");
+    const noteAnchor = this.root.querySelector<HTMLSelectElement>("[data-property-note-anchor]");
+    const noteTextRow = this.root.querySelector<HTMLElement>("[data-property-note-text-row]");
+    const noteTextDivider = this.root.querySelector<HTMLElement>("[data-property-note-text-divider]");
+    const noteText = this.root.querySelector<HTMLTextAreaElement>("[data-property-note-text]");
     const noteSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-note-background-swatch]");
     const componentColorSwatches = this.root.querySelectorAll<HTMLButtonElement>("[data-component-color-swatch]");
     if (!mosThickGateRow || !mosThickGateInput) return null;
-    if (!empty || !componentForm || !couplingForm || !couplingPair || !couplingExistingFields || !couplingCoefficientInput || !couplingLabelModeControl || !couplingShowLabelInput || !couplingShowArcInput || !couplingShowCoreInput || !couplingColorInput || !couplingCreateButton || !noteForm || !cellRow || !cellSelect || !refInput || !labelVisibilityInput || !componentColorRow || !componentColorInput || !gainPolarityRow || !gainPolarityControl || gainPolarityButtons.length !== 3 || !valueRow || !valueLabel || !valueInput || !valueUnit || !inductorFields || !inductorTapControl || !inductorDotControl || !inductorCouplingList || !inductorAddCouplingButton || !timeDomainRow || !timeDomainControl || timeDomainButtons.length !== 2 || !variantRow || !variantLabel || !variantSelect || !variantSegmented || !clockRow || !clockSelect || !clockSegmented || dffRows.length !== 5 || !filterKindRow || !filterKindSelect || !mosPinsRow || !mosPinsSegmented || !mosGateStyleRow || !mosGateStyleInput || !mosArrowRow || !mosArrowSegmented || !transistorCircleRow || !transistorCircleControl || transistorCircleButtons.length !== 2 || !pinVisibilityRow || !noteBackgroundRow || !noteBackgroundInput || !noteFontSizeRow || !noteFontSizeInput || !noteFormatRow || !noteFormatSelect || !noteFormatSegmented || !noteWidthRow || !noteWidthInput) {
+    if (!empty || !componentForm || !couplingForm || !couplingPair || !couplingExistingFields || !couplingCoefficientInput || !couplingLabelModeControl || !couplingShowLabelInput || !couplingShowArcInput || !couplingShowCoreInput || !couplingColorInput || !couplingCreateButton || !noteForm || !cellRow || !cellSelect || !refInput || !labelVisibilityInput || !componentColorRow || !componentColorInput || !gainPolarityRow || !gainPolarityControl || gainPolarityButtons.length !== 3 || !valueRow || !valueLabel || !valueInput || !valueUnit || !inductorFields || !inductorTapControl || !inductorDotControl || !inductorCouplingList || !inductorAddCouplingButton || !timeDomainRow || !timeDomainControl || timeDomainButtons.length !== 2 || !variantRow || !variantLabel || !variantSelect || !variantSegmented || !clockRow || !clockSelect || !clockSegmented || dffRows.length !== 5 || !filterKindRow || !filterKindSelect || !mosPinsRow || !mosPinsSegmented || !mosGateStyleRow || !mosGateStyleInput || !mosArrowRow || !mosArrowSegmented || !transistorCircleRow || !transistorCircleControl || transistorCircleButtons.length !== 2 || !pinVisibilityRow || !noteBackgroundRow || !noteBackgroundInput || !noteFontSizeRow || !noteFontSizeInput || !noteAnchor || !noteTextRow || !noteText) {
       return null;
     }
+    const refRow = refInput.closest<HTMLElement>(".property-row");
+    const labelRow = labelVisibilityInput.closest<HTMLElement>(".property-row");
+    if (identityFields && refRow && labelRow) {
+      this.componentIdentity = { container: identityFields, refRow, labelRow, refInput, labelVisibilityInput };
+    }
+    if (!noteFillEnabledInput || !noteFillOpacityInput || !noteTextDivider) return null;
     return {
       empty,
       componentForm,
@@ -518,17 +568,26 @@ export class SchematicPropertyPanelController {
       wireDigitalSlashInput,
       wireDigitalLabelRow,
       wireDigitalLabelInput,
-      labelToolForm,
-      labelToolInput,
-      labelToolError,
       cellRow,
       cellSelect,
+      identityFields,
       refInput,
       labelVisibilityInput,
       valueVisibilityRow,
       valueVisibilityInput,
       componentColorRow,
       componentColorInput,
+      libraryShapeStrokeFields,
+      libraryShapeStrokeWidthInput,
+      libraryShapeLineStyleSelect,
+      libraryShapeCornerRadiusRow,
+      libraryShapeCornerRadiusInput,
+      libraryShapeArrowSelects,
+      libraryShapeFillFields,
+      libraryShapeFillEnabledInput,
+      libraryShapeFillColorInput,
+      libraryShapeFillColorSwatches,
+      libraryShapeFillOpacityInput,
       gainPolarityRow,
       gainPolarityControl,
       gainPolarityButtons,
@@ -582,13 +641,14 @@ export class SchematicPropertyPanelController {
       noteTextColorSwatches,
       noteBackgroundRow,
       noteBackgroundInput,
+      noteFillEnabledInput,
+      noteFillOpacityInput,
       noteFontSizeRow,
       noteFontSizeInput,
-      noteFormatRow,
-      noteFormatSelect,
-      noteFormatSegmented,
-      noteWidthRow,
-      noteWidthInput,
+      noteAnchor,
+      noteTextRow,
+      noteTextDivider,
+      noteText,
       noteSwatches,
       componentColorSwatches
     };
@@ -610,7 +670,6 @@ export class SchematicPropertyPanelController {
     if (elements.wireEndMarkerRow) elements.wireEndMarkerRow.hidden = true;
     if (elements.wireDigitalSlashRow) elements.wireDigitalSlashRow.hidden = true;
     if (elements.wireDigitalLabelRow) elements.wireDigitalLabelRow.hidden = true;
-    if (elements.labelToolForm) elements.labelToolForm.hidden = true;
     elements.cellRow.hidden = true;
     if (elements.valueVisibilityRow) elements.valueVisibilityRow.hidden = true;
     elements.valueRow.hidden = true;
@@ -643,11 +702,12 @@ export class SchematicPropertyPanelController {
     elements.transistorCircleRow.hidden = true;
     elements.pinVisibilityRow.hidden = true;
     elements.componentColorRow.hidden = true;
+    if (elements.libraryShapeStrokeFields) elements.libraryShapeStrokeFields.hidden = true;
+    if (elements.libraryShapeCornerRadiusRow) elements.libraryShapeCornerRadiusRow.hidden = true;
+    if (elements.libraryShapeFillFields) elements.libraryShapeFillFields.hidden = true;
     elements.noteBackgroundRow.hidden = true;
     if (elements.noteTextColorRow) elements.noteTextColorRow.hidden = true;
     elements.noteFontSizeRow.hidden = true;
-    elements.noteFormatRow.hidden = true;
-    elements.noteWidthRow.hidden = true;
     elements.cellSelect.replaceChildren();
     elements.variantSelect.replaceChildren();
     elements.variantSelect.hidden = false;
@@ -682,7 +742,7 @@ export class SchematicPropertyPanelController {
       button.classList.remove("is-selected");
       button.ariaPressed = "false";
     });
-    [...elements.noteTextColorSwatches, ...elements.noteSwatches, ...elements.componentColorSwatches, ...elements.networkColorSwatches, ...elements.couplingColorSwatches].forEach((swatch) => {
+    [...elements.noteTextColorSwatches, ...elements.noteSwatches, ...elements.componentColorSwatches, ...elements.networkColorSwatches, ...elements.couplingColorSwatches, ...elements.libraryShapeFillColorSwatches].forEach((swatch) => {
       swatch.classList.remove("is-selected");
       swatch.ariaPressed = "false";
     });
@@ -698,11 +758,11 @@ export class SchematicPropertyPanelController {
     if (network.netName) this.syncReadonlyAggregate(elements.netNameInput, network.netName);
     elements.netLabelRow.hidden = !network.label;
     if (network.label) this.syncTextAggregate(elements.netLabelInput, network.label.name);
-    elements.netMessage.textContent = network.label?.message ?? "";
+    elements.netMessage.textContent = localizeSchematicStatus(network.label?.message ?? "");
     elements.netMessage.hidden = !network.label?.message;
     if (network.color && elements.networkColorRow && elements.networkColorInput) {
       elements.networkColorRow.hidden = false;
-      elements.networkColorInput.ariaLabel = "Ink color";
+      elements.networkColorInput.ariaLabel = parameterLabel("Ink color");
       this.syncColorAggregate(
         elements.networkColorInput,
         elements.networkColorSwatches,
@@ -754,19 +814,8 @@ export class SchematicPropertyPanelController {
     }
   }
 
-  private syncLabelTool(elements: PropertyPanelElements, labelTool: NonNullable<SchematicPropertyPanelInput["labelTool"]>) {
-    if (!elements.labelToolForm || !elements.labelToolInput || !elements.labelToolError) {
-      this.syncEmpty(elements, false);
-      return;
-    }
-    elements.labelToolForm.hidden = false;
-    if (elements.labelToolInput.value !== labelTool.value) elements.labelToolInput.value = labelTool.value;
-    elements.labelToolError.textContent = labelTool.error ?? "";
-    elements.labelToolError.hidden = !labelTool.error;
-  }
-
   private syncEmpty(elements: PropertyPanelElements, hasSelection: boolean) {
-    elements.empty.textContent = hasSelection ? "No common editable properties." : "No object selected.";
+    elements.empty.textContent = parameterLabel(hasSelection ? "No common editable properties." : "No object selected.");
     elements.empty.hidden = false;
   }
 
@@ -778,29 +827,19 @@ export class SchematicPropertyPanelController {
       DEFAULT_NOTE_TEXT_COLOR, "noteTextColorSwatch", "default"
     );
     elements.noteBackgroundRow.hidden = false;
-    this.syncColorAggregate(
-      elements.noteBackgroundInput,
-      elements.noteSwatches,
-      note.backgroundColor,
-      "#ffffe8",
-      "noteBackgroundSwatch",
-      "none"
-    );
+    this.syncFillControls({
+      enabled: elements.noteFillEnabledInput,
+      color: elements.noteBackgroundInput,
+      opacity: elements.noteFillOpacityInput,
+      swatches: elements.noteSwatches,
+      swatchKey: "noteBackgroundSwatch"
+    }, note.backgroundEnabled, note.backgroundColor, note.backgroundOpacity);
     elements.noteFontSizeRow.hidden = false;
     this.syncTextAggregate(elements.noteFontSizeInput, note.fontSizePx, String);
-    elements.noteFormatRow.hidden = false;
-    elements.noteFormatSelect.hidden = true;
-    this.syncSegmentedButtons(
-      elements.noteFormatSegmented,
-      [
-        { value: "plain", label: "Plain" },
-        { value: "markdown", label: "Markdown" }
-      ],
-      note.format,
-      "propertyNoteFormatValue"
-    );
-    elements.noteWidthRow.hidden = !note.widthPx;
-    if (note.widthPx) this.syncTextAggregate(elements.noteWidthInput, note.widthPx, String);
+    elements.noteAnchor.value = note.anchor.state === "uniform" ? note.anchor.value : "";
+    elements.noteTextRow.hidden = note.text === undefined;
+    elements.noteTextDivider.hidden = elements.noteTextRow.hidden;
+    if (elements.noteText !== this.root.ownerDocument.activeElement) elements.noteText.value = note.text ?? "";
   }
 
   private syncVoltageSourceFields(container: HTMLElement | null, fields: SchematicPropertyPanelComponentInput["sourceFields"]) {
@@ -813,9 +852,7 @@ export class SchematicPropertyPanelController {
         const row = this.root.ownerDocument.createElement("label");
         row.className = "property-row";
         const label = this.root.ownerDocument.createElement("span");
-        label.textContent = field.label;
         const input = this.root.ownerDocument.createElement(field.options ? "select" : "input");
-        input.setAttribute("aria-label", field.label);
         if (field.options) {
           input.dataset.propertyVsourceOption = field.key;
         } else {
@@ -836,6 +873,9 @@ export class SchematicPropertyPanelController {
     const inputs = container.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select");
     fields.forEach((field, index) => {
       const input = inputs[index];
+      const caption = parameterLabel(field.label);
+      input.setAttribute("aria-label", caption);
+      input.previousElementSibling!.textContent = caption;
       if (field.options) {
         const select = input as HTMLSelectElement;
         select.replaceChildren(...field.options.map(value => this.createOption(value, value || "Default")));
@@ -851,9 +891,23 @@ export class SchematicPropertyPanelController {
     elements.cellRow.hidden = !component.cellType || !component.cells;
     if (component.cellType && component.cells) {
       elements.cellSelect.replaceChildren(
-        ...component.cells.map((cell) => this.createOption(cell.type, cell.label, cell.disabled))
+        ...component.cells.map((cell) => this.createOption(cell.type, componentName(cell.type, cell.label), cell.disabled))
       );
       this.syncSelectAggregate(elements.cellSelect, component.cellType);
+    }
+    const identity = this.componentIdentity?.container === elements.identityFields
+      ? this.componentIdentity
+      : null;
+    if (identity) {
+      if (component.libraryShape) identity.container.replaceChildren();
+      else if (!identity.container.contains(identity.refRow)) {
+        identity.container.replaceChildren(identity.refRow, identity.labelRow);
+      }
+    } else {
+      const refRow = elements.refInput.closest<HTMLElement>(".property-row");
+      const labelVisibilityRow = elements.labelVisibilityInput.closest<HTMLElement>(".property-row");
+      if (refRow) refRow.hidden = !!component.libraryShape;
+      if (labelVisibilityRow) labelVisibilityRow.hidden = !!component.libraryShape;
     }
     this.syncTextAggregate(elements.refInput, component.ref);
     this.syncCheckboxAggregate(elements.labelVisibilityInput, component.labelVisible);
@@ -872,6 +926,7 @@ export class SchematicPropertyPanelController {
       "componentColorSwatch",
       "default"
     );
+    this.syncLibraryShapeStyle(elements, component.libraryShapeStyle);
     elements.gainPolarityRow.hidden = component.gainPolarity === undefined;
     const gainPolarity = component.gainPolarity;
     elements.gainPolarityControl.classList.toggle("is-mixed", gainPolarity?.state === "mixed");
@@ -894,7 +949,7 @@ export class SchematicPropertyPanelController {
 
     elements.valueRow.hidden = !component.value;
     if (component.value) {
-      elements.valueLabel.textContent = component.value.label;
+      elements.valueLabel.textContent = parameterLabel(component.value.label);
       this.syncTextAggregate(elements.valueInput, component.value.value);
       if (component.value.value.state === "uniform") {
         elements.valueInput.placeholder = component.value.placeholder;
@@ -910,16 +965,13 @@ export class SchematicPropertyPanelController {
     }
     this.syncInductor(elements, component.inductor);
     if (elements.rectangleFields) elements.rectangleFields.hidden = !component.rectangle;
-    if (elements.triangleFields) elements.triangleFields.hidden = !component.triangle;
-    if (component.triangle) elements.triangleInputs.forEach(input => {
-      this.syncTextAggregate(input, component.triangle![input.dataset.propertyTrianglePins as TriangleEdge], String);
-    });
-    if (component.rectangle && elements.rectangleInputs.length === 6) {
+    if (elements.triangleFields) elements.triangleFields.hidden = true;
+    if (component.rectangle && elements.rectangleInputs.length === 2) {
       elements.rectangleInputs.forEach((input) => {
         const property = input.dataset.propertyRectangle as RectangleProperty;
         this.syncTextAggregate(
           input,
-          component.rectangle![rectangleSettingsKey(property)],
+          component.rectangle![property === "width" ? "widthGrid" : "heightGrid"],
           String
         );
       });
@@ -943,9 +995,11 @@ export class SchematicPropertyPanelController {
     if (component.variants) {
       const variantLabel = component.variants.label ?? "View";
       elements.variantRow.classList.toggle("is-source-type", variantLabel === "Source type");
-      elements.variantLabel.textContent = variantLabel;
-      elements.variantSegmented.ariaLabel = `Component ${variantLabel.toLowerCase()}`;
-      elements.variantSegmented.dataset.propertyBaseAriaLabel = elements.variantSegmented.ariaLabel;
+      elements.variantLabel.textContent = parameterLabel(variantLabel);
+      elements.variantSegmented.ariaLabel = uiFormat("parameter.componentCaption", "Component {label}", {
+        label: schematicLanguage() === "zh" ? parameterLabel(variantLabel) : variantLabel.toLowerCase()
+      });
+      elements.variantSegmented.dataset.propertyBaseAriaLabel = elements.variantSegmented.ariaLabel ?? "";
       elements.variantSelect.replaceChildren(
         ...component.variants.options.map((variant) => this.createVariantOption(variant))
       );
@@ -1012,6 +1066,90 @@ export class SchematicPropertyPanelController {
     );
   }
 
+  private syncLibraryShapeStyle(
+    elements: PropertyPanelElements,
+    style: SchematicPropertyPanelComponentInput["libraryShapeStyle"]
+  ) {
+    const strokeFields = elements.libraryShapeStrokeFields;
+    const strokeWidth = elements.libraryShapeStrokeWidthInput;
+    const lineStyle = elements.libraryShapeLineStyleSelect;
+    const fillFields = elements.libraryShapeFillFields;
+    const fillEnabled = elements.libraryShapeFillEnabledInput;
+    const fillColor = elements.libraryShapeFillColorInput;
+    const fillOpacity = elements.libraryShapeFillOpacityInput;
+    if (!strokeFields || !strokeWidth || !lineStyle || !fillFields || !fillEnabled || !fillColor || !fillOpacity) return;
+    strokeFields.hidden = !style?.strokeWidth;
+    fillFields.hidden = !style?.fillEnabled;
+    elements.libraryShapeArrowSelects.forEach(select => {
+      const field = select.dataset.propertyLibraryShapeArrow;
+      const fields = LIBRARY_SHAPE_ARROW_FIELDS.find(pair => pair.some(property => property === field));
+      if (!fields) return;
+      const [typeField, sizeField] = fields;
+      const isSize = field === sizeField;
+      const option = style?.[isSize ? sizeField : typeField];
+      const type = style?.[typeField];
+      const row = select.closest("label");
+      if (row) row.hidden = !option;
+      select.disabled = !option || (isSize && type?.state === "uniform" && type.value === "none");
+      if (option) {
+        select.querySelector('option[value=""][disabled]')?.remove();
+        this.syncSelectAggregate(select, option);
+      }
+    });
+    if (!style) return;
+
+    if (style.strokeWidth && style.lineStyle) {
+      this.syncTextAggregate(strokeWidth, style.strokeWidth, String);
+      lineStyle.replaceChildren(...LIBRARY_SHAPE_LINE_STYLE_OPTIONS.map(option =>
+        this.createOption(option.value, option.label)
+      ));
+      this.syncSelectAggregate(lineStyle, style.lineStyle);
+    }
+    if (elements.libraryShapeCornerRadiusRow) {
+      elements.libraryShapeCornerRadiusRow.hidden = !style.cornerRadius;
+    }
+    if (style.cornerRadius && elements.libraryShapeCornerRadiusInput) {
+      this.syncTextAggregate(elements.libraryShapeCornerRadiusInput, style.cornerRadius, String);
+    }
+    if (!style.fillEnabled || !style.fillColor || !style.fillOpacity) return;
+    this.syncFillControls({
+      enabled: fillEnabled,
+      color: fillColor,
+      opacity: fillOpacity,
+      swatches: elements.libraryShapeFillColorSwatches,
+      swatchKey: "libraryShapeFillColorSwatch"
+    }, style.fillEnabled, style.fillColor, style.fillOpacity);
+  }
+
+  private syncFillControls(
+    controls: {
+      enabled: HTMLInputElement;
+      color: HTMLInputElement;
+      opacity: HTMLInputElement;
+      swatches: NodeListOf<HTMLButtonElement>;
+      swatchKey: "noteBackgroundSwatch" | "libraryShapeFillColorSwatch";
+    },
+    enabled: AggregateValue<boolean>,
+    color: AggregateValue<string | null>,
+    opacity: AggregateValue<number>
+  ) {
+    this.syncCheckboxAggregate(controls.enabled, enabled);
+    this.syncColorAggregate(
+      controls.color,
+      controls.swatches,
+      color.state === "uniform" && color.value === DEFAULT_LIBRARY_SHAPE_STYLE.fillColor
+        ? { state: "uniform", value: null } : color,
+      DEFAULT_LIBRARY_SHAPE_STYLE.fillColor,
+      controls.swatchKey,
+      "default"
+    );
+    this.syncTextAggregate(controls.opacity, opacity, String);
+    const disabled = enabled.state === "uniform" && !enabled.value;
+    controls.color.disabled = disabled;
+    controls.swatches.forEach(swatch => { swatch.disabled = disabled; });
+    controls.opacity.disabled = disabled;
+  }
+
   private syncInductor(
     elements: PropertyPanelElements,
     inductor: SchematicPropertyPanelInductorInput | undefined
@@ -1042,12 +1180,12 @@ export class SchematicPropertyPanelController {
       const row = this.root.ownerDocument.createElement("div");
       row.className = "property-coupling-list-row";
       const label = this.root.ownerDocument.createElement("span");
-      label.textContent = "Coupled";
+      label.textContent = parameterLabel("Coupled");
       const partner = this.root.ownerDocument.createElement("span");
       partner.textContent = coupling.partnerRef;
       const button = this.root.ownerDocument.createElement("button");
       button.type = "button";
-      button.textContent = "Edit";
+      button.textContent = parameterLabel("Edit");
       button.dataset.propertyInductorCouplingId = coupling.id;
       row.append(label, partner, button);
       return row;
@@ -1102,7 +1240,7 @@ export class SchematicPropertyPanelController {
     header.className = `property-pin-header${showModes ? "" : " is-visibility-only"}`;
     (showModes ? ["Pin", "Show", "Role", "Sign"] : ["Pin", "Show"]).forEach((text) => {
       const label = this.root.ownerDocument.createElement("span");
-      label.textContent = text;
+    label.textContent = parameterLabel(text);
       header.append(label);
     });
     return header;
@@ -1143,11 +1281,11 @@ export class SchematicPropertyPanelController {
     const row = this.root.ownerDocument.createElement("div");
     row.className = `property-pin-row${pin.modeEditable ? "" : " is-visibility-only"}`;
     const label = this.root.ownerDocument.createElement("span");
-    label.textContent = pin.label;
+    label.textContent = parameterLabel(pin.label);
     const visibilityInput = this.root.ownerDocument.createElement("input");
     visibilityInput.type = "checkbox";
     visibilityInput.className = "property-toggle";
-    visibilityInput.ariaLabel = `Show ${pin.label.toLowerCase()} pin`;
+    visibilityInput.ariaLabel = uiFormat("parameter.pinVisibility", "Show {pin} pin", { pin: parameterLabel(pin.label.toLowerCase()) });
     visibilityInput.dataset.propertyPinVisibilityId = pin.id;
     this.syncCheckboxAggregate(visibilityInput, pin.visible);
     if (!pin.modeEditable) {
@@ -1156,7 +1294,7 @@ export class SchematicPropertyPanelController {
     }
     const modeControl = this.root.ownerDocument.createElement("div");
     modeControl.className = "property-segmented property-segmented-compact";
-    modeControl.ariaLabel = `${pin.label} pin role`;
+    modeControl.ariaLabel = uiFormat("parameter.pinRole", "{pin} pin role", { pin: parameterLabel(pin.label) });
     this.syncSegmentedButtons(
       modeControl,
       [
@@ -1173,7 +1311,7 @@ export class SchematicPropertyPanelController {
     const symbolInput = this.root.ownerDocument.createElement("input");
     symbolInput.type = "checkbox";
     symbolInput.className = "property-toggle";
-    symbolInput.ariaLabel = `Show ${pin.label.toLowerCase()} pin role symbol`;
+    symbolInput.ariaLabel = uiFormat("parameter.pinSymbol", "Show {pin} pin role symbol", { pin: parameterLabel(pin.label.toLowerCase()) });
     symbolInput.dataset.propertyPinSymbolVisibilityId = pin.id;
     this.syncCheckboxAggregate(symbolInput, pin.symbolVisible ?? { state: "mixed" });
     symbolInput.disabled = pin.symbolEditable === false;
@@ -1223,7 +1361,7 @@ export class SchematicPropertyPanelController {
     container.replaceChildren(...options.map((option) => {
       const button = this.root.ownerDocument.createElement("button");
       button.type = "button";
-      button.textContent = option.label;
+      button.textContent = parameterLabel(option.label);
       button.dataset[datasetKey] = option.value;
       button.disabled = !!option.disabled;
       const selected = aggregateIsUniform(selectedValue) && option.value === selectedValue.value;
@@ -1240,7 +1378,7 @@ export class SchematicPropertyPanelController {
   private syncColorSwatches(
     swatches: NodeListOf<HTMLButtonElement>,
     selectedColor: AggregateValue<string | null>,
-    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch",
+    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch" | "libraryShapeFillColorSwatch",
     nullValue: "none" | "default"
   ) {
     swatches.forEach((swatch) => {
@@ -1257,7 +1395,7 @@ export class SchematicPropertyPanelController {
   private createOption(value: string, label: string, disabled = false) {
     const option = this.root.ownerDocument.createElement("option");
     option.value = value;
-    option.textContent = label;
+    option.textContent = parameterLabel(label);
     option.disabled = disabled;
     return option;
   }
@@ -1278,7 +1416,7 @@ export class SchematicPropertyPanelController {
   ) {
     const syncedValue = aggregateIsUniform(value) ? format(value.value) : "";
     input.value = syncedValue;
-    input.placeholder = value.state === "mixed" ? "Multiple values" : "";
+    input.placeholder = value.state === "mixed" ? parameterLabel("Multiple values") : "";
     input.dataset.propertyMixed = String(value.state === "mixed");
     input.dataset.propertySyncedValue = syncedValue;
     input.dataset.propertySyncedPlaceholder = input.placeholder;
@@ -1312,7 +1450,7 @@ export class SchematicPropertyPanelController {
     swatches: NodeListOf<HTMLButtonElement>,
     value: AggregateValue<string | null>,
     defaultColor: string,
-    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch",
+    datasetKey: "noteTextColorSwatch" | "noteBackgroundSwatch" | "componentColorSwatch" | "networkColorSwatch" | "couplingColorSwatch" | "libraryShapeFillColorSwatch",
     nullValue: "none" | "default"
   ) {
     const mixed = value.state === "mixed";
@@ -1391,10 +1529,11 @@ export class SchematicPropertyPanelController {
   }
 
   private syncMixedAriaLabel(element: HTMLElement, mixed: boolean) {
-    const baseLabel = element.dataset.propertyBaseAriaLabel ?? element.ariaLabel ?? "";
+    const message = element.dataset.schematicMessageAriaLabel;
+    const baseLabel = message ? messageText(JSON.parse(message)) : element.dataset.propertyBaseAriaLabel ?? element.ariaLabel ?? "";
     element.dataset.propertyBaseAriaLabel = baseLabel;
     element.ariaLabel = mixed
-      ? `${baseLabel ? `${baseLabel}: ` : ""}Multiple values`
+      ? `${baseLabel ? `${baseLabel}: ` : ""}${parameterLabel("Multiple values")}`
       : baseLabel;
   }
 
@@ -1414,6 +1553,16 @@ export class SchematicPropertyPanelController {
     };
     const rectangleProperty = input.dataset.propertyRectangle as RectangleProperty;
     const triangleEdge = input.dataset.propertyTrianglePins as TriangleEdge;
+    const shapeStyleBinding = (
+      property: LibraryShapeStyleProperty,
+      kind: PropertyInputBinding["kind"] = "text"
+    ): PropertyInputBinding => ({
+      kind,
+      start: () => callbacks.onLibraryShapeStyleEditStart?.(property),
+      input: value => callbacks.onLibraryShapeStyleInput?.(property, value),
+      commit: value => callbacks.onLibraryShapeStyleCommit?.(property, value),
+      cancel: () => callbacks.onLibraryShapeStyleCancel?.(property)
+    });
     const bindings: Record<string, PropertyInputBinding> = {
       "data-property-ref": {
         kind: "text",
@@ -1435,13 +1584,6 @@ export class SchematicPropertyPanelController {
         input: callbacks.onNoteFontSizeInput,
         commit: callbacks.onNoteFontSizeCommit,
         cancel: callbacks.onNoteFontSizeCancel
-      },
-      "data-property-note-width": {
-        kind: "text",
-        start: callbacks.onNoteWidthEditStart,
-        input: callbacks.onNoteWidthInput,
-        commit: callbacks.onNoteWidthCommit,
-        cancel: callbacks.onNoteWidthCancel
       },
       "data-property-net-label": {
         kind: "text",
@@ -1485,6 +1627,13 @@ export class SchematicPropertyPanelController {
         commit: callbacks.onNoteBackgroundCommit ?? callbacks.onNoteBackgroundChange,
         cancel: callbacks.onNoteBackgroundCancel
       },
+      "data-property-note-fill-opacity": {
+        kind: "text",
+        start: callbacks.onNoteFillOpacityEditStart,
+        input: callbacks.onNoteFillOpacityInput,
+        commit: callbacks.onNoteFillOpacityCommit,
+        cancel: callbacks.onNoteFillOpacityCancel
+      },
       "data-property-triangle-pins": {
         kind: "text",
         start: () => callbacks.onTrianglePinsEditStart?.(triangleEdge),
@@ -1498,7 +1647,11 @@ export class SchematicPropertyPanelController {
         input: (value) => callbacks.onRectanglePropertyInput?.(rectangleProperty, value),
         commit: (value) => callbacks.onRectanglePropertyCommit?.(rectangleProperty, value),
         cancel: () => callbacks.onRectanglePropertyCancel?.(rectangleProperty)
-      }
+      },
+      "data-property-library-shape-stroke-width": shapeStyleBinding("strokeWidth"),
+      "data-property-library-shape-corner-radius": shapeStyleBinding("cornerRadius"),
+      "data-property-library-shape-fill-color": shapeStyleBinding("fillColor", "color"),
+      "data-property-library-shape-fill-opacity": shapeStyleBinding("fillOpacity")
     };
     for (const [attribute, binding] of Object.entries(bindings)) {
       if (input.matches("[" + attribute + "]")) return { input, binding };
@@ -1528,6 +1681,10 @@ export class SchematicPropertyPanelController {
       return;
     }
     const cellSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-cell]");
+    const libraryShapeLineStyle = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-line-style]");
+    const arrow = this.closestInRoot<HTMLSelectElement>(event, "[data-property-library-shape-arrow]");
+    const libraryShapeFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-library-shape-fill-enabled]");
+    const noteFillEnabled = this.closestInRoot<HTMLInputElement>(event, "[data-property-note-fill-enabled]");
     const labelVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-visible]");
     const valueVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-value-visible]");
     const differentialOutputsInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-differential-outputs-same]");
@@ -1540,12 +1697,31 @@ export class SchematicPropertyPanelController {
     const pinVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-pin-visibility-id]");
     const pinModeSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-pin-mode-id]");
     const pinSymbolVisibilityInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-pin-symbol-visibility-id]");
-    const noteFormatSelect = this.closestInRoot<HTMLSelectElement>(event, "[data-property-note-format]");
+    const noteAnchor = this.closestInRoot<HTMLSelectElement>(event, "[data-property-note-anchor]");
+    const noteText = this.closestInRoot<HTMLTextAreaElement>(event, "[data-property-note-text]");
     const couplingCoefficientInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
     const couplingShowLabelInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-label]");
     const couplingShowArcInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-arc]");
     const couplingShowCoreInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-show-core]");
     const couplingColorInput = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-color]");
+    if (libraryShapeLineStyle && isLibraryShapeLineStyle(libraryShapeLineStyle.value)) {
+      this.callbacks.onLibraryShapeStyleChange?.("lineStyle", libraryShapeLineStyle.value);
+    }
+    const endpoint = arrow?.dataset.propertyLibraryShapeArrow;
+    if (arrow && !arrow.disabled) {
+      if ((endpoint === "startArrow" || endpoint === "endArrow") && isLibraryShapeArrowType(arrow.value)) {
+        this.callbacks.onLibraryShapeStyleChange?.(endpoint, arrow.value);
+      } else if ((endpoint === "startArrowSize" || endpoint === "endArrowSize") && isLibraryShapeArrowSize(arrow.value)) {
+        this.callbacks.onLibraryShapeStyleChange?.(endpoint, arrow.value);
+      }
+    }
+    if (libraryShapeFillEnabled) {
+      this.callbacks.onLibraryShapeStyleChange?.("fillEnabled", this.checkboxValue(libraryShapeFillEnabled));
+    }
+    if (noteFillEnabled) {
+      this.callbacks.onNoteFillEnabledChange?.(this.checkboxValue(noteFillEnabled));
+      return;
+    }
     if (cellSelect && cellSelect.value) this.callbacks.onComponentCellChange?.(cellSelect.value as ComponentType);
     if (labelVisibilityInput) this.callbacks.onComponentLabelVisibilityChange?.(this.checkboxValue(labelVisibilityInput));
     if (valueVisibilityInput) this.callbacks.onComponentValueVisibilityChange?.(this.checkboxValue(valueVisibilityInput));
@@ -1579,7 +1755,8 @@ export class SchematicPropertyPanelController {
       pinSymbolVisibilityInput.dataset.propertyPinSymbolVisibilityId ?? "",
       this.checkboxValue(pinSymbolVisibilityInput)
     );
-    if (noteFormatSelect) this.callbacks.onNoteFormatChange?.(noteFormatSelect.value as SchematicNoteFormat);
+    if (noteAnchor && NOTE_ANCHORS.includes(noteAnchor.value as SchematicNoteAnchor)) this.callbacks.onNoteAnchorChange?.(noteAnchor.value as SchematicNoteAnchor);
+    if (noteText) this.callbacks.onNoteTextChange?.(noteText.value);
     if (couplingCoefficientInput) {
       this.commitCouplingCoefficientInput(couplingCoefficientInput);
     }
@@ -1616,8 +1793,6 @@ export class SchematicPropertyPanelController {
     }
     const coefficient = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
     if (coefficient) this.dirtyTextInputs.add(coefficient);
-    const label = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-tool-input]");
-    if (label) this.callbacks.onLabelToolInput?.(label.value);
   };
 
   private readonly handleFocusIn = (event: Event) => {
@@ -1762,13 +1937,6 @@ export class SchematicPropertyPanelController {
       }
       return;
     }
-    const noteFormatButton = this.closestInRoot<HTMLButtonElement>(event, "[data-property-note-format-value]");
-    if (noteFormatButton && !noteFormatButton.disabled) {
-      event.preventDefault();
-      const format = noteFormatButton.dataset.propertyNoteFormatValue;
-      if (format === "plain" || format === "markdown") this.callbacks.onNoteFormatChange?.(format);
-      return;
-    }
     const gainPolarityButton = this.closestInRoot<HTMLButtonElement>(event, "[data-property-gain-polarity-value]");
     if (gainPolarityButton) {
       event.preventDefault();
@@ -1785,8 +1953,19 @@ export class SchematicPropertyPanelController {
     const swatch = this.closestInRoot<HTMLButtonElement>(event, "[data-note-background-swatch]");
     if (swatch) {
       event.preventDefault();
-      const value = swatch.dataset.noteBackgroundSwatch;
-      this.callbacks.onNoteBackgroundChange?.(value === "none" ? null : value ?? "");
+      if (!swatch.disabled) {
+        const value = swatch.dataset.noteBackgroundSwatch;
+        this.callbacks.onNoteBackgroundChange?.(value === "default" ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : value ?? "");
+      }
+      return;
+    }
+    const fillSwatch = this.closestInRoot<HTMLButtonElement>(event, "[data-library-shape-fill-color-swatch]");
+    if (fillSwatch) {
+      event.preventDefault();
+      if (!fillSwatch.disabled) {
+        const value = fillSwatch.dataset.libraryShapeFillColorSwatch;
+        this.callbacks.onLibraryShapeStyleChange?.("fillColor", value === "default" ? DEFAULT_LIBRARY_SHAPE_STYLE.fillColor : value ?? "");
+      }
       return;
     }
     const componentColorSwatch = this.closestInRoot<HTMLButtonElement>(event, "[data-component-color-swatch]");
@@ -1831,11 +2010,10 @@ export class SchematicPropertyPanelController {
   private readonly handleKeydown = (event: Event) => {
     const key = (event as KeyboardEvent).key;
     const edit = this.propertyEditFromEvent(event);
-    const label = this.closestInRoot<HTMLInputElement>(event, "[data-property-label-tool-input]");
     const coefficient = this.closestInRoot<HTMLInputElement>(event, "[data-property-coupling-coefficient]");
-    const input = edit?.input ?? label ?? coefficient;
+    const input = edit?.input ?? coefficient;
     if (!input) return;
-    if (key === "Escape" && !label) {
+    if (key === "Escape") {
       event.preventDefault();
       edit?.binding.cancel?.();
       if (input.type === "color") this.restoreColorInput(input);
@@ -1845,12 +2023,9 @@ export class SchematicPropertyPanelController {
     }
     if (key !== "Enter") return;
     event.preventDefault();
-    if (label) this.callbacks.onLabelToolSubmit?.(label.value);
-    else {
-      if (edit?.binding.kind === "text") this.commitBoundPropertyInput(edit);
-      else if (coefficient) this.commitCouplingCoefficientInput(coefficient);
-      input.blur();
-    }
+    if (edit?.binding.kind === "text") this.commitBoundPropertyInput(edit);
+    else if (coefficient) this.commitCouplingCoefficientInput(coefficient);
+    input.blur();
   };
 
   private closestInRoot<T extends Element>(event: Event, selector: string): T | null {
@@ -1863,14 +2038,6 @@ export class SchematicPropertyPanelController {
   private couplingIdFromPanel() {
     return this.root.querySelector<HTMLElement>("[data-property-coupling-form]")?.dataset.couplingId ?? "";
   }
-}
-
-function rectangleSettingsKey(property: RectangleProperty) {
-  return property === "width"
-    ? "widthGrid"
-    : property === "height"
-      ? "heightGrid"
-      : property;
 }
 
 function isGainPolarity(value: string | undefined): value is GainPolarity {

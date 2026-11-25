@@ -7,6 +7,12 @@ import type { ComponentInstance, ComponentType, Point, SchematicDocument } from 
 
 export type PlacementIdFactory = (kind: "component" | "wire", index: number) => string;
 export type PlacementRefFactory = (type: ComponentType) => string;
+export type PlacementComponentProperties = Pick<ComponentInstance, "type" | "variantId" | "scale" | "values" | "appearance">;
+export interface PlacementTemplateProperties {
+  type: SchematicTemplateId;
+  components: readonly PlacementComponentProperties[];
+}
+export type PlacementProperties = PlacementComponentProperties | PlacementTemplateProperties;
 
 export interface BuildPlacedComponentOptions {
   id: string;
@@ -18,6 +24,7 @@ export interface BuildPlacedComponentOptions {
 export interface BuildPlacementPreviewOptions {
   rotation: number;
   mirrored: boolean;
+  properties?: PlacementProperties;
 }
 
 export interface BuildTemplatePlacementOptions {
@@ -25,10 +32,7 @@ export interface BuildTemplatePlacementOptions {
   nextRef: PlacementRefFactory;
 }
 
-export interface BuildPlacementCommitOptions extends BuildTemplatePlacementOptions {
-  rotation: number;
-  mirrored: boolean;
-}
+export interface BuildPlacementCommitOptions extends BuildTemplatePlacementOptions, BuildPlacementPreviewOptions {}
 
 export interface PlacementCommit {
   fragment: SchematicDocument;
@@ -77,10 +81,33 @@ function buildPlacementPreviewComponent(type: ComponentType, point: Point, optio
   };
 }
 
-export function buildTemplatePlacement(templateId: SchematicTemplateId, point: Point, options: BuildTemplatePlacementOptions): SchematicDocument {
+export function applyPlacementProperties(component: ComponentInstance, properties?: PlacementProperties): ComponentInstance {
+  if (properties?.type !== component.type) return component;
+  const values = { ...properties.values };
+  const def = getComponentDef(component.type);
+  if (def.valueKey === "main" && values.main === def.hotLabel && component.values.main !== undefined) {
+    values.main = component.values.main;
+  }
+  return {
+    ...component,
+    variantId: properties.variantId,
+    scale: properties.scale,
+    values,
+    ...(properties.appearance ? { appearance: { ...properties.appearance } } : {})
+  };
+}
+
+export function buildTemplatePlacement(
+  templateId: SchematicTemplateId,
+  point: Point,
+  options: BuildTemplatePlacementOptions,
+  properties?: PlacementProperties
+): SchematicDocument {
   return instantiateSchematicTemplate(templateId, point, {
-    createId: options.createId,
-    nextRef: options.nextRef
+    ...options,
+    configureComponent: properties?.type === templateId
+      ? (component, index) => applyPlacementProperties(component, properties.components[index])
+      : undefined
   });
 }
 
@@ -89,7 +116,7 @@ export function buildPlacementCommit(item: ComponentType | SchematicTemplateId, 
     const fragment = buildTemplatePlacement(item, point, {
       createId: options.createId,
       nextRef: options.nextRef
-    });
+    }, options.properties);
     return {
       fragment,
       selectedIds: [...fragment.components.map((component) => component.id), ...fragment.wires.map((wire) => wire.id)],
@@ -106,22 +133,20 @@ export function buildPlacementCommit(item: ComponentType | SchematicTemplateId, 
     mirrored: options.mirrored
   });
   return {
-    fragment: createSchematicDocument({ components: [component] }),
+    fragment: createSchematicDocument({ components: [applyPlacementProperties(component, options.properties)] }),
     selectedIds: [component.id],
     status: `${component.ref} placed. Continue moving and clicking to place more ${def.hotLabel} instances.`
   };
 }
 
-function buildTemplatePlacementPreviewFragment(templateId: SchematicTemplateId, point: Point): SchematicDocument {
-  return instantiateSchematicTemplate(templateId, point, {
-    createId: (kind, index) => `preview-template-${kind}-${index}`,
-    nextRef: (type) => getComponentDef(type).hotLabel
-  });
-}
-
 export function buildPlacementPreviewFragment(item: ComponentType | SchematicTemplateId, point: Point, options: BuildPlacementPreviewOptions): SchematicDocument {
-  if (isSchematicTemplateId(item)) return buildTemplatePlacementPreviewFragment(item, point);
+  if (isSchematicTemplateId(item)) {
+    return buildTemplatePlacement(item, point, {
+      createId: (kind, index) => `preview-template-${kind}-${index}`,
+      nextRef: (type) => getComponentDef(type).hotLabel
+    }, options.properties);
+  }
   return createSchematicDocument({
-    components: [buildPlacementPreviewComponent(item, point, options)],
+    components: [applyPlacementProperties(buildPlacementPreviewComponent(item, point, options), options.properties)],
   });
 }

@@ -37,6 +37,7 @@ export interface SchematicAnalysisControllerOptions {
   prepareNetPick(): void;
   focusCanvas(): void;
   setStatus(message: string): void;
+  onActivePickChange?(): void;
   persistWorkspaceState(): void;
   workerClient?: SchematicAnalysisClient;
   findVoltageNetAtPoint?: (document: SchematicDocument, point: Point) => VoltageNetPick | null;
@@ -49,6 +50,8 @@ export class SchematicAnalysisController {
   private readonly findVoltageNetAtPoint: (document: SchematicDocument, point: Point) => VoltageNetPick | null;
   private bindingController: AbortController | null = null;
   private currentNetNames: string[] = [];
+  private diagnostics: readonly string[] = [];
+  private busy = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -127,6 +130,12 @@ export class SchematicAnalysisController {
     return readAnalysisPortSelection(this.root);
   }
 
+  refreshLanguage() {
+    renderAnalysisPortOptions(this.root, this.currentNetNames, this.selection());
+    setAnalysisBusy(this.root, this.busy);
+    renderAnalysisDiagnostics(this.root, this.diagnostics);
+  }
+
   setSelection(selection: AnalysisPortSelection) {
     const normalized = normalizeAnalysisPortSelection(selection, this.currentNetNames);
     (Object.keys(normalized) as AnalysisPortField[]).forEach((key) => {
@@ -197,8 +206,10 @@ export class SchematicAnalysisController {
   }
 
   private setActiveNetField(field: AnalysisPortField | null) {
+    const wasPicking = this.hasActivePick();
     this.activeNetField = field;
     setActiveAnalysisPortPick(this.root, field);
+    if (wasPicking !== this.hasActivePick()) this.options.onActivePickChange?.();
   }
 
   private renderResult(result: AnalysisResult) {
@@ -211,10 +222,12 @@ export class SchematicAnalysisController {
   }
 
   private setBusy(busy: boolean) {
+    this.busy = busy;
     setAnalysisBusy(this.root, busy);
   }
 
   private renderDiagnostics(diagnostics: readonly string[]) {
+    this.diagnostics = diagnostics;
     renderAnalysisDiagnostics(this.root, diagnostics);
   }
 }

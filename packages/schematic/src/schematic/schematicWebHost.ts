@@ -1,21 +1,38 @@
-import deleteIcon from "./icons/delete.svg?raw";
-import tempDeleteIcon from "./icons/temp-delete.svg?raw";
 import { SchematicAnalysisController } from "./analysis/analysisController";
 import { SchematicContextMenuController } from "./contextMenuController";
 import type { SchematicEditorHandle } from "./editorHandle";
 import { mountSchematicEditorFacade } from "./schematicEditorFacade";
 import type { SchematicEditorMountElements } from "./schematicTabShell";
-import { readSchematicDocumentFromClipboard } from "./schematicClipboardWebAdapter";
+import { readSchematicClipboardText, readSchematicDocumentFromClipboard } from "./schematicClipboardWebAdapter";
 import {
   downloadSchematicDocumentFile,
-  readSchematicDocumentFile
+  downloadSchematicDocumentImage
 } from "./schematicDocumentWebAdapter";
 import { SchematicDocumentTabs } from "./schematicDocumentTabs";
-import { webMarkdownNoteRuntimeAdapter } from "./notes/webMarkdownNoteRuntimeAdapter";
-import type { SchematicEditorHostServices } from "./schematicEditorHostPorts";
+import type { ImportedSchematicDocumentFile, SchematicEditorHostServices } from "./schematicEditorHostPorts";
 import { SchematicWebDocumentHost } from "./schematicWebDocumentHost";
 import { createSchematicWorkspacePersistence } from "./workspacePersistence";
 import type { WorkspaceStorage } from "../shared/workspaceState";
+import { downloadBlob } from "../shared/download";
+import { documentFromContent } from "./document/documentModel";
+import { assertSchematicDocumentFileSize, parseSchematicDocumentFile, schematicDocumentFilename, schematicDocumentTitleFromFilename } from "./schematicDocumentCodec";
+import { decodeSchematicProject, isProjectFile, serializeSchematicProject } from "./schematicProject";
+import { t } from "./schematicI18n";
+
+function readSchematicImport(source: string, title: string): ImportedSchematicDocumentFile {
+  let value: unknown;
+  try { value = JSON.parse(source); } catch { /* Keep the single-sheet codec's error details. */ }
+  if (!isProjectFile(value)) {
+    const document = parseSchematicDocumentFile(source);
+    if (document.components.some(component => component.type === "sheetBlock")) {
+      throw new Error(t("hierarchy.requiresProject", "Import the Project JSON to open a schematic that contains sheet instances."));
+    }
+    return { title, document };
+  }
+  const project = decodeSchematicProject(value);
+  const top = project.sheets.find(sheet => sheet.id === project.topSheetId)!;
+  return { title: project.name, document: documentFromContent(top.content), project };
+}
 
 export type SchematicWebEditorFactory<Editor extends SchematicEditorHandle> = (
   mountElements: SchematicEditorMountElements,
@@ -84,11 +101,25 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
   const workspace = options.workspace ?? createSchematicWorkspacePersistence(storage,
     realm.navigator?.locks ? (key, write) => realm.navigator.locks.request(key, write) : undefined);
   const documentFiles: SchematicEditorHostServices["documentFiles"] = {
-    read: (file) => readSchematicDocumentFile(file),
-    download: (document, title) => downloadSchematicDocumentFile(document, title)
+    async read(file) {
+      assertSchematicDocumentFileSize(file.size);
+      return readSchematicImport(await file.text(), schematicDocumentTitleFromFilename(file.name));
+    },
+    download: (document, title) => downloadSchematicDocumentFile(document, title, ownerDocument),
+    downloadProject(project, title) {
+      const blob = new Blob([serializeSchematicProject({ ...project, name: title })], { type: "application/json" });
+      assertSchematicDocumentFileSize(blob.size);
+      downloadBlob(blob, schematicDocumentFilename(title).replace(/\.sch\.json$/, ".atproj.json"), ownerDocument);
+    },
+    downloadImage: (document, title, format, options) => downloadSchematicDocumentImage(document, title, format, options, ownerDocument)
   };
   const clipboardPort: SchematicEditorHostServices["clipboard"] = {
-    readDocument: () => readSchematicDocumentFromClipboard(ownerWindow.navigator.clipboard)
+    readDocument: () => readSchematicDocumentFromClipboard(ownerWindow.navigator.clipboard),
+    async readImport() {
+      const source = await readSchematicClipboardText(ownerWindow.navigator.clipboard);
+      assertSchematicDocumentFileSize(new Blob([source]).size);
+      return readSchematicImport(source, "Imported schematic");
+    }
   };
   const createTabs = (
     element: HTMLElement,
@@ -104,11 +135,6 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
     workspace,
     documentFiles,
     clipboard: clipboardPort,
-    cursors: {
-      delete: cursorFromSvg(deleteIcon),
-      temporaryDelete: cursorFromSvg(tempDeleteIcon)
-    },
-    noteRuntimeAdapter: webMarkdownNoteRuntimeAdapter,
     idFactory: createId,
     createAbortController: () => new realm.AbortController(),
     requestAnimationFrame: (callback) => ownerWindow.requestAnimationFrame(callback),
@@ -138,13 +164,6 @@ export function createSchematicWebHostServices(root: HTMLElement, options: Schem
       }
     })
   };
-}
-
-function cursorFromSvg(svg: string) {
-  const cursorSvg = svg
-    .replace('width="200"', 'width="32"')
-    .replace('height="200"', 'height="32"');
-  return `url("data:image/svg+xml,${encodeURIComponent(cursorSvg)}") 16 16, crosshair`;
 }
 
 /** LAN HTTP has getRandomValues, but not the secure-context-only randomUUID. */

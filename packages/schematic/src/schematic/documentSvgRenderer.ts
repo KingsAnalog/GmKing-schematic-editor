@@ -3,10 +3,14 @@ import {
   normalizeSchematicContent
 } from "./document/documentModel";
 import { pointKey } from "./geometry";
-import { renderSchematicSvgScene } from "./svgRenderer";
+import { junctionId } from "./junctionIdentity";
+import { resolveLayerObjects } from "./layerObjectStateModel";
+import { layerObjectStackIds } from "./layerObjectTreeModel";
+import { renderSchematicSvgScene, type SchematicSvgScene } from "./svgRenderer";
 import { deriveSchematicTopology, type SchematicDerivedTopology } from "./topology";
 import { escapeAttribute } from "./uiUtils";
 import { svgIdFragment } from "./svgId";
+import { wireEndpointConnections } from "./wire/wireEndpointConnection";
 import type { Rect } from "./view-geometry";
 import type { SchematicContent, SchematicDocument } from "./types";
 import { GRID_SIZE } from "./types";
@@ -17,6 +21,8 @@ export interface SchematicDocumentSvgOptions {
   namespace: string;
   padding?: number;
   presentationMode?: boolean;
+  includeHidden?: boolean;
+  noteGraphics?: SchematicSvgScene["noteGraphics"];
   showGrid?: boolean;
   backgroundColor?: string | null;
 }
@@ -53,22 +59,33 @@ export function renderSchematicDocumentSvg(
   const netLabelStatuses = Object.fromEntries(
     Array.from(topology.netResolution.labelStates, ([id, state]) => [id, state.status])
   );
+  const projection = resolveLayerObjects(document, topology.connectivity.junctionMembers, {
+    includeHidden: options.includeHidden
+  });
+  const { displayed } = projection;
+  const layerObjectOrder = layerObjectStackIds({ ...document, junctions: junctionPoints }, projection);
+  const wires = document.wires.filter(wire => displayed(wire.id));
+  const wireEndpoints = new Map(wires.map(wire => [wire.id, wireEndpointConnections(document, wire)]));
   const rendered = renderSchematicSvgScene(
     {
       symbolTemplate: document.symbolTemplate,
-      components: document.components,
-      inductorCouplings: document.inductorCouplings,
-      wires: document.wires,
-      connections: document.connections,
-      junctionPoints,
+      display: document.display,
+      crossingJunctions: document.junctions,
+      components: document.components.filter(component => displayed(component.id)),
+      inductorCouplings: (document.inductorCouplings ?? []).filter(coupling => displayed(coupling.id)),
+      wires,
+      wireEndpoints,
+      busWireIds: topology.netResolution.busWireIds,
+      junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
       junctionColors,
-      netLabels: document.netLabels,
+      netLabels: document.netLabels.filter(label => displayed(label.id)),
       netLabelStatuses,
-      notes: document.notes
+      notes: document.notes.filter(note => displayed(note.id)),
+      noteGraphics: options.noteGraphics,
+      layerObjectOrder
     },
     {
       presentationMode,
-      portableNotes: true,
       padding: options.padding,
       namespace: options.namespace,
       showGrid: options.showGrid,

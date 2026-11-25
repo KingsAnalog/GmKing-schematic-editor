@@ -1,7 +1,11 @@
 import { resolveComponentDef } from "./catalog";
 import { scaleComponentDefinition } from "./componentScaleModel";
-import { triangleFrameSymbol } from "./symbols/triangleSymbols";
+import { quadraticArc } from "./arcGeometry";
+import { polylineFrameSymbol } from "./symbols/polylineSymbols";
+import { closedPolygonPath } from "./symbols/closedShapeSymbols";
 import { rotatePoint, snapPoint } from "./geometry";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { snapLibraryShapeCenterToVertices } from "./libraryShapeGeometry";
 import { noteWorldBounds } from "./notes/noteGeometry";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { GRID_SIZE, SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type NetLabel, type Point, type SchematicDocument, type SchematicNote, type Wire } from "./types";
@@ -28,7 +32,17 @@ const JUNCTION_VISUAL_RADIUS = JUNCTION_VISUAL_DIAMETER / 2;
 export function componentFrameBox(def: ComponentDef): Rect {
   // The shared layout envelope is template-independent, just like catalog pins.
   // Template artwork must fit this frame; template changes never shift cell origins.
-  if (def.type === "annotation") {
+  if (def.bodyArc) {
+    const { bounds } = quadraticArc(def.bodyArc)!;
+    const width = Math.max(GRID_SIZE, bounds.width);
+    const height = Math.max(GRID_SIZE, bounds.height);
+    return {
+      x: bounds.x + (def.size.width + bounds.width - width) / 2,
+      y: bounds.y + (def.size.height + bounds.height - height) / 2,
+      width, height
+    };
+  }
+  if (def.type === "annotation" || isLibraryShapeType(def.type)) {
     return { x: 0, y: 0, width: def.size.width, height: def.size.height };
   }
 
@@ -89,7 +103,10 @@ export function componentCellPosition(instance: ComponentInstance): Point {
 
 export function componentCenterFromCellPosition(instance: ComponentInstance, position: Point): Point {
   const offset = componentCellPosition({ ...instance, x: 0, y: 0 });
-  return snapPoint({ x: position.x - offset.x, y: position.y - offset.y });
+  const center = { x: position.x - offset.x, y: position.y - offset.y };
+  return isLibraryShapeType(instance.type)
+    ? snapLibraryShapeCenterToVertices(instance, center)
+    : snapPoint(center);
 }
 
 export function componentSymbolBounds(def: ComponentDef): Rect {
@@ -258,8 +275,10 @@ function componentPathBounds(def: ComponentDef): { rect: Rect; padding: number }
       padding: padding * scale
     }));
   }
+  if (def.bodyArc) return [{ rect: componentFrameBox(def), padding: symbolStrokeWidth(def.symbol) / 2 }];
   return [
-    { data: def.bodyPolygon ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon) : symbolPath(def.symbol, def.size.width, def.size.height), padding: symbolStrokeWidth(def.symbol) / 2 },
+    { data: def.bodyPolyline ? polylineFrameSymbol(def.size.width, def.size.height, def.bodyPolyline)
+      : def.bodyPolygon ? closedPolygonPath(def.size.width, def.size.height, def.bodyPolygon) : symbolPath(def.symbol, def.size.width, def.size.height), padding: symbolStrokeWidth(def.symbol) / 2 },
     { data: symbolAccentPath(def.symbol, def.size.width, def.size.height), padding: symbolAccentStrokeWidth(def.symbol) / 2 },
     { data: symbolMarkerPath(def.symbol, def.size.width, def.size.height), padding: 0 }
   ]

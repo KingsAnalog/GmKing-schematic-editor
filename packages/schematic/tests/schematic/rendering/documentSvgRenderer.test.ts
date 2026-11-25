@@ -1,3 +1,6 @@
+import { applyNormalizedDocumentWires } from "../../../src/schematic/document/documentWires";
+import { resolveLayerObjects } from "../../../src/schematic/layerObjectStateModel";
+import { fixtureWire } from "../support/fixtures";
 import { fixtureDocument } from "../support/fixtureDocument";
 import { describe, expect, it } from "vitest";
 import { COMPONENT_CATALOG } from "../../../src/schematic/catalog";
@@ -73,7 +76,6 @@ describe("pure schematic SVG rendering", () => {
     expect(rendered.svg).toContain('data-junction="40,0"');
     expect(rendered.svg).toContain('data-note-id="plain-note"');
     expect(rendered.svg).toContain('data-note-id="markdown-note"');
-    expect(rendered.svg).toContain('data-markdown-note-fallback="markdown-note"');
     expect(rendered.svg).toContain("# Heading");
     expect(rendered.topology.junctions).toContainEqual({ x: 40, y: 0 });
   });
@@ -89,13 +91,11 @@ describe("pure schematic SVG rendering", () => {
     }).svg;
 
     expect(first).toContain('id="viewer-a-grid"');
-    expect(first).toContain('id="viewer-a-note-text-clip-markdown-note"');
     expect(second).toContain('id="viewer-b-grid"');
-    expect(second).toContain('id="viewer-b-note-text-clip-markdown-note"');
     expect(second).not.toContain("viewer-a-");
   });
 
-  it("keeps unsafe namespaces and colliding sanitized Note IDs unique", () => {
+  it("keeps unsafe namespaces and distinct Note IDs scoped", () => {
     const content = decoratedContent();
     content.notes = [
       { ...content.notes[0], id: "a:b" },
@@ -110,11 +110,10 @@ describe("pure schematic SVG rendering", () => {
       showGrid: true
     }).svg;
     const firstIds = [...first.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
-    const firstClipIds = firstIds.filter((id) => id.includes("-note-text-clip-"));
 
     expect(new Set(firstIds).size).toBe(firstIds.length);
-    expect(firstClipIds).toHaveLength(2);
-    expect(new Set(firstClipIds).size).toBe(2);
+    expect(first).toContain('data-note-id="a:b"');
+    expect(first).toContain('data-note-id="a?b"');
     expect(first).not.toContain('id="viewer_a-grid"');
     expect(second).not.toContain('id="viewer_a-grid"');
     expect(firstIds.find((id) => id.endsWith("-grid"))).not.toBe(
@@ -122,6 +121,132 @@ describe("pure schematic SVG rendering", () => {
         .map((match) => match[1])
         .find((id) => id.endsWith("-grid"))
     );
+  });
+
+  it("omits independently hidden objects without changing connectivity", () => {
+    const content = decoratedContent();
+    content.layerObjectStates = Object.fromEntries([
+      "R1", "signal", "signal-segment-1", "branch", "branch-segment-1",
+      "deleted-wire", "junction-40-0", "net-label", "plain-note", "markdown-note"
+    ].map(id => [id, { visible: false }]));
+
+    const rendered = renderSchematicDocumentSvg(content, {
+      namespace: "hidden-objects",
+      presentationMode: false
+    });
+
+    expect(rendered.svg).not.toContain("data-component-id=");
+    expect(rendered.svg).not.toContain("data-wire-id=");
+    expect(rendered.svg).not.toContain("data-junction=");
+    expect(rendered.svg).not.toContain("data-net-label-id=");
+    expect(rendered.svg).not.toContain("data-note-id=");
+    expect(rendered.topology.junctions).toContainEqual({ x: 40, y: 0 });
+    expect(content.connections.wires.signal).toBeDefined();
+  });
+
+  it("keeps cross-layer wires connected and places a junction with its topmost visible wire", () => {
+    const point = { x: 40, y: 0 };
+    const layer2 = { id: "layer-2", name: "Overlay", visible: true, locked: false };
+    const document = fixtureDocument({
+      layers: [{ id: "layer-1", name: "Base", visible: true, locked: false }, layer2],
+      wires: [
+        fixtureWire("west", [{ x: 0, y: 0 }, point]),
+        { ...fixtureWire("east", [point, { x: 80, y: 0 }]), layerId: "layer-2" },
+        { ...fixtureWire("south", [point, { x: 40, y: 40 }]), layerId: "layer-2" }
+      ],
+      netLabels: [{ id: "tag", layerId: "layer-2", name: "OUT", attachment: { wireId: "east", point } }],
+      notes: [{ id: "note", layerId: "layer-2", x: 80, y: 80, width: 120, anchor: "upperLeft", text: "Overlay note" }]
+    });
+    applyNormalizedDocumentWires(document);
+    const render = () => renderSchematicDocumentSvg(document, { namespace: "layers", presentationMode: false });
+    const before = render();
+    const junctionId = "junction-40-0";
+    expect(document.wires.map(wire => wire.id).sort()).toEqual(["east", "south", "west"]);
+    expect(before.topology.connectivity.rootOfWire("east")).toBe(before.topology.connectivity.rootOfWire("west"));
+    expect(resolveLayerObjects(document).layerOf(junctionId).id).toBe("layer-2");
+
+    layer2.visible = false;
+    const after = render();
+    expect(resolveLayerObjects(document).layerOf(junctionId).id).toBe("layer-1");
+    expect(after.svg).toContain('data-junction="40,0"');
+    expect(after.svg).toContain('data-wire-id="west"');
+    expect(after.svg).not.toContain('data-wire-id="east"');
+    expect(after.svg).not.toContain('data-net-label-id="tag"');
+    expect(after.svg).not.toContain('data-note-id="note"');
+    expect(after.topology.netResolution.wireNetNames).toEqual(before.topology.netResolution.wireNetNames);
+    document.layerObjectStates = { west: { visible: false } };
+    expect(render().svg).not.toContain('data-junction="40,0"');
+  });
+
+  it("includes both kinds of hidden objects for one render and sizes the result to their bounds", () => {
+    const document = decoratedContent();
+    document.layers = [
+      { id: "layer-1", name: "Circuit", visible: true, locked: true },
+      { id: "layer-2", name: "Comments", visible: false, locked: false }
+    ];
+    const note = document.notes.find(note => note.id === "plain-note")!;
+    note.layerId = "layer-2";
+    note.x = 1200;
+    document.layerObjectStates = {
+      R1: { visible: false, z: 4 },
+      "junction-40-0": { visible: false, z: 9 },
+      "net-label": { z: 3 }
+    };
+    const original = structuredClone(document);
+    const options = { namespace: "export", presentationMode: false };
+    const visible = renderSchematicDocumentSvg(document, options);
+    const all = renderSchematicDocumentSvg(document, { ...options, includeHidden: true });
+
+    expect(visible.svg).toContain('data-net-label-id="net-label"');
+    for (const marker of ['data-component-id="R1"', 'data-note-id="plain-note"', 'data-junction="40,0"']) {
+      expect(visible.svg).not.toContain(marker);
+      expect(all.svg).toContain(marker);
+    }
+    expect(all.svg.indexOf('data-net-label-id="net-label"')).toBeLessThan(all.svg.indexOf('data-component-id="R1"'));
+    expect(all.svg.indexOf('data-component-id="R1"')).toBeLessThan(all.svg.indexOf('data-note-id="plain-note"'));
+    expect(all.width).toBeGreaterThan(visible.width);
+    expect(all.topology.netResolution.wireNetNames).toEqual(visible.topology.netResolution.wireNetNames);
+    expect(document).toEqual(original);
+  });
+
+  it("keeps a visible arrow anchored to its physical node when the adjoining wire is hidden", () => {
+    const document = fixtureDocument({
+      wires: [
+        { ...fixtureWire("horizontal", [{ x: 0, y: 0 }, { x: 40, y: 0 }]), appearance: { variant: "signal", endMarker: "arrow" } },
+        fixtureWire("vertical", [{ x: 40, y: 0 }, { x: 40, y: 60 }])
+      ],
+      layerObjectStates: { vertical: { visible: false } }
+    });
+    const rendered = renderSchematicDocumentSvg(document, { namespace: "connected-end" });
+
+    expect(rendered.svg).not.toContain('data-wire-id="vertical"');
+    expect(rendered.svg).toContain('data-wire-endpoint="end" points="40,0 ');
+  });
+
+  it("uses the Layers panel object order for all SVG object types", () => {
+    const content = decoratedContent();
+    content.layerObjectStates = Object.fromEntries([
+      "R1", "signal", "branch", "deleted-wire", "junction-40-0",
+      "net-label", "plain-note", "markdown-note"
+    ].map((id, index) => [id, { z: index + 1 }]));
+
+    const svg = renderSchematicDocumentSvg(content, {
+      namespace: "ordered-objects",
+      presentationMode: false
+    }).svg;
+    const markers = [
+      'data-component-id="R1"',
+      'data-wire-id="signal"',
+      'data-wire-id="branch"',
+      'data-wire-id="deleted-wire"',
+      'data-junction="40,0"',
+      'data-net-label-id="net-label"',
+      'data-note-id="plain-note"',
+      'data-note-id="markdown-note"'
+    ];
+    const positions = markers.map(marker => svg.indexOf(marker));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((first, second) => first - second));
   });
 });
 
@@ -172,7 +297,7 @@ function decoratedContent(): SchematicContent {
       y: 120,
       width: 140,
       height: 40,
-      format: "plain",
+      anchor: "upperLeft",
       text: "plain note"
     }, {
       id: "markdown-note",
@@ -180,7 +305,7 @@ function decoratedContent(): SchematicContent {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "# Heading"
     }]
   }, { joinAt: [{ x: 40, y: 0 }] });

@@ -11,6 +11,7 @@ import {
   documentFromContent
 } from "./document/documentModel";
 import { parseSchematicContent, SCHEMATIC_FILE_FORMAT } from "./schematicDocumentCodec";
+import { decodeSchematicProject } from "./schematicProject";
 import type {
   AnalysisPortSelection,
   Point,
@@ -118,7 +119,9 @@ export function persistSchematicDocumentSnapshot(
     cacheSchematicDocumentSnapshot(id, cloned, target);
     return cloneSchematicDocumentSnapshot(cloned);
   }
-  target.setItem(schematicDocumentStorageKey(id), serializeSchematicDocumentSnapshotEnvelope(cloned));
+  const key = schematicDocumentStorageKey(id);
+  const serialized = serializeSchematicDocumentSnapshotEnvelope(cloned);
+  if (readStorageItem(target, key) !== serialized) target.setItem(key, serialized);
   cacheSchematicDocumentSnapshot(id, cloned, target);
   return cloneSchematicDocumentSnapshot(cloned);
 }
@@ -150,6 +153,8 @@ export function projectSchematicDocumentRestore(
 function cloneSchematicDocumentSnapshot(snapshot: SchematicDocumentState): SchematicDocumentState {
   const next: SchematicDocumentState = {};
   if (snapshot.document) next.document = cloneSchematicDocument(snapshot.document);
+  if (snapshot.project) next.project = structuredClone(snapshot.project);
+  if (snapshot.sheetPath) next.sheetPath = structuredClone(snapshot.sheetPath);
   if (snapshot.analysisSelection) next.analysisSelection = cloneAnalysisSelection(snapshot.analysisSelection);
   if (snapshot.zoom !== undefined) next.zoom = snapshot.zoom;
   if (snapshot.viewTranslate) next.viewTranslate = clonePoint(snapshot.viewTranslate);
@@ -252,6 +257,10 @@ function normalizeStoredSchematicDocumentState(value: unknown): SchematicDocumen
   const state: SchematicDocumentState | undefined = sanitized ?? emptyState;
   if (!state) return undefined;
   try {
+    const stored = value as Pick<SchematicDocumentState, "project" | "sheetPath">;
+    if (stored.project) state.project = decodeSchematicProject(stored.project);
+    if (Array.isArray(stored.sheetPath) && stored.sheetPath.every(step => step && typeof step.sheetId === "string"
+      && (step.instanceId === undefined || typeof step.instanceId === "string"))) state.sheetPath = stored.sheetPath;
     if (state.document) {
       const content = (value as { document: unknown }).document;
       state.document = documentFromContent(parseSchematicContent(JSON.stringify({

@@ -43,7 +43,6 @@ const interactiveBannedFiles = new Set([
   "analysisWorkerClient.ts",
   "markdownNoteRuntime.ts",
   "webMarkdownNoteRuntimeAdapter.ts",
-  "mathjax.ts"
 ]);
 
 describe("schematic core import boundary", () => {
@@ -77,7 +76,7 @@ describe("schematic core import boundary", () => {
       const source = sourceFor(file);
       expect(source, file).not.toContain("?raw");
       expect(source, file).not.toMatch(/import\s+["'][^"']+\.css["']/);
-      expect(source, file).not.toMatch(/\b(?:localStorage|sessionStorage|nerdamer|MathJax)\b/i);
+      expect(source, file).not.toMatch(/\b(?:localStorage|sessionStorage|nerdamer)\b/i);
     });
   });
 });

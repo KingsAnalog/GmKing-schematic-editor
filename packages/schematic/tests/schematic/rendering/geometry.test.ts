@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { snapPoint } from "../../../src/schematic/geometry";
 import {
   noteSizeFromMeasuredContent,
-  markdownNoteHeightFromMeasuredContent,
-  textForNoteMeasurement
 } from "../../../src/schematic/notes/noteSizing";
 import {
   extendOrthogonalPath,
@@ -106,15 +104,4 @@ describe("schematic geometry", () => {
     expect(noteSizeFromMeasuredContent({ width: 23, height: 14 }, 14)).toEqual({ width: 40, height: 20 });
   });
 
-  it("retains the Markdown height grid independently of plain text sizing", () => {
-    expect(markdownNoteHeightFromMeasuredContent(10)).toBe(20);
-    expect(markdownNoteHeightFromMeasuredContent(21)).toBe(40);
-    expect(markdownNoteHeightFromMeasuredContent(42)).toBe(60);
-  });
-
-  it("keeps trailing blank note lines measurable", () => {
-    expect(textForNoteMeasurement("")).toBe(" ");
-    expect(textForNoteMeasurement("line\n")).toBe("line\n ");
-    expect(textForNoteMeasurement("line   ")).toBe("line   ");
-  });
 });

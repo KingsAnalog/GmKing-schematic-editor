@@ -1,7 +1,6 @@
 import { fixtureDocument } from "../support/fixtureDocument";
 import { describe, expect, it } from "vitest";
 import { buildSchematicSelectionNetlist } from "../../../src/schematic/selection/selectionNetlist";
-import { setRectangleProperty } from "../../../src/schematic/rectangleComponentModel";
 import type { NetLabel, SchematicDocument } from "../../../src/schematic/types";
 import { fixtureComponent, fixtureWire, twoResistorsStraightWireDoc } from "../support/fixtures";
 
@@ -111,12 +110,8 @@ describe("schematic selection netlist", () => {
     expect(text).toContain("    Q2 (Q2_C Q2_B Q2_E) pnp");
   });
 
-  it("orders rectangle black-box pins by left, right, top, then bottom", () => {
+  it("omits a pin-free pure rectangle from the electrical netlist", () => {
     const rectangle = fixtureComponent("rectangle", "XBOX", 200, 200);
-    setRectangleProperty(rectangle, "leftPins", 2);
-    setRectangleProperty(rectangle, "rightPins", 2);
-    setRectangleProperty(rectangle, "topPins", 2);
-    setRectangleProperty(rectangle, "bottomPins", 2);
     const document: SchematicDocument = fixtureDocument({
 
       junctionAppearances: [],
@@ -127,9 +122,7 @@ describe("schematic selection netlist", () => {
       junctions: []
     });
 
-    expect(buildSchematicSelectionNetlist(document, [rectangle.id])?.text).toContain(
-      "    XBOX (XBOX_LEFT_1 XBOX_LEFT_2 XBOX_RIGHT_1 XBOX_RIGHT_2 XBOX_TOP_1 XBOX_TOP_2 XBOX_BOTTOM_1 XBOX_BOTTOM_2) rectangle"
-    );
+    expect(buildSchematicSelectionNetlist(document, [rectangle.id])).toBeNull();
   });
 
   it("ignores temporary and non-instance symbols and returns null without devices", () => {

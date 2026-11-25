@@ -22,7 +22,7 @@ describe("SchematicWireCommitCoordinator", () => {
     expect(coordinator.applyBlankClick({ x: 13, y: 8 })).toEqual({
       kind: "pending",
       previewPoint: { x: 10, y: 10 },
-      status: "Wire start 10, 10. Empty clicks add bends; click a pin or press Enter to finish."
+      status: "Wire start 10, 10. Click to add bends. Double-click or press Enter to finish."
     });
     expect(document.wires).toEqual([]);
     expect(wireTool.routePointCount()).toBe(1);
@@ -32,7 +32,9 @@ describe("SchematicWireCommitCoordinator", () => {
     const { coordinator, document, wireTool } = coordinatorHarness();
 
     expect(coordinator.applyPinClick({ x: 40, y: 0 }).kind).toBe("pending");
-    const outcome = coordinator.applyPinClick({ x: 80, y: 40 });
+    expect(coordinator.applyPinClick({ x: 80, y: 40 }).kind).toBe("pending");
+    expect(document.wires).toEqual([]);
+    const outcome = coordinator.finish({ x: 80, y: 40 });
 
     expect(outcome).toMatchObject({
       kind: "commit",
@@ -55,17 +57,17 @@ describe("SchematicWireCommitCoordinator", () => {
 
     coordinator.applyBlankClick({ x: 0, y: 0 });
     coordinator.applyBlankClick({ x: 40, y: 0 });
-    const outcome = coordinator.finishFromKeyboard({ x: 0, y: 0 });
+    const outcome = coordinator.finish({ x: 0, y: 0 });
 
     expect(outcome).toEqual({ kind: "none" });
     expect(document.wires).toEqual([]);
     expect(wireTool.routePointCount()).toBe(2);
   });
 
-  it("projects invalid keyboard finishes as status without changing route state", () => {
+  it("projects invalid finishes as status without changing route state", () => {
     const { coordinator, document, wireTool } = coordinatorHarness();
 
-    expect(coordinator.finishFromKeyboard(null)).toEqual({
+    expect(coordinator.finish(null)).toEqual({
       kind: "status",
       status: "Click a start point before finishing a wire."
     });

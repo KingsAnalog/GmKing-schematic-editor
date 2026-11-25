@@ -17,8 +17,26 @@ describe("Obsidian schematic export menu", () => {
     expect(obsidianMockState.menus[0].items.map((item) => item.title)).toEqual([
       "Copy as SVG",
       "Copy as PNG",
-      "Copy as JSON"
+      "Copy as JSON",
+      "Copy as SVG (include hidden objects)",
+      "Copy as PNG (include hidden objects)"
     ]);
+  });
+
+  it("copies hidden objects only when the whole-document image action requests them", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: { writeText } });
+    const content = createEmptySchematicContent();
+    content.notes.push({ id: "hidden-note", x: 0, y: 0, width: 140, anchor: "upperLeft", text: "Hidden note" });
+    content.layerObjectStates = { "hidden-note": { visible: false } };
+    showSchematicExportMenu({ content, namespace: "hidden-export" }, { x: 0, y: 0 }, document);
+    const actions = obsidianMockState.menus[0].items;
+    actions.find(item => item.title === "Copy as SVG")?.onClick?.();
+    actions.find(item => item.title === "Copy as SVG (include hidden objects)")?.onClick?.();
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls[0][0]).not.toContain("Hidden note");
+    expect(writeText.mock.calls[1][0]).toContain("Hidden note");
   });
 
   it("keeps successful JSON copies silent", async () => {
@@ -91,7 +109,7 @@ describe("Obsidian image export in the owning window", () => {
   it.each([false, true])("copies a proportional transparent PNG (selection: %s)", async (selection) => {
     const runtime = host();
     const content = createEmptySchematicContent();
-    content.notes.push({ id: "large-note", x: 0, y: 0, width: 6000, height: 1000, format: "plain", text: "Wide schematic" });
+    content.wires.push({ id: "wide", routeMode: "orthogonal", points: [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 1000 }] });
     const exported = renderSchematicDocumentSvg(content, { namespace: "dimensions" });
     const editor = selection ? {
       hasExportableSelection: () => true,

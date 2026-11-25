@@ -155,7 +155,7 @@ function interactionDocument(): SchematicDocument {
         x: 220,
         y: 260,
         width: 160,
-        format: "plain",
+        anchor: "upperLeft",
         text: "selection note"
       }
     ]
@@ -728,7 +728,7 @@ describe("SchematicCellGeometryInteractionCoordinator", () => {
       x: 420,
       y: 300,
       width: 180,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "**second** note"
     });
     const fixture = createFixture(document);

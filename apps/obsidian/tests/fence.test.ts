@@ -68,7 +68,7 @@ describe("Obsidian schematic fences", () => {
       x: 0,
       y: 0,
       text: "hello",
-      format: "plain",
+      anchor: "upperLeft",
       fontSizePx: 16,
       width: 120,
       height: 40

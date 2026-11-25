@@ -9,19 +9,42 @@ export function typesetMath(elements: Element | Element[]) {
     groups.set(ownerWindow, targets);
   }
   for (const [ownerWindow, targets] of groups) {
-    const mathJax = ownerWindow.MathJax;
-    if (!mathJax?.typesetPromise) continue;
-    mathJax.typesetClear?.(targets);
-    mathJax.typesetPromise(targets).catch(() => {});
+    if (mathJaxLoaders.has(ownerWindow)) {
+      const pending = targets.map(element => ({ element, source: element.textContent }));
+      void waitForMathJax(ownerWindow).then(ready => {
+        if (!ready) return;
+        // A tab switch or a newer result may have cleared or replaced the TeX.
+        const current = pending.filter(({ element, source }) =>
+          element.isConnected && element.ownerDocument.defaultView === ownerWindow && element.textContent === source
+        ).map(({ element }) => element);
+        if (current.length) typesetReadyMath(ownerWindow, current);
+      });
+    } else {
+      typesetReadyMath(ownerWindow, targets);
+    }
   }
+}
+
+function typesetReadyMath(ownerWindow: Window, targets: Element[]) {
+  const mathJax = ownerWindow.MathJax;
+  if (!mathJax?.typesetPromise) return;
+  mathJax.typesetClear?.(targets);
+  void mathJax.typesetPromise(targets).catch(() => {});
 }
 
 const renderTokens = new WeakMap<Element, number>();
 const texRenderTokens = new WeakMap<Element, number>();
 const mathJaxReadyPromises = new WeakMap<Window, Promise<boolean>>();
+const mathJaxLoaders = new WeakMap<Window, () => Promise<boolean>>();
 const MATHJAX_READY_TIMEOUT_MS = 3000;
 
+export function registerMathJaxLoader(ownerWindow: Window, load: () => Promise<boolean>) {
+  mathJaxLoaders.set(ownerWindow, load);
+}
+
 function waitForMathJax(ownerWindow: Window) {
+  const load = mathJaxLoaders.get(ownerWindow);
+  if (load) return load();
   if (ownerWindow.MathJax?.typesetPromise) return Promise.resolve(true);
   const existing = mathJaxReadyPromises.get(ownerWindow);
   if (existing) return existing;
@@ -126,4 +149,32 @@ export async function renderMathTexInto(
   if (options.signal?.aborted || texRenderTokens.get(element) !== token) return false;
   element.classList.toggle("is-math-error", !rendered);
   return rendered;
+}
+
+/** Produces a vector formula in the target window without attaching an editor. */
+export async function renderMathSvg(doc: Document, tex: string, options: { display: boolean; signal?: AbortSignal }) {
+  const ownerWindow = doc.defaultView;
+  if (!ownerWindow || !(await waitForMathJaxOrAbort(ownerWindow, options.signal))) return null;
+  if (options.signal?.aborted) return null;
+  try {
+    const mathJax = ownerWindow.MathJax;
+    let container: HTMLElement;
+    if (mathJax?.tex2svg) {
+      try {
+        container = mathJax.tex2svg(tex, { display: options.display });
+      } catch (error) {
+        if (!mathJax.tex2svgPromise) throw error;
+        container = await mathJax.tex2svgPromise(tex, { display: options.display });
+      }
+    } else if (mathJax?.tex2svgPromise) {
+      container = await mathJax.tex2svgPromise(tex, { display: options.display });
+    } else {
+      container = doc.createElement("span");
+      await renderMathTexInto(container, tex, options);
+    }
+    if (options.signal?.aborted || container.querySelector('mjx-merror, [data-mjx-error], [data-mml-node="merror"]')) return null;
+    return container.querySelector<SVGSVGElement>("svg");
+  } catch {
+    return null;
+  }
 }

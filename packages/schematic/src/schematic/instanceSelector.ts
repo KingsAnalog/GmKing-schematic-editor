@@ -3,11 +3,14 @@ import { createSchematicSvgElement } from "./schematicSvgDom";
 import { getComponentDef, PALETTE_ORDER } from "./catalog";
 import { getSchematicTemplateDef, isSchematicTemplateId, SCHEMATIC_TEMPLATE_ORDER, schematicTemplateBounds, type SchematicTemplateId } from "./templates";
 import { resolveComponentVisualModel } from "./componentVisualModel";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { RECTANGLE_WIDTH_VALUE_KEY } from "./rectangleComponentModel";
 import { renderComponentSvg } from "./componentSvgRenderer";
 import type { SymbolTemplateId, SymbolTemplateContext } from "./symbolTemplateModel";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { renderSymbolContentSvg } from "./symbolContentView";
 import { clamp, escapeAttribute, escapeHtml } from "./uiUtils";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import type { ComponentType } from "./types";
 
 export type InstancePaletteItem = ComponentType | SchematicTemplateId;
@@ -743,6 +746,8 @@ export function paletteItemPreview(item: InstancePaletteItem, context: SymbolTem
 
 export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplateContext = {}) {
   const base = getComponentDef(type);
+  const values = { ...base.defaultValues };
+  if (type === "rectangle") values[RECTANGLE_WIDTH_VALUE_KEY] = "3";
   const model = resolveComponentVisualModel({
     id: `palette-${type}-preview`,
     type,
@@ -752,18 +757,22 @@ export function paletteSymbolPreview(type: ComponentType, context: SymbolTemplat
     y: 0,
     rotation: 0,
     mirrored: false,
-    values: { ...(base.defaultValues ?? {}) }
+    values
   }, { ...context, preview: true });
   const def = model.def;
   const symbolContent = renderSymbolContentSvg(model.symbolContentLayout);
+  const previewPadding = isLibraryShapeType(type)
+    ? Math.max(4, model.symbolStrokeWidth)
+    : 0;
+  const viewBox = `${-previewPadding} ${-previewPadding} ${def.size.width + 2 * previewPadding} ${def.size.height + 2 * previewPadding}`;
   return `
-    <svg class="palette-symbol-preview" viewBox="0 0 ${def.size.width} ${def.size.height}" aria-hidden="true" focusable="false">
+    <svg class="palette-symbol-preview" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
       ${model.path ? `<path d="${escapeAttribute(model.path)}" fill="none" stroke="currentColor" stroke-width="${model.symbolStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"></path>` : ""}
       ${model.accentPath ? `<path d="${escapeAttribute(model.accentPath)}" fill="none" stroke="currentColor" stroke-width="${model.accentStrokeWidth}" stroke-linecap="round" stroke-linejoin="round"></path>` : ""}
       ${model.pinMarksPath ? `<path d="${escapeAttribute(model.pinMarksPath)}" fill="none" stroke="currentColor" stroke-width="${SYMBOL_STROKE_WIDTH}" stroke-linecap="square" stroke-linejoin="miter"></path>` : ""}
       ${model.markerPath ? `<path d="${escapeAttribute(model.markerPath)}" fill="currentColor" stroke="none"></path>` : ""}
       ${symbolContent}
-      ${!model.isAnnotation && model.labelText ? `<text x="${model.labelLayout.x}" y="${model.labelLayout.y}" fill="currentColor" font-family="Arial, Helvetica, sans-serif" font-size="${model.labelLayout.fontSize}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}">${escapeHtml(model.labelText)}</text>` : ""}
+      ${!model.isAnnotation && model.labelText ? `<text x="${model.labelLayout.x}" y="${model.labelLayout.y}" fill="currentColor" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${model.labelLayout.fontSize}" font-weight="${model.labelFontWeight}" text-anchor="${model.labelLayout.textAnchor}" dominant-baseline="${model.labelLayout.dominantBaseline}">${escapeHtml(model.labelText)}</text>` : ""}
     </svg>
   `;
 }

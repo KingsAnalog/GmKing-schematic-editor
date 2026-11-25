@@ -1,6 +1,6 @@
 import type { WireVariant } from "./types";
 
-export const TOOL_MODES = ["select", "place", "wire", "label", "delete", "temp-delete", "copy"] as const;
+export const TOOL_MODES = ["select", "place", "wire", "label", "delete", "temp-delete", "move", "copy", "rotate"] as const;
 
 export type ToolMode = (typeof TOOL_MODES)[number];
 export type ToolFocusTarget = "canvas" | "palette" | "none";
@@ -44,8 +44,9 @@ export type SchematicKeyboardShortcutIntent =
       behavior: "stretch" | "moveOnly";
     })
   | (SchematicKeyboardShortcutIntentBase & { kind: "rotate"; preventDefault: true; stopPropagation: false })
-  | (SchematicKeyboardShortcutIntentBase & { kind: "mirror"; preventDefault: true; stopPropagation: false; axis: "x" | "y" })
-  | (SchematicKeyboardShortcutIntentBase & { kind: "fit"; preventDefault: true; stopPropagation: false });
+  | (SchematicKeyboardShortcutIntentBase & { kind: "mirror"; preventDefault: true; axis: "x" | "y" })
+  | (SchematicKeyboardShortcutIntentBase & { kind: "fit"; preventDefault: true; stopPropagation: false })
+  | (SchematicKeyboardShortcutIntentBase & { kind: "toggle-log"; preventDefault: true; stopPropagation: true });
 
 export type SchematicEscapeKeyProjectionInput = {
   key: string;
@@ -54,8 +55,6 @@ export type SchematicEscapeKeyProjectionInput = {
   dropdownOpen: boolean;
   optionsOpen: boolean;
   editable: boolean;
-  noteEditorTarget: boolean;
-  noteEditingActive: boolean;
 };
 
 type SchematicEscapeKeyIntentBase = {
@@ -79,7 +78,6 @@ export type SchematicEscapeKeyIntent =
       stopPropagation: true;
       focusCanvas: false;
     })
-  | (SchematicEscapeKeyIntentBase & { kind: "finish-note-edit"; preventDefault: true; stopPropagation: true; focusCanvas: true })
   | (SchematicEscapeKeyIntentBase & { kind: "cancel-tool"; preventDefault: true; stopPropagation: true; focusCanvas: false });
 
 export type CancelToolIntent = {
@@ -127,7 +125,7 @@ export type MoveBehaviorToolEntryBehavior = "stretch" | "moveOnly";
 
 export type MoveBehaviorToolEntryIntent = {
   moveBehavior: MoveBehaviorToolEntryBehavior;
-  nextMode: Extract<ToolMode, "select">;
+  nextMode: Extract<ToolMode, "move">;
   closeInstancePanel: true;
   syncToolUi: true;
   focusTarget: Extract<ToolFocusTarget, "canvas">;
@@ -146,23 +144,15 @@ type CopyToolEntryIntentBase = {
 
 export type CopyToolNoSourceEntryIntent = CopyToolEntryIntentBase & {
   hasSource: false;
-  awaitingReference: false;
 };
 
 export type CopyToolSourceEntryIntent = CopyToolEntryIntentBase & {
   hasSource: true;
-  awaitingReference: false;
   sourceCount: number;
   updateCopyPreview: true;
 };
 
-export type CopyToolReferenceEntryIntent = CopyToolEntryIntentBase & {
-  hasSource: false;
-  awaitingReference: true;
-  sourceCount: number;
-};
-
-export type CopyToolEntryIntent = CopyToolNoSourceEntryIntent | CopyToolSourceEntryIntent | CopyToolReferenceEntryIntent;
+export type CopyToolEntryIntent = CopyToolNoSourceEntryIntent | CopyToolSourceEntryIntent;
 
 export type ToolbarProjectionInput = {
   mode: ToolMode;
@@ -191,7 +181,10 @@ export type SchematicToolbarCommandIntent =
   | { kind: "fit" }
   | { kind: "reset" }
   | { kind: "undo" }
-  | { kind: "redo" };
+  | { kind: "redo" }
+  | { kind: "open-library" }
+  | { kind: "open-right-view"; view: "analysis" | "netlist" }
+  | { kind: "toggle-log" };
 
 const TOOL_MODE_SET = new Set<string>(TOOL_MODES);
 const DELETE_TOOL_ENTRY_STATUS: Record<DeleteToolMode, string> = {
@@ -199,16 +192,21 @@ const DELETE_TOOL_ENTRY_STATUS: Record<DeleteToolMode, string> = {
   "temp-delete": "Temporary Delete mode: click a component or wire to toggle it, drag a box to toggle enclosed components and wires, Esc cancels."
 };
 const WIRE_TOOL_ENTRY_STATUS: Record<WireToolVariant, string> = {
-  signal: "Wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates.",
-  wide: "Wide wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+  signal: "Wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish.",
+  wide: "Wide wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
 };
 const MOVE_BEHAVIOR_TOOL_ENTRY_STATUS: Record<MoveBehaviorToolEntryBehavior, string> = {
-  stretch: "Stretch move active: moved components pull attached wire endpoints. Shift+M switches to move-only.",
-  moveOnly: "Move-only active: moved components do not pull attached wires. M switches back to stretch move."
+  stretch: "Stretch move: click an object or drag a box to move with connections. Esc cancels.",
+  moveOnly: "Move only: click an object or drag a box to move without pulling attached wires. Esc cancels."
 };
+export const COPY_PICK_STATUS = "Copy mode: click an object or drag a box to copy. Esc cancels.";
 
 export function isToolMode(value: string): value is ToolMode {
   return TOOL_MODE_SET.has(value);
+}
+
+export function isMoveOrRotateMode(mode: ToolMode) {
+  return mode === "move" || mode === "rotate";
 }
 
 export function isDeleteToolMode(mode: ToolMode): mode is DeleteToolMode {
@@ -221,6 +219,10 @@ export function projectSchematicKeyboardShortcut(
 ): SchematicKeyboardShortcutIntent {
   const key = snapshot.key.toLowerCase();
   const modifierKey = !!snapshot.ctrlKey || !!snapshot.metaKey;
+
+  if (modifierKey && snapshot.shiftKey && key === "l") {
+    return { kind: "toggle-log", preventDefault: true, stopPropagation: true };
+  }
 
   if (modifierKey && key === "z") {
     return snapshot.shiftKey
@@ -271,12 +273,15 @@ export function projectSchematicKeyboardShortcut(
     };
   }
 
-  if (snapshot.shiftKey && !snapshot.ctrlKey && !snapshot.metaKey && !snapshot.altKey && key === "r") {
-    return { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false };
-  }
-
-  if (key === "r") {
-    return { kind: "rotate", preventDefault: true, stopPropagation: false };
+  if (key === "r" && !snapshot.metaKey && !snapshot.altKey) {
+    if (snapshot.ctrlKey && !snapshot.shiftKey) {
+      return { kind: "mirror", axis: "y", preventDefault: true, stopPropagation: true };
+    }
+    if (!snapshot.ctrlKey) {
+      return snapshot.shiftKey
+        ? { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false }
+        : { kind: "rotate", preventDefault: true, stopPropagation: false };
+    }
   }
 
   if (key === "f") {
@@ -309,10 +314,6 @@ export function projectSchematicEscapeKeyIntent(input: SchematicEscapeKeyProject
     return { kind: "close-instance-options", preventDefault: true, stopPropagation: true, focusCanvas: false };
   }
 
-  if (input.editable && input.noteEditorTarget && input.noteEditingActive) {
-    return { kind: "finish-note-edit", preventDefault: true, stopPropagation: true, focusCanvas: true };
-  }
-
   if (input.editable) {
     return { kind: "none", preventDefault: false, stopPropagation: false, focusCanvas: false };
   }
@@ -332,10 +333,11 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
       return { kind: "create-note" };
     case "rotate":
       return { kind: "rotate" };
+    // The toolbar names the reflection axis. The editor takes the coordinate to flip.
     case "mirror-x":
-      return { kind: "mirror", axis: "x" };
-    case "mirror-y":
       return { kind: "mirror", axis: "y" };
+    case "mirror-y":
+      return { kind: "mirror", axis: "x" };
     case "delete":
       return { kind: "delete-selected-or-begin-tool" };
     case "temp-delete":
@@ -350,6 +352,16 @@ export function projectSchematicToolbarCommandIntent(command: string): Schematic
       return { kind: "undo" };
     case "redo":
       return { kind: "redo" };
+    case "library":
+      return { kind: "open-library" };
+    case "analysis":
+      return { kind: "open-right-view", view: "analysis" };
+    case "netlist":
+      return { kind: "open-right-view", view: "netlist" };
+    case "diagnostics":
+      return { kind: "open-right-view", view: "netlist" };
+    case "log":
+      return { kind: "toggle-log" };
     default:
       return { kind: "none" };
   }
@@ -405,7 +417,7 @@ export function buildPlacementToolEntryIntent<TItem>(
 export function buildMoveBehaviorToolEntryIntent(behavior: MoveBehaviorToolEntryBehavior): MoveBehaviorToolEntryIntent {
   return {
     moveBehavior: behavior,
-    nextMode: "select",
+    nextMode: "move",
     closeInstancePanel: true,
     syncToolUi: true,
     focusTarget: "canvas",
@@ -419,24 +431,9 @@ export function buildCopyToolNoSourceEntryIntent(): CopyToolNoSourceEntryIntent 
     closeInstancePanel: true,
     suppressNextBlankClick: false,
     hasSource: false,
-    awaitingReference: false,
     syncToolUi: true,
     focusTarget: "canvas",
-    status: "Copy mode: click an object to copy, or Esc cancels."
-  };
-}
-
-export function buildCopyToolReferenceEntryIntent(sourceCount: number): CopyToolReferenceEntryIntent {
-  return {
-    nextMode: "copy",
-    closeInstancePanel: true,
-    suppressNextBlankClick: false,
-    hasSource: false,
-    awaitingReference: true,
-    sourceCount,
-    syncToolUi: true,
-    focusTarget: "canvas",
-    status: `Copy mode: ${sourceCount} object${sourceCount === 1 ? "" : "s"} selected. Click a reference point; Esc cancels.`
+    status: COPY_PICK_STATUS
   };
 }
 
@@ -446,7 +443,6 @@ export function buildCopyToolSourceEntryIntent(sourceCount: number): CopyToolSou
     closeInstancePanel: true,
     suppressNextBlankClick: false,
     hasSource: true,
-    awaitingReference: false,
     sourceCount,
     updateCopyPreview: true,
     syncToolUi: true,
@@ -466,6 +462,7 @@ export function projectSchematicToolbarCommand(
     (button.command === "delete" && input.mode === "delete") ||
     (button.command === "temp-delete" && input.mode === "temp-delete") ||
     (button.command === "copy" && input.mode === "copy") ||
+    (button.command === "rotate" && input.mode === "rotate") ||
     (button.command === "presentation" && input.presentationMode);
   const projection: ToolbarCommandProjection = {
     active,

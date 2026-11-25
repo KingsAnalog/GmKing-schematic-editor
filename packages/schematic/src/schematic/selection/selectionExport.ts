@@ -1,4 +1,4 @@
-import { renderSchematicSvgScene, schematicSvgSceneBounds } from "../svgRenderer";
+import { renderSchematicSvgScene, schematicSvgSceneBounds, type SchematicSvgScene } from "../svgRenderer";
 import { svgIdFragment } from "../svgId";
 import type { Rect } from "../view-geometry";
 import type { ComponentInstance, InductorCoupling, NetLabel, Point, SchematicConnections, SchematicNote, Wire } from "../types";
@@ -8,28 +8,26 @@ import type { SymbolTemplateContext } from "../symbolTemplateModel";
 const EXPORT_PADDING = 24;
 
 export interface SchematicSelectionExportInput extends SymbolTemplateContext {
+  display?: SchematicSvgScene["display"];
+  crossingJunctions?: SchematicSvgScene["crossingJunctions"];
   connections?: SchematicConnections;
   components: ComponentInstance[];
   inductorCouplings?: InductorCoupling[];
   wires: Wire[];
+  wireEndpoints?: SchematicSvgScene["wireEndpoints"];
+  busWireIds?: SchematicSvgScene["busWireIds"];
   junctionPoints: Point[];
   junctionColors?: Readonly<Record<string, string>>;
   netLabels: NetLabel[];
   netLabelStatuses?: Readonly<Record<string, NetLabelStatus>>;
   notes: SchematicNote[];
+  layerObjectOrder?: readonly string[];
+  noteGraphics?: SchematicSvgScene["noteGraphics"];
   presentationMode?: boolean;
   padding?: number;
-  renderedNoteHtml?: Readonly<Record<string, string>>;
-  renderedNoteText?: Readonly<Record<string, string>>;
-  renderedNoteTextStyles?: Readonly<Record<string, RenderedNoteTextStyle>>;
   namespace?: string;
   showGrid?: boolean;
   backgroundColor?: string | null;
-}
-
-export interface RenderedNoteTextStyle {
-  fontWeight?: number;
-  fontStyle?: "italic";
 }
 
 export interface SchematicSelectionSvgExport {
@@ -54,11 +52,10 @@ export function buildSchematicSelectionSvg(input: SchematicSelectionExportInput)
     showGrid: input.showGrid,
     backgroundColor: input.backgroundColor
   };
-  const rendered = renderSchematicSvgScene(input, { ...options, portableNotes: false });
+  const rendered = renderSchematicSvgScene(input, options);
   if (!rendered) return null;
-  const clipboard = renderSchematicSvgScene(input, { ...options, portableNotes: true });
   return {
     ...rendered,
-    clipboardSvg: clipboard?.svg
+    clipboardSvg: rendered.svg
   };
 }

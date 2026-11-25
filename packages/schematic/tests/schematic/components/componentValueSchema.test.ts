@@ -59,7 +59,7 @@ describe("shared component setting contracts", () => {
     expect(() => serializeSchematicDocumentFile(document)).toThrow(/pinMode/);
   });
 
-  it("accepts odd rectangle dimensions through property edits and file decoding", () => {
+  it("accepts rectangle dimensions and rejects legacy pin commands", () => {
     const document = createEmptySchematicDocument();
     const component = fixtureComponent("rectangle", "X1", 210, 230);
     document.components.push(component);
@@ -67,8 +67,7 @@ describe("shared component setting contracts", () => {
     const selection = { selectedIds: [component.id], selectedNoteIds: [] };
     for (const command of [
       { kind: "rectangle-width", value: 5 },
-      { kind: "rectangle-height", value: 3 },
-      { kind: "rectangle-left-pins", value: 2 }
+      { kind: "rectangle-height", value: 3 }
     ] as const) {
       expect(executeSchematicPropertyBatchCommand(document, selection, command).kind).toBe("changed");
       expect(componentValueIssue(component)).toBeNull();
@@ -76,5 +75,11 @@ describe("shared component setting contracts", () => {
     }
     expect(component.values.rectangleWidthGrid).toBe("5");
     expect(component.values.rectangleHeightGrid).toBe("3");
+
+    const before = structuredClone(document);
+    expect(executeSchematicPropertyBatchCommand(document, selection, {
+      kind: "rectangle-left-pins", value: 2
+    })).toMatchObject({ kind: "rejected", rejectionReason: "invalid-value" });
+    expect(document).toEqual(before);
   });
 });

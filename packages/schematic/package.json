@@ -1,6 +1,6 @@
 {
   "name": "@edahelper/schematic",
-  "version": "0.1.0",
+  "version": "1.0.0-beta",
   "type": "module",
   "files": [
     "dist",
@@ -51,18 +51,10 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.20.3",
-    "@codemirror/commands": "^6.10.4",
-    "@codemirror/language": "^6.12.4",
-    "@codemirror/legacy-modes": "^6.5.3",
-    "@codemirror/state": "^6.7.1",
-    "@codemirror/view": "^6.43.7",
     "@joint/core": "^4.1.3",
-    "@milkdown/kit": "^7.21.3",
     "dompurify": "^3.4.18",
     "json-stringify-pretty-compact": "^4.0.0",
-    "nerdamer": "^1.1.13",
-    "remark-math": "^6.0.0"
+    "nerdamer": "^1.1.13"
   },
   "devDependencies": {
     "esbuild": "^0.25.12",

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-manual-title="Schematic Editor 使用说明">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Schematic Editor Help</title>
+    <script vite-ignore src="./editor-preferences.js"></script>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <main class="schematic-manual">
+      <article lang="en">
+        <a href="./">← Open Schematic Editor</a>
+        <h1>Schematic Editor Help</h1>
+        <section>
+          <h2>Place components and shapes</h2>
+          <p>Open <strong>Library</strong> to browse symbols and shapes. Press <kbd>I</kbd> to search for a component. The right column shows its name, symbol, and editable properties. Set any parameters, choose <strong>Place</strong>, then click the canvas. You can also edit an existing object in the main <strong>Properties</strong> panel.</p>
+        </section>
+        <section>
+          <h2>Connect and label nets</h2>
+          <p>Press <kbd>W</kbd> and click a pin, wire, or grid point to start a wire. The preview shows the snap point and the route. Click to add bends, then double-click or press <kbd>Enter</kbd> at the endpoint to finish. Press <kbd>L</kbd>, enter a net name, and confirm. Click near a wire or junction when the snap marker appears to place the label. Press <kbd>Esc</kbd> to cancel.</p>
+          <p>Net Labels are case-sensitive. Wires on the same sheet with identical labels are electrically connected. Use <code>OUT&lt;7:0&gt;</code> for a bus. To use one bit, draw a separate wire and label it <code>OUT&lt;3&gt;</code>.</p>
+        </section>
+        <section>
+          <h2>Arrange the drawing</h2>
+          <p>Use <strong>Layers</strong> to show, hide, or lock layers. Use <strong>Properties → Layer</strong> to move a selected object to a different layer. Press <kbd>Ctrl+R</kbd> to mirror across X or <kbd>Shift+R</kbd> to mirror across Y.</p>
+          <p>Press <kbd>R</kbd> to rotate the selection 90° in place. With an empty selection, press <kbd>R</kbd>, click a component to rotate it, then click the destination. Repeat for other components or press <kbd>Esc</kbd> to exit.</p>
+          <p>Press <kbd>M</kbd> to move with attached wires, <kbd>Shift+M</kbd> to move while leaving unselected wires in place, or <kbd>C</kbd> to copy. If objects are selected, click the destination to place them and finish. With an empty selection, click an object or drag a box from blank canvas to pick a group, then click its destination. You can keep picking and placing until you press <kbd>Esc</kbd>. Copying a subcircuit symbol on its sheet creates another instance of the same child sheet.</p>
+        </section>
+        <section>
+          <h2>Add a note</h2>
+          <p>Choose <strong>Note</strong> or press <kbd>Shift+N</kbd>. Enter text, set the font size, and choose one of the nine anchors. Press <kbd>Enter</kbd> to confirm, then click a snapped point on the canvas. <kbd>Shift+Enter</kbd> adds a line while entering text.</p>
+          <p>Use <code>\(…\)</code> for inline TeX and <code>\[…\]</code> for display TeX. Select a placed note to edit its text and anchor in <strong>Properties</strong>. SVG and PNG exports include the typeset formulas.</p>
+        </section>
+        <section>
+          <h2>Build a hierarchical schematic</h2>
+          <p>Open <strong>Hierarchy</strong> in the right dock and create a sheet. Press <kbd>P</kbd> to set a Pin Name, Type and Direction, then place the pin on the sheet and connect it. Edit an existing pin in <strong>Properties</strong>.</p>
+          <p>Choose <strong>Library → Hierarchy</strong> in the parent sheet to place the sheet symbol. Connect wires to the square terminals. Press <kbd>E</kbd> and click a symbol to enter its sheet. Press <kbd>Ctrl+E</kbd> to return one level. The Hierarchy panel shows the current path, included cells, pin list, and callers.</p>
+          <p>Pin names are case-sensitive. Use a range in a Pin Name to expose a bus on the sheet symbol, and connect it to a bus of the same width. The arrows in the pin list set its netlist order.</p>
+          <p>Renaming a pin preserves its connection. Moving a pin to another side or deleting it leaves parent wires where they are. Reconnect any loose ends in the parent sheet. Export <strong>Project JSON</strong> to save all sheets in one editable file.</p>
+        </section>
+        <section>
+          <h2>Save and reopen a schematic</h2>
+          <p>Workspace tabs are saved in this browser. Use the tab strip to import or paste schematic JSON into a new tab. Export JSON to keep an editable backup or export SVG or PNG to share an image.</p>
+        </section>
+        <section>
+          <h2>Work with an AI Agent</h2>
+          <p>Run <code>npm run agent:connector</code> from the Schematic Editor source folder. In the editor, choose <strong>AI → Hand off to AI → Copy text</strong> and paste the prompt into your local Agent. Allow local network access if the browser asks. Pairing uses a two-minute, single-use code. A paired session lasts up to two hours.</p>
+          <p>When paired, the green bar shows <strong>AI connected</strong>. You can edit normally. AI transactions use the latest project revision and enter the same Undo history. <strong>Suspend</strong> pauses AI access. <strong>Disconnect</strong> and <strong>Reclaim editing</strong> both revoke the session. The connector only listens on this computer.</p>
+        </section>
+        <section>
+          <h2>Editor options</h2>
+          <p>Use <strong>Language</strong> to switch between English and Simplified Chinese. <strong>Color mode</strong> can follow your system or stay in Light or Dark mode. Both settings are saved in this browser and also apply to this manual.</p>
+          <p>The gear opens <strong>Options</strong>, which also contains the current schematic's symbol template. Choose <strong>Wire crossings → Plain</strong> for straight crossings or <strong>Hop</strong> to show a bridge where wires cross without joining. Dots mark actual connections in either mode.</p>
+          <p><strong>Wire angle</strong> sets the drawing mode to <strong>Orthogonal</strong>, <strong>45 Degree</strong>, or <strong>Free</strong>. The preference is saved in this browser.</p>
+          <p><strong>Default text font</strong> sets the font for the current schematic's notes and net labels. Select an individual note or net label and choose <strong>Properties → Font</strong> to override it or return to <strong>Document default</strong>. These settings are included in schematic JSON and used for image export.</p>
+          <p><strong>Options → Process</strong> sets the default device models for this schematic. Select a transistor, resistor, capacitor or inductor and use <strong>Properties → Device model</strong> to override its model. Choose <strong>Custom</strong> as the process to enter model names directly. A blank custom field uses the process default. The process and overrides are stored in the schematic JSON and used for SPICE and Spectre output.</p>
+        </section>
+      </article>
+      <article lang="zh-CN">
+        <a href="./">← 打开 Schematic Editor</a>
+        <h1>Schematic Editor 使用说明</h1>
+        <section>
+          <h2>放置元件和图形</h2>
+          <p>打开<strong>器件库</strong>浏览符号和图形，或按 <kbd>I</kbd> 搜索元件。右栏依次显示器件名称、符号和可编辑属性。设置参数后选择<strong>放置</strong>，再点击画布。在画布上选中对象后，也可以在<strong>属性</strong>面板中编辑。</p>
+        </section>
+        <section>
+          <h2>连接导线并命名网络</h2>
+          <p>按 <kbd>W</kbd>，点击引脚、导线或网格点开始绘制。预览会显示吸附点和预计路径。单击添加拐点，在终点双击或按 <kbd>Enter</kbd> 完成。按 <kbd>L</kbd> 打开网络标签窗口，输入并确认网络名。导线或连接点附近出现吸附标记时，点击放置标签。按 <kbd>Esc</kbd> 取消。</p>
+          <p>网络标签严格区分大小写。同一张原理图内，标签名称完全相同的导线会电气相连。将标签设为 <code>OUT&lt;7:0&gt;</code> 可定义总线。需要使用某一位时，另画一段导线并标成 <code>OUT&lt;3&gt;</code>。</p>
+        </section>
+        <section>
+          <h2>整理图纸</h2>
+          <p>在<strong>图层</strong>中管理图层的可见性和锁定状态，通过<strong>属性 → 图层</strong>调整所选对象所属的图层。按 <kbd>Ctrl+R</kbd> 沿 X 轴镜像，按 <kbd>Shift+R</kbd> 沿 Y 轴镜像。</p>
+          <p>按 <kbd>R</kbd> 将选中的对象就地旋转 90°。没有选中对象时，按 <kbd>R</kbd> 后先点击器件旋转，再点击目标位置放置。可以继续旋转其他器件，或按 <kbd>Esc</kbd> 退出。</p>
+          <p>按 <kbd>M</kbd> 移动对象并拉伸相连导线，按 <kbd>Shift+M</kbd> 仅移动对象，按 <kbd>C</kbd> 复制。已选中对象时，点击目标位置即可放置并退出。没有选中对象时，先点击对象，再点击目标位置，可以连续拾取和放置，直到按 <kbd>Esc</kbd> 结束。</p>
+        </section>
+        <section>
+          <h2>添加注释</h2>
+          <p>点击<strong>注释</strong>或按 <kbd>Shift+N</kbd>，输入文本并选择字号和九个定位点之一。按 <kbd>Enter</kbd> 确认，再点击画布上的吸附点放置。输入时可用 <kbd>Shift+Enter</kbd> 换行。</p>
+          <p>用 <code>\(…\)</code> 插入行内 TeX，用 <code>\[…\]</code> 单独显示公式。选中已放置的注释，在<strong>属性</strong>中修改文本和定位点。SVG 和 PNG 导出会保留公式排版。</p>
+        </section>
+        <section>
+          <h2>创建层次原理图</h2>
+          <p>在右栏打开<strong>层次</strong>并新建子图。按 <kbd>P</kbd> 设置端口名称、类型和所在边，再到画布放置并接线。已有端口可在<strong>属性</strong>中修改。</p>
+          <p>在父图通过<strong>器件库 → 层次</strong>放置子图符号，将导线接到方框端子。按 <kbd>E</kbd> 后点选符号进入子图，按 <kbd>Ctrl+E</kbd> 返回上一层。层次面板显示当前路径、包含的子图、端口列表和引用。</p>
+          <p>Pin Name 严格区分大小写，也可使用总线范围。父图中的端子接入同宽总线。用端口列表中端口旁的箭头调整网表顺序。</p>
+          <p>端口改名会保留连接。修改所在边或删除端口时，父图导线保留在原处，可在父图手动重接悬空线头。导出<strong>项目 JSON</strong>可保存全部子图。</p>
+        </section>
+        <section>
+          <h2>保存与重新打开图纸</h2>
+          <p>工作区标签页保存在当前浏览器中。通过标签栏导入或粘贴电路 JSON，可在新标签页打开图纸。导出 JSON 可保留可编辑的备份，导出 SVG 或 PNG 可分享图像。</p>
+        </section>
+        <section>
+          <h2>与 AI Agent 协作</h2>
+          <p>在 Schematic Editor 源码目录运行 <code>npm run agent:connector</code>。在编辑器选择 <strong>AI → 交给 AI 修改 → 复制文本</strong>，将提示词粘贴给本机 Agent。若浏览器询问，请允许本地网络访问。配对码两分钟内可以使用一次，配对成功后会话最长持续两小时。</p>
+          <p>配对后，顶部绿条显示<strong>AI 已连接</strong>，仍可正常手工编辑。AI 事务按最新项目修订号提交，与手工操作使用同一个撤销历史。<strong>暂停连接</strong>会暂停 AI 访问。<strong>取消连接</strong>和<strong>收回编辑权</strong>都会撤销会话。连接器只监听本机。</p>
+        </section>
+        <section>
+          <h2>编辑器选项</h2>
+          <p>通过 <strong>Language</strong> 在英文和简体中文之间切换。<strong>颜色模式</strong>可跟随系统，也可固定使用亮色或暗色。两项设置均保存在当前浏览器，并应用于本说明。</p>
+          <p>点击齿轮打开<strong>选项</strong>，可设置当前电路的符号模板。在 <strong>Wire crossings</strong> 中选择直线交叉（Plain）或跨线桥（Hop）。两种模式都用圆点表示真实连接。</p>
+          <p>在<strong>导线角度</strong>中选择正交、45 度或自由布线。此偏好保存在当前浏览器。</p>
+          <p>通过 <strong>Default text font</strong> 选择当前图纸的注释和网络标签默认字体。在<strong>属性 → 字体</strong>中可覆盖单个对象的字体，或恢复为文档默认值。这些设置随电路 JSON 保存，并用于图像导出。</p>
+          <p><strong>选项 → 工艺</strong>决定当前原理图的默认器件模型。选中晶体管、电阻、电容或电感后，可在<strong>属性 → 器件模型</strong>中单独指定。工艺选择<strong>自定义</strong>时可直接输入模型名称，留空则采用工艺默认值。工艺和单个器件的模型设置随原理图 JSON 保存，并用于生成 SPICE 和 Spectre 网表。</p>
+        </section>
+      </article>
+      <footer><a href="https://github.com/KingsAnalog/GmKing-schematic-editor">GmKing Schematic Editor</a> · MIT © 2026 RarityBrown</footer>
+    </main>
+  </body>
+</html>

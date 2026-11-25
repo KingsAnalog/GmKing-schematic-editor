@@ -1,3 +1,4 @@
+import type { CopyLayerTarget } from "./copyModel";
 import { SchematicCopyController } from "./copyController";
 import {
   applyCopyPlacementDocumentOp,
@@ -36,7 +37,7 @@ export class SchematicPlacementCommitCoordinator {
     private readonly factories: SchematicPlacementCommitFactories
   ) {}
 
-  commitPlacement(point: Point): SchematicPlacementCommitOutcome {
+  commitPlacement(point: Point, layerId?: string): SchematicPlacementCommitOutcome {
     const commit = this.placementTool.buildCommit(point, {
       createId: this.factories.createId,
       nextRef: this.factories.nextComponentRef
@@ -48,6 +49,10 @@ export class SchematicPlacementCommitCoordinator {
       };
     }
 
+    if (layerId !== undefined) {
+      commit.fragment.components.forEach(component => { component.values["layer:id"] = layerId; });
+      commit.fragment.wires.forEach(wire => { wire.layerId = layerId; });
+    }
     return this.commitOutcome(
       "placement",
       applyPlacementCommitDocumentOp(this.document, commit),
@@ -56,8 +61,8 @@ export class SchematicPlacementCommitCoordinator {
     );
   }
 
-  commitCopy(point: Point): SchematicPlacementCommitOutcome {
-    const placement = this.copyTool.preparePlacement(point, this.factories);
+  commitCopy(point: Point, target?: CopyLayerTarget): SchematicPlacementCommitOutcome {
+    const placement = this.copyTool.preparePlacement(point, this.factories, this.document, target);
     if (!placement.ok) {
       return {
         kind: "status",

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { findInstancePaletteMatches, InstanceSelector } from "../../../src/schematic/instanceSelector";
+import { findInstancePaletteMatches, InstanceSelector, paletteSymbolPreview } from "../../../src/schematic/instanceSelector";
 
 describe("schematic instance palette search", () => {
   it("finds component and template names containing the query", () => {
@@ -31,6 +31,15 @@ describe("schematic instance palette search", () => {
     expect(firstIds.size).toBeGreaterThan(2);
     expect([...firstIds].every((id) => !secondIds.has(id))).toBe(true);
     expect(first.target.innerHTML).not.toContain('id="schematic-instance-query"');
+  });
+
+  it.each([
+    ["rectangle", "-4 -4 68 48"],
+    ["triangle", "-4 -4 88 88"]
+  ] as const)("pads the %s preview without distorting its outline", (type, viewBox) => {
+    const preview = paletteSymbolPreview(type);
+    expect(preview).toContain(`viewBox="${viewBox}"`);
+    expect(preview).toContain('preserveAspectRatio="xMidYMid meet"');
   });
 
   it.each([

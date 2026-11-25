@@ -90,7 +90,7 @@ function documentFixture(): SchematicDocument {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "**gain**",
       backgroundColor: null,
       fontSizePx: 16
@@ -198,7 +198,7 @@ describe("single schematic document file codec", () => {
     expect(wireLines[0]).toContain('"id": "horizontal"},');
     expect(wireLines[0].length).toBeGreaterThan(120);
     expect(noteLines).toEqual([
-      '      {"x": 20, "y": 120, "width": 180, "height": 60, "format": "markdown", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",',
+      '      {"x": 20, "y": 120, "width": 180, "height": 60, "anchor": "upperLeft", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",',
       '        "text": "**gain**"}'
     ]);
     expect(lines.length).toBeLessThan(spacious.trimEnd().split("\n").length);
@@ -213,6 +213,7 @@ describe("single schematic document file codec", () => {
       "connections",
       "junctionAppearances",
       "netLabels",
+      "layers",
       "notes"
     ]);
     expect(schematic).not.toHaveProperty("junctions");
@@ -224,6 +225,63 @@ describe("single schematic document file codec", () => {
     expect(exportedComponent.appearance).not.toHaveProperty("hoverColor");
     expect(exportedWire.appearance).not.toHaveProperty("renderedStrokeWidth");
     expect(document.junctions).toEqual([{ x: 999, y: 999 }]);
+  });
+
+  it("round trips per-object layer state and omits empty defaults", () => {
+    const document = documentFixture();
+    document.layerObjectStates = {
+      "component-1": { visible: false, z: 3 },
+      horizontal: { z: 2 },
+      "note-1": { visible: true }
+    };
+
+    const serialized = serializeSchematicDocumentFile(document);
+    const restored = parseSchematicDocumentFile(serialized);
+    expect(restored.layerObjectStates).toEqual({
+      "component-1": { visible: false, z: 3 },
+      horizontal: { z: 2 },
+      "horizontal-segment-1": { z: 2 }
+    });
+    expect(serialized).toContain('"layerObjectStates": {"component-1":');
+    expect(serializeSchematicDocumentFile({ ...document, layerObjectStates: {} }))
+      .not.toContain('"layerObjectStates"');
+  });
+
+  it("round trips assigned wire, label and note layers in the current document format", () => {
+    const document = documentFixture();
+    document.layers = [
+      { id: "layer-1", name: "Base", visible: true, locked: false },
+      { id: "layer-2", name: "Overlay", visible: true, locked: false }
+    ];
+    document.wires.forEach(wire => { wire.layerId = "layer-2"; });
+    document.netLabels.forEach(label => { label.layerId = "layer-2"; });
+    document.notes.forEach(note => { note.layerId = "layer-2"; });
+    const file = serializeSchematicDocumentFile(document);
+    const restored = parseSchematicDocumentFile(file);
+    for (const objects of [restored.wires, restored.netLabels, restored.notes]) {
+      expect(objects.length).toBeGreaterThan(0);
+      expect(objects.every(object => object.layerId === "layer-2")).toBe(true);
+    }
+    expect(restored.wires.some(wire => wire.id === "horizontal-segment-1")).toBe(true);
+    const normalized = serializeSchematicDocumentFile(restored);
+    expect(serializeSchematicDocumentFile(parseSchematicDocumentFile(normalized))).toBe(normalized);
+  });
+
+  it("rejects malformed per-object layer state", () => {
+    const invalidStates: unknown[] = [
+      [],
+      { "component-1": null },
+      { "component-1": { visible: "false" } },
+      { "component-1": { z: "3" } },
+      { "component-1": { locked: true } },
+      { "": { visible: false } },
+      { constructor: { visible: false } }
+    ];
+    invalidStates.forEach((layerObjectStates) => {
+      const file = emptyFile();
+      file.schematic.layerObjectStates = layerObjectStates as never;
+      expectFileError(() => parseValue(file), "invalid-schema");
+    });
   });
 
   it("keeps empty collections inline and long note strings lossless", () => {
@@ -351,7 +409,7 @@ describe("single schematic document file codec", () => {
     const compacted = serializeSchematicDocumentFile(withoutHeight);
 
     expect(compacted).toContain(
-      '      {"x": 20, "y": 120, "width": 180, "format": "markdown", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",\n'
+      '      {"x": 20, "y": 120, "width": 180, "anchor": "upperLeft", "backgroundColor": null, "fontSizePx": 16, "id": "note-1",\n'
       + '        "text": "**gain**"}'
     );
 
@@ -423,7 +481,7 @@ describe("single schematic document file codec", () => {
       y: 120,
       width: 180,
       height: 60,
-      format: "markdown",
+      anchor: "upperLeft",
       text: "**gain**",
       backgroundColor: null,
       fontSizePx: 16
@@ -667,16 +725,16 @@ describe("single schematic document file codec", () => {
     ["unknown connection field", (file: SchematicFile) => {
       Object.assign(file.schematic.connections, { unexpected: true });
     }],
-    ["unknown note format", (file: SchematicFile) => {
+    ["unknown note anchor", (file: SchematicFile) => {
       file.schematic.notes.push({
         id: "note",
         x: 0,
         y: 0,
         width: 80,
-        format: "plain",
+        anchor: "upperLeft",
         text: ""
       });
-      (file.schematic.notes[0] as { format: string }).format = "html";
+      (file.schematic.notes[0] as { anchor: string }).anchor = "invalid";
     }]
   ])("rejects %s", (_name, mutate) => {
     const file = emptyFile();
@@ -824,7 +882,7 @@ describe("single schematic document file codec", () => {
       x: 0,
       y: 0,
       width: 180,
-      format: "plain",
+      anchor: "upperLeft",
       text: "x".repeat(MAX_SCHEMATIC_FILE_BYTES)
     });
     expectFileError(() => serializeSchematicDocumentFile(oversized), "file-too-large");
@@ -874,12 +932,11 @@ describe("Blob download helper", () => {
       click,
       remove
     };
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     vi.stubGlobal("document", {
+      defaultView: { setTimeout, URL: { createObjectURL, revokeObjectURL } },
       createElement: vi.fn(() => link),
       body: { appendChild }
     });
-    vi.stubGlobal("window", { setTimeout });
     const blob = new Blob(["{}"], { type: "application/json" });
 
     downloadBlob(blob, "adc.sch.json");
@@ -914,12 +971,11 @@ describe("Blob download helper", () => {
       click,
       remove
     };
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     vi.stubGlobal("document", {
+      defaultView: { setTimeout, URL: { createObjectURL, revokeObjectURL } },
       createElement: vi.fn(() => link),
       body: { appendChild: vi.fn() }
     });
-    vi.stubGlobal("window", { setTimeout });
 
     expect(() => downloadBlob(new Blob(["{}"]), "adc.sch.json")).toThrow("download blocked");
     expect(remove).toHaveBeenCalledOnce();

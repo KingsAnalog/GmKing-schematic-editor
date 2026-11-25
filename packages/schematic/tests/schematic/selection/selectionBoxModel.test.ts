@@ -279,6 +279,21 @@ describe("schematic selection box model", () => {
     expect(intent.noteIds).toBe(noteIds);
   });
 
+  it.each(["move", "copy"] as const)("picks the boxed targets directly in %s mode", mode => {
+    const input = {
+      mode,
+      additive: false,
+      hasActiveAnalysisPick: false,
+      selectionState: createSchematicSelectionState()
+    };
+    const ids = ["S1", "w1"];
+    const noteIds = ["note-1"];
+    expect(projectFinishedSelectionBox({ ...input, selectionBox: selectionBox({ ids, noteIds }) }))
+      .toEqual({ kind: "pick-tool-targets", mode, ids, noteIds });
+    expect(projectFinishedSelectionBox({ ...input, selectionBox: selectionBox() })).toEqual({ kind: "noop" });
+    expect(projectFinishedSelectionBox({ ...input, selectionBox: selectionBox({ tiny: true }) })).toEqual({ kind: "noop" });
+  });
+
   it("projects a plain box as replacement mixed selection", () => {
     const intent = projectFinishedSelectionBox({
       selectionBox: selectionBox({ ids: ["R1", "w1"], noteIds: ["note-1"] }),

@@ -7,6 +7,7 @@ import type { NetLabel } from "./types";
 import { NET_LABEL_FONT_SIZE, NET_LABEL_HEIGHT, netLabelPosition, netLabelWidth } from "./netLabelModel";
 import type { NetLabelStatus } from "./netResolution";
 import { wireColor } from "./networkColorModel";
+import { schematicTextFontStack, type SchematicTextFont } from "./schematicFont";
 import {
   resolvedWireAppearance,
   wireDigitalLocalGeometry,
@@ -75,11 +76,11 @@ export function wireAppearance(wire: Wire): WireAppearance {
   return resolvedWireAppearance(wire);
 }
 
-export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean } = {}) {
+export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean; bus?: boolean } = {}) {
   const preview = !!options.preview;
   const deleted = !!wire.temporarilyDeleted;
   const baseStroke = wireColor(wire);
-  const baseWidth = wireStrokeWidth(wire);
+  const baseWidth = wireStrokeWidth(wire, options.bus);
   return {
     stroke: preview ? SCHEMATIC_SELECTION_COLOR : deleted ? "#b00020" : baseStroke,
     strokeWidth: preview ? Math.max(2, baseWidth) : baseWidth,
@@ -93,10 +94,9 @@ export function wireLineAttrs(wire: Wire, options: { preview?: boolean; selected
   };
 }
 
-export function wireSelectionHaloAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean } = {}) {
-  const baseWidth = wireStrokeWidth(wire);
+export function wireSelectionHaloAttrs(wire: Wire, options: { preview?: boolean; selected?: boolean; bus?: boolean } = {}) {
+  const baseWidth = wireStrokeWidth(wire, options.bus);
   return {
-    connection: true,
     stroke: SCHEMATIC_SELECTION_COLOR,
     strokeWidth: baseWidth + 3,
     strokeLinecap: "butt",
@@ -138,7 +138,7 @@ export function makeWireCell(
     labels: wireDecorationLabels(wire, lineAttrs, options.endpointConnections),
     attrs: {
       line: lineAttrs,
-      selectionHalo: wireSelectionHaloAttrs(wire, options),
+      selectionHalo: { connection: true, ...wireSelectionHaloAttrs(wire, options) },
       wrapper: {
         pointerEvents: preview ? "none" : "stroke"
       }
@@ -146,12 +146,14 @@ export function makeWireCell(
   });
   link.set("wireId", wire.id);
   link.set("preview", preview);
+  link.attr("root/data-layer", "wire");
   return link;
 }
 
 export interface WireCellRenderOptions {
   preview?: boolean;
   selected?: boolean;
+  bus?: boolean;
   endpointConnections?: WireEndpointConnections;
 }
 
@@ -289,6 +291,7 @@ export function makeJunctionCell(point: Point, options: { selected?: boolean; co
   });
   cell.set("junction", true);
   cell.set("junctionKey", pointKey(point));
+  cell.attr("root/data-layer", "junction");
   return cell;
 }
 
@@ -296,12 +299,14 @@ export function netLabelTextAttrs(options: {
   selected?: boolean;
   status?: NetLabelStatus;
   preview?: boolean;
+  fontFamily?: SchematicTextFont;
+  documentFont?: SchematicTextFont;
 } = {}) {
   const conflict = options.status === "conflict";
   const inactive = options.status === "inactive";
   return {
     fill: options.selected || options.preview ? "#005f9e" : conflict ? "#b00020" : "#111111",
-    fontFamily: "Arial, Helvetica, sans-serif",
+    fontFamily: schematicTextFontStack(options.fontFamily, options.documentFont),
     fontSize: NET_LABEL_FONT_SIZE,
     fontWeight: 400,
     textAnchor: "start",
@@ -317,7 +322,7 @@ export function netLabelTextAttrs(options: {
 
 export function makeNetLabelCell(
   label: NetLabel,
-  options: { selected?: boolean; status?: NetLabelStatus; preview?: boolean } = {}
+  options: { selected?: boolean; status?: NetLabelStatus; preview?: boolean; documentFont?: SchematicTextFont } = {}
 ) {
   const position = netLabelPosition(label);
   const cell = new shapes.standard.Rectangle({
@@ -331,12 +336,13 @@ export function makeNetLabelCell(
         pointerEvents: options.preview ? "none" : "all"
       },
       label: {
-        ...netLabelTextAttrs(options),
+        ...netLabelTextAttrs({ ...options, fontFamily: label.fontFamily }),
         text: label.name
       }
     }
   });
   cell.set("netLabelId", label.id);
   cell.set("preview", !!options.preview);
+  cell.attr("root/data-layer", "label");
   return cell;
 }

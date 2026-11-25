@@ -1,0 +1,7 @@
+// analog-tools structural netlist
+simulator lang=spectre
+subckt schematic (GND)
+  VIN (net0 GND) vsource dc=1
+  R1 (net0 net1) resistor r=10k
+  C1 (net1 GND) capacitor c=100p
+ends schematic

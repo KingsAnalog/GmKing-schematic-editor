@@ -33,10 +33,10 @@ import {
   type DffSettings
 } from "./dffModel";
 import { buildVisibleJunctions } from "./connectivity";
-import { pinTouchesConnectedWire, reconcileConnectionEdit } from "./connectionGraph";
+import { pinTouchesConnectedWire } from "./connectionGraph";
 import { componentPinPoints } from "./document/documentGeometryModel";
 import { cloneSchematicDocument } from "./document/documentModel";
-import { applyNormalizedDocumentWires } from "./document/documentWires";
+import { applyNormalizedDocumentWires, reconcileDocumentConnectionEdit } from "./document/documentWires";
 import { pointKey, samePoint, snapPoint } from "./geometry";
 import { junctionId } from "./junctionIdentity";
 import {
@@ -73,18 +73,24 @@ import { remapNetLabelsAfterWirePathChange } from "./netLabelModel";
 import { validateNetLabelName } from "./netResolution";
 import {
   applyNoteBackgroundColor,
+  applyNoteFillEnabled,
+  applyNoteFillOpacity,
   applyNoteTextColor,
   applyNoteFontSize,
-  applyNoteFormat,
-  applyNoteWidth,
-  normalizeNoteFontSizeInput,
-  normalizeNoteWidthInput
+  normalizeNoteFontSizeInput
 } from "./notes/noteProperties";
-import { noteBackgroundColor as resolvedNoteBackground } from "./notes/noteAppearance";
+import { noteBackgroundColor, noteFillStyle } from "./notes/noteAppearance";
 import {
   setRectangleProperty,
   type RectangleProperty
 } from "./rectangleComponentModel";
+import {
+  isLibraryShapeStyleProperty,
+  supportsLibraryShapeStyle,
+  setLibraryShapeStyleProperty,
+  type LibraryShapeStyleProperty,
+  type LibraryShapeStyleValue
+} from "./libraryShapeStyleModel";
 import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
 import { normalizeHexColor } from "../shared/color";
 import type {
@@ -97,7 +103,6 @@ import type {
   Point,
   SchematicDocument,
   SchematicNote,
-  SchematicNoteFormat,
   Wire
 } from "./types";
 import { normalizeInductorCouplings } from "./inductorCouplingModel";
@@ -146,6 +151,11 @@ export type SchematicPropertyBatchCommand =
   | { kind: "rectangle-bottom-pins"; value: string | number }
   | { kind: "triangle-pins"; edge: TriangleEdge; value: string | number }
   | { kind: "triangle-vertex"; vertex: TriangleVertex; point: Point }
+  | {
+      kind: "library-shape-style";
+      property: LibraryShapeStyleProperty;
+      value: LibraryShapeStyleValue;
+    }
   | { kind: "component-label-visibility"; visible: boolean }
   | { kind: "component-value-visibility"; visible: boolean }
   | { kind: "component-gain-polarity"; polarity: GainPolarity }
@@ -172,10 +182,10 @@ export type SchematicPropertyBatchCommand =
   | { kind: "wire-decoration"; patch: WireDecorationPatch }
   | { kind: "net-label-name"; name: string }
   | { kind: "note-background"; color: string | null }
+  | { kind: "note-fill-enabled"; enabled: boolean }
+  | { kind: "note-fill-opacity"; value: string | number }
   | { kind: "note-text-color"; color: string | null }
-  | { kind: "note-font-size"; value: string | number }
-  | { kind: "note-format"; format: SchematicNoteFormat }
-  | { kind: "note-width"; value: string | number };
+  | { kind: "note-font-size"; value: string | number };
 
 export type SchematicPropertyBatchRenderScope = "none" | "incremental" | "document";
 
@@ -483,6 +493,15 @@ function preflightCommand(
       return preflightComponentGeometryMutation(document, targets, component => command.kind === "triangle-pins"
         ? setTrianglePinCount(component, command.edge, command.value)
         : setTriangleVertex(component, command.vertex, command.point));
+    case "library-shape-style":
+      if (!isLibraryShapeStyleProperty(command.property)) return invalidValue();
+      if (!onlyComponents(targets)
+        || targets.components.some(component => !supportsLibraryShapeStyle(component.type, command.property))) {
+        return incompatibleSelection();
+      }
+      return preflightComponentMutation(targets, component =>
+        setLibraryShapeStyleProperty(cloneComponent(component), command.property, command.value)
+      );
     case "rectangle-width":
     case "rectangle-height":
     case "rectangle-left-pins":
@@ -586,10 +605,13 @@ function preflightCommand(
     case "net-label-name":
       return preflightNetLabelName(targets, command.name);
     case "note-text-color":
-      if (targets.notes.some(note => note.format === "markdown")) return incompatibleSelection();
       return preflightNoteMutation(targets, note => applyNoteTextColor(cloneNote(note), command.color));
     case "note-background":
       return preflightNoteBackground(targets, command.color);
+    case "note-fill-enabled":
+      return preflightNoteMutation(targets, note => applyNoteFillEnabled(cloneNote(note), command.enabled));
+    case "note-fill-opacity":
+      return preflightNoteMutation(targets, note => applyNoteFillOpacity(cloneNote(note), command.value));
     case "note-font-size": {
       const nextSize = normalizeNoteFontSizeInput(String(command.value));
       if (nextSize === null) return invalidValue();
@@ -597,22 +619,7 @@ function preflightCommand(
         applyNoteFontSize(cloneNote(note), nextSize)
       );
     }
-    case "note-format":
-      if (command.format !== "plain" && command.format !== "markdown") return invalidValue();
-      return readyIf(
-        onlyNotes(targets),
-        targets.notes.some((note) => note.format !== command.format)
-      );
-    case "note-width": {
-      if (!onlyNotes(targets) || targets.notes.some((note) => note.format !== "markdown")) {
-        return incompatibleSelection();
-      }
-      const nextWidth = normalizeNoteWidthInput(String(command.value));
-      if (nextWidth === null) return invalidValue();
-      return preflightNoteMutation(targets, (note) =>
-        applyNoteWidth(cloneNote(note), nextWidth)
-      );
-    }
+
   }
 }
 
@@ -774,6 +781,11 @@ function applyCommand(
         : setTriangleVertex(component, command.vertex, command.point), changed, runtime);
       renderScope = "document";
       break;
+    case "library-shape-style":
+      applyComponents(targets, changed, component =>
+        setLibraryShapeStyleProperty(component, command.property, command.value)
+      );
+      break;
     case "component-label-visibility":
       applyComponents(targets, changed, (component) =>
         setComponentLabelVisibility(component, command.visible)
@@ -870,10 +882,19 @@ function applyCommand(
       break;
     case "note-background":
       targets.notes.forEach((note) => {
-        if (resolvedNoteBackground(note) === canonicalNoteBackground(command.color)) return;
+        if (matchesNoteBackground(note, canonicalNoteBackground(command.color))) return;
         if (applyNoteBackgroundColor(note, command.color).status === "changed") {
           changed.noteIds.push(note.id);
         }
+      });
+      break;
+    case "note-fill-enabled":
+    case "note-fill-opacity":
+      targets.notes.forEach(note => {
+        const result = command.kind === "note-fill-enabled"
+          ? applyNoteFillEnabled(note, command.enabled)
+          : applyNoteFillOpacity(note, command.value);
+        if (result.status === "changed") changed.noteIds.push(note.id);
       });
       break;
     case "note-font-size": {
@@ -883,18 +904,7 @@ function applyCommand(
       });
       break;
     }
-    case "note-format":
-      targets.notes.forEach((note) => {
-        if (applyNoteFormat(note, command.format)) changed.noteIds.push(note.id);
-      });
-      break;
-    case "note-width": {
-      const nextWidth = normalizeNoteWidthInput(String(command.value))!;
-      targets.notes.forEach((note) => {
-        if (applyNoteWidth(note, nextWidth).status === "changed") changed.noteIds.push(note.id);
-      });
-      break;
-    }
+
   }
 
   normalizeInductorCouplings(document);
@@ -1008,9 +1018,13 @@ function preflightNoteBackground(
   if (!onlyNotes(targets)) return incompatibleSelection();
   const color = canonicalNoteBackground(value);
   if (color === undefined) return invalidValue();
-  return targets.notes.some((note) => resolvedNoteBackground(note) !== color)
+  return targets.notes.some((note) => !matchesNoteBackground(note, color))
     ? { kind: "ready" }
     : { kind: "unchanged" };
+}
+
+function matchesNoteBackground(note: SchematicNote, color: string | null | undefined) {
+  return noteBackgroundColor(note) === color && (color !== null || !noteFillStyle(note).fillEnabled);
 }
 
 function preflightInkColor(
@@ -1135,7 +1149,7 @@ function finishComponentGeometryChange(
     runtime.applyWireMoveTopology(document, topology, previousPinPoints, nextPinPoints);
     remapNetLabelsAfterWirePathChange(document, previousWires);
   }
-  reconcileConnectionEdit(document, before.connectionSnapshot);
+  reconcileDocumentConnectionEdit(document, before.connectionSnapshot);
   runtime.applyNormalizedDocumentWires(document);
   document.junctions = buildVisibleJunctions(document);
   pruneJunctionAppearances(document);
@@ -1570,9 +1584,9 @@ function primaryChangedTargetCount(
       return targets.netLabelIds.length;
     case "note-text-color":
     case "note-background":
+    case "note-fill-enabled":
+    case "note-fill-opacity":
     case "note-font-size":
-    case "note-format":
-    case "note-width":
       return targets.noteIds.length;
     default:
       return targets.componentIds.length;
@@ -1645,6 +1659,8 @@ function successStatus(command: SchematicPropertyBatchCommand, count: number) {
   switch (command.kind) {
     case "triangle-pins": return "Triangle pins updated.";
     case "triangle-vertex": return "Triangle reshaped.";
+    case "library-shape-style":
+      return `${count} shape${count === 1 ? "" : "s"} updated.`;
     case "component-cell":
       return `${count} component${count === 1 ? "" : "s"} changed cell.`;
     case "component-ref":
@@ -1699,12 +1715,11 @@ function successStatus(command: SchematicPropertyBatchCommand, count: number) {
     case "note-text-color":
       return "Note text color updated.";
     case "note-background":
+    case "note-fill-enabled":
+    case "note-fill-opacity":
       return `${count} note fill${count === 1 ? "" : "s"} updated.`;
     case "note-font-size":
       return `${count} note size${count === 1 ? "" : "s"} updated.`;
-    case "note-format":
-      return `${count} note format${count === 1 ? "" : "s"} updated.`;
-    case "note-width":
-      return `${count} note width${count === 1 ? "" : "s"} updated.`;
+
   }
 }

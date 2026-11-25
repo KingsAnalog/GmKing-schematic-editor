@@ -1,4 +1,6 @@
+import type { SchematicDocumentSvgOptions } from "./documentSvgRenderer";
 import type { SchematicContextMenuScope } from "./contextMenuModel";
+import type { LogEntry } from "./eventLog";
 import type {
   SchematicAnalysisControllerOptions
 } from "./analysis/analysisController";
@@ -24,7 +26,7 @@ import type {
   Point,
   SchematicDocument
 } from "./types";
-import type { SchematicNoteRuntimeAdapter } from "./notes/noteRuntimeAdapter";
+import type { SchematicProject } from "./schematicProject";
 
 export interface SchematicDocumentFileLike {
   readonly name: string;
@@ -35,6 +37,7 @@ export interface SchematicDocumentFileLike {
 export interface ImportedSchematicDocumentFile {
   title: string;
   document: SchematicDocument;
+  project?: SchematicProject;
 }
 
 export interface SchematicDocumentTabsPort {
@@ -48,6 +51,7 @@ export interface SchematicDocumentTabsPort {
 }
 
 export interface SchematicAnalysisControllerPort {
+  refreshLanguage?(): void;
   bind(): void;
   destroy(): void;
   clearActivePick(): void;
@@ -89,10 +93,18 @@ export interface SchematicWorkspacePort {
 export interface SchematicDocumentFilePort {
   read(file: SchematicDocumentFileLike): Promise<ImportedSchematicDocumentFile>;
   download(document: SchematicDocument, title: string): void;
+  downloadProject?(project: SchematicProject, title: string): void;
+  downloadImage(
+    document: SchematicDocument,
+    title: string,
+    format: "svg" | "png",
+    options: Pick<SchematicDocumentSvgOptions, "includeHidden" | "presentationMode">
+  ): Promise<void>;
 }
 
 export interface SchematicClipboardPort {
   readDocument(): Promise<SchematicDocument>;
+  readImport?(): Promise<ImportedSchematicDocumentFile>;
 }
 
 export interface SchematicHostedDocumentSession<EditorState> {
@@ -116,8 +128,9 @@ export interface SchematicDocumentHostBridge<EditorState> {
   finishActiveEdits(): void;
   isDisposableBlank(session: SchematicHostedDocumentSession<EditorState>): boolean;
   currentDocument(): SchematicDocument;
+  currentPresentationMode(): boolean;
   applyClipboardDocument(document: SchematicDocument): void;
-  setStatus(message: string): void;
+  setStatus(message: string, log?: Pick<LogEntry, "level" | "source">): void;
   fit(): void;
   isDestroyed(): boolean;
   onSaveStateChange?(): void;
@@ -142,11 +155,6 @@ export interface SchematicEditorHostServices {
   readonly workspace: SchematicWorkspacePort;
   readonly documentFiles: SchematicDocumentFilePort;
   readonly clipboard: SchematicClipboardPort;
-  readonly cursors?: {
-    delete: string;
-    temporaryDelete: string;
-  };
-  readonly noteRuntimeAdapter?: SchematicNoteRuntimeAdapter;
   idFactory(): string;
   createAbortController(): AbortController;
   requestAnimationFrame(callback: FrameRequestCallback): number;

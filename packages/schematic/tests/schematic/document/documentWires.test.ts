@@ -1,7 +1,8 @@
 import { fixtureDocument } from "../support/fixtureDocument";
 import { describe, expect, it } from "vitest";
 import { buildConnectivity } from "../../../src/schematic/connectivity";
-import { applyNormalizedDocumentWires, normalizeDocumentWires } from "../../../src/schematic/document/documentWires";
+import { applyNormalizedDocumentWires, normalizeDocumentWires, reconcileDocumentConnectionEdit } from "../../../src/schematic/document/documentWires";
+import { parseSchematicDocumentFile, serializeSchematicDocumentFile } from "../../../src/schematic/schematicDocumentCodec";
 import type { Point, SchematicDocument, Wire, WireAppearance } from "../../../src/schematic/types";
 
 function wire(id: string, points: Point[], options: { appearance?: WireAppearance; temporarilyDeleted?: boolean } = {}): Wire {
@@ -19,6 +20,67 @@ function clone<T>(value: T): T {
 }
 
 describe("schematic document wires", () => {
+  it("copies wire state by physical source when a split renumbers a segment", () => {
+    const document = fixtureDocument({
+      components: [], junctions: [], junctionAppearances: [], notes: [],
+      layers: [
+        { id: "layer-1", name: "Base", visible: true, locked: false },
+        { id: "layer-2", name: "Signals", visible: true, locked: false }
+      ],
+      wires: [
+        wire("signal", [{ x: 0, y: 80 }, { x: 100, y: 80 }]),
+        { ...wire("signal-segment-1", [{ x: 0, y: 0 }, { x: 100, y: 0 }]), layerId: "layer-2" },
+        wire("branch", [{ x: 40, y: 0 }, { x: 40, y: 40 }])
+      ],
+      netLabels: [{ id: "label", name: "BUS", attachment: { wireId: "signal-segment-1", point: { x: 70, y: 0 } } }],
+      layerObjectStates: { signal: { z: 1 }, "signal-segment-1": { visible: false, z: 8 }, label: { z: 4 } }
+    });
+    applyNormalizedDocumentWires(document);
+
+    const pieces = document.wires.filter(wire => wire.layerId === "layer-2");
+    const states = document.layerObjectStates!;
+    expect(pieces).toHaveLength(2);
+    for (const piece of pieces) expect(states[piece.id]).toEqual({ visible: false, z: 8 });
+    expect(states.signal).toEqual({ z: 1 });
+    expect(states.label).toEqual({ z: 4 });
+    expect(document.netLabels[0].attachment).toEqual({ wireId: pieces[1].id, point: { x: 70, y: 0 } });
+    const connectivity = buildConnectivity(document);
+    expect(connectivity.rootOfWire(pieces[1].id)).toBe(connectivity.rootOfWire("branch"));
+    expect(connectivity.rootOfWire(pieces[1].id)).not.toBe(connectivity.rootOfWire("signal"));
+
+    const reloaded = parseSchematicDocumentFile(serializeSchematicDocumentFile(document));
+    expect(reloaded.wires).toEqual(document.wires);
+    expect(reloaded).toMatchObject({
+      connections: document.connections,
+      layerObjectStates: states,
+      netLabels: document.netLabels
+    });
+  });
+
+  it("moves junction display state with the retained physical node", () => {
+    const before = fixtureDocument({
+      components: [], notes: [], netLabels: [], junctionAppearances: [],
+      junctions: [{ x: 40, y: 0 }, { x: 40, y: 80 }],
+      wires: [
+        wire("left", [{ x: 0, y: 0 }, { x: 40, y: 0 }]),
+        wire("right", [{ x: 40, y: 0 }, { x: 80, y: 0 }]),
+        wire("branch", [{ x: 40, y: 0 }, { x: 40, y: 30 }]),
+        wire("other-left", [{ x: 0, y: 80 }, { x: 40, y: 80 }]),
+        wire("other-right", [{ x: 40, y: 80 }, { x: 80, y: 80 }]),
+        wire("other-branch", [{ x: 40, y: 80 }, { x: 40, y: 110 }])
+      ],
+      layerObjectStates: { "junction-40-0": { visible: false, z: 7 }, "junction-40-80": { z: 2 } }
+    });
+    const document = structuredClone(before);
+    document.wires.slice(0, 3).forEach(wire => wire.points.forEach(point => { point.x += 100; }));
+
+    reconcileDocumentConnectionEdit(document, before);
+    applyNormalizedDocumentWires(document);
+
+    expect(buildConnectivity(document).junctions).toEqual([{ x: 40, y: 80 }, { x: 140, y: 0 }]);
+    expect(document.layerObjectStates).toEqual({ "junction-140-0": { visible: false, z: 7 }, "junction-40-80": { z: 2 } });
+  });
+
   it("normalizes document wires as a pure computation", () => {
     const document: SchematicDocument = fixtureDocument({
 

@@ -71,7 +71,9 @@ export function createSchematicPaperSurface<Graph extends SchematicSurfaceGraph 
     drawGrid: SCHEMATIC_GRID,
     background: { color: "#ffffff" },
     cellViewNamespace: shapes,
-    elementView: (element) => element.get("type") === "eda.Symbol" ? SymbolElementView : dia.ElementView,
+    elementView: (element) => element.get("type") === "eda.Symbol" || element.get("type") === "eda.LibraryShape"
+      ? SymbolElementView
+      : dia.ElementView,
     // Wire routing is owned by SchematicWireToolController, not JointJS link gestures.
     validateMagnet: () => false,
     interactive: options.interactive

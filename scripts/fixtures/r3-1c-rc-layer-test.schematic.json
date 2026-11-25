@@ -1,0 +1,43 @@
+{
+  "format": "adc-helper/schematic",
+  "schematic": {
+    "symbolTemplate": "razavi",
+    "components": [
+      {
+        "type": "voltageSource", "ref": "V1", "x": 220, "y": 250, "rotation": 90, "mirrored": false, "variantId": "dc", "id": "v1",
+        "values": {"layer:id": "layer-1", "main": "1"}
+      },
+      {
+        "type": "resistor", "ref": "R1", "x": 370, "y": 130, "rotation": 0, "mirrored": false, "variantId": "fixed", "id": "r1",
+        "values": {"layer:id": "layer-1", "main": "10k"}
+      },
+      {
+        "type": "capacitor", "ref": "C1", "x": 520, "y": 250, "rotation": 90, "mirrored": false, "variantId": "fixed", "id": "c1",
+        "values": {"layer:id": "layer-1", "main": "100n"}
+      },
+      {"type": "gnd", "ref": "GND", "x": 370, "y": 390, "rotation": 0, "mirrored": false, "id": "ground",
+        "values": {"layer:id": "layer-1"}}
+    ],
+    "wires": [
+      {"points": [{"x": 220, "y": 210}, {"x": 220, "y": 130}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "input-wire"},
+      {"points": [{"x": 220, "y": 130}, {"x": 330, "y": 130}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "input-wire-segment-1"},
+      {"points": [{"x": 410, "y": 130}, {"x": 520, "y": 130}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "filter-wire"},
+      {"points": [{"x": 520, "y": 130}, {"x": 520, "y": 210}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "filter-wire-segment-1"},
+      {"points": [{"x": 520, "y": 130}, {"x": 700, "y": 130}], "routeMode": "orthogonal", "layerId": "layer-2", "appearance": {"variant": "signal", "color": "#005f9e"}, "id": "output-branch"},
+      {"points": [{"x": 220, "y": 290}, {"x": 220, "y": 370}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "source-return"},
+      {"points": [{"x": 220, "y": 370}, {"x": 370, "y": 370}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "source-return-segment-1"},
+      {"points": [{"x": 520, "y": 370}, {"x": 370, "y": 370}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "capacitor-return"},
+      {"points": [{"x": 520, "y": 290}, {"x": 520, "y": 370}], "routeMode": "orthogonal", "layerId": "layer-1", "id": "capacitor-return-segment-1"}
+    ],
+    "connections": {"wires": {"input-wire": ["node-14", "node-1"], "input-wire-segment-1": ["node-1", "node-16"], "filter-wire": ["node-17", "node-4"], "filter-wire-segment-1": ["node-4", "node-18"], "output-branch": ["node-4", "node-7"], "source-return": ["node-15", "node-9"], "source-return-segment-1": ["node-9", "node-20"], "capacitor-return": ["node-12", "node-20"], "capacitor-return-segment-1": ["node-19", "node-12"]}, "pins": {"v1": {"p": "node-14", "n": "node-15"}, "r1": {"p": "node-16", "n": "node-17"}, "c1": {"p": "node-18", "n": "node-19"}, "ground": {"g": "node-20"}}},
+    "junctionAppearances": [],
+    "netLabels": [{"id": "input-label", "name": "IN", "layerId": "layer-1", "attachment": {"wireId": "input-wire-segment-1", "point": {"x": 270, "y": 130}}}, {"id": "output-label", "name": "OUT", "layerId": "layer-2", "attachment": {"wireId": "output-branch", "point": {"x": 630, "y": 130}}}],
+    "layers": [{"id": "layer-1", "name": "主电路", "visible": true, "locked": false}, {"id": "layer-2", "name": "输出与标注", "visible": true, "locked": false}, {"id": "layer-3", "name": "参考层", "visible": true, "locked": true}],
+    "notes": [
+      {"x": 570, "y": 205, "width": 205, "layerId": "layer-2", "anchor": "upperLeft", "id": "output-note",
+        "text": "RC 低通滤波器\nR1 = 10 kΩ，C1 = 100 nF\n截止频率约 159 Hz"},
+      {"x": 570, "y": 350, "width": 190, "layerId": "layer-3", "anchor": "upperLeft", "id": "locked-note",
+        "text": "参考层（已锁定）\n用于验证编辑与图层改派限制"}
+    ]
+  }
+}

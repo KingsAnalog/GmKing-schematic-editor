@@ -67,7 +67,6 @@ function project(
     document?: SchematicDocument;
     hasSelection?: boolean;
     resolution?: NetResolution;
-    labelTool?: { value: string; error?: string };
     couplingPickSourceId?: string | null;
   } = {}
 ) {
@@ -76,7 +75,6 @@ function project(
     targets: selection,
     hasSelection: options.hasSelection ?? true,
     resolution: options.resolution,
-    labelTool: options.labelTool,
     couplingPickSourceId: options.couplingPickSourceId
   });
 }
@@ -111,15 +109,6 @@ describe("schematic property panel projection", () => {
       notes: [note("note-1")]
     }))).toEqual({
       hasSelection: true
-    });
-  });
-
-  it("prioritizes the active label tool over selection properties", () => {
-    expect(project(targets({ components: [component()] }), {
-      labelTool: { value: "CLK", error: "invalid" }
-    })).toEqual({
-      hasSelection: true,
-      labelTool: { value: "CLK", error: "invalid" }
     });
   });
 
@@ -188,23 +177,41 @@ describe("schematic property panel projection", () => {
     expect(projected?.valueVisible).toEqual(mixed);
   });
 
-  it("projects rectangle dimensions and side pin counts with mixed values", () => {
+  it("projects only pure rectangle dimensions with mixed values", () => {
     const first = fixtureComponent("rectangle", "X1", 40, 40);
     const second = fixtureComponent("rectangle", "X2", 160, 40);
     setRectangleProperty(second, "width", 8);
-    setRectangleProperty(second, "topPins", 3);
 
     const projected = project(targets({ components: [first, second] })).component;
 
     expect(projected?.value).toBeUndefined();
+    expect(projected?.libraryShape).toBe(true);
     expect(projected?.rectangle).toEqual({
       widthGrid: mixed,
-      heightGrid: uniform(2),
-      leftPins: uniform(1),
-      rightPins: uniform(1),
-      topPins: mixed,
-      bottomPins: uniform(0)
+      heightGrid: uniform(2)
     });
+  });
+
+  it("projects shared shape styles and reserves corner radius for rectangles", () => {
+    const rectangle = fixtureComponent("rectangle", "X1", 40, 40);
+    const triangle = fixtureComponent("triangle", "X2", 160, 40);
+    rectangle.values.libraryShapeStrokeWidth = "2.5";
+    rectangle.values.libraryShapeCornerRadius = "6";
+    triangle.values.libraryShapeFillEnabled = "true";
+    triangle.values.libraryShapeFillColor = "#123456";
+
+    const projected = project(targets({ components: [rectangle, triangle] })).component;
+    expect(projected?.libraryShapeStyle).toEqual({
+      strokeWidth: mixed,
+      lineStyle: uniform("solid"),
+      fillEnabled: mixed,
+      fillColor: mixed,
+      fillOpacity: uniform(1)
+    });
+    expect(project(targets({ components: [rectangle] })).component?.libraryShapeStyle?.cornerRadius)
+      .toEqual(uniform(6));
+    expect(project(targets({ components: [triangle] })).component?.libraryShapeStyle?.cornerRadius)
+      .toBeUndefined();
   });
 
   it("projects Filter kind only for all-Filter selections and aggregates mixed values", () => {
@@ -693,54 +700,27 @@ describe("schematic property panel projection", () => {
     });
   });
 
-  it("aggregates Note fields and only exposes Width when every Note is Markdown", () => {
-    const first = note("note-1", {
-      format: "markdown",
-      width: 320,
-      backgroundColor: null,
-      fontSizePx: 12
-    });
-    const second = note("note-2", {
-      format: "markdown",
-      width: 333,
-      backgroundColor: undefined,
-      fontSizePx: 18
-    });
-    const markdownProjection = project(targets({
-      notes: [first, second]
-    })).note;
-
-    expect(markdownProjection).toEqual({
-      backgroundColor: mixed,
-      fontSizePx: mixed,
-      format: uniform("markdown"),
-      widthPx: mixed
-    });
-    second.format = "plain";
-    const mixedFormat = project(targets({ notes: [first, second] })).note;
-    expect(mixedFormat?.format).toEqual(mixed);
-    expect(mixedFormat).not.toHaveProperty("widthPx");
-  });
-
   it("resolves default Note fill and size before aggregating", () => {
     const first = note("note-1", {
-      format: "markdown",
+      anchor: "upperLeft",
       width: 333,
       backgroundColor: undefined,
       fontSizePx: 0
     });
     const second = note("note-2", {
-      format: "markdown",
+      anchor: "upperLeft",
       width: 340,
       backgroundColor: "#ffffe8",
       fontSizePx: 1
     });
 
     expect(project(targets({ notes: [first, second] })).note).toEqual({
-      backgroundColor: uniform("#ffffe8"),
+      backgroundColor: mixed,
+      backgroundEnabled: mixed,
+      backgroundOpacity: uniform(1),
       fontSizePx: uniform(1),
-      format: uniform("markdown"),
-      widthPx: uniform(340)
+      anchor: uniform("upperLeft"),
+      textColor: uniform("#111111")
     });
 
   });

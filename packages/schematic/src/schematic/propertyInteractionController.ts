@@ -9,6 +9,7 @@ import { SchematicPropertyEditSession, type SchematicPropertyEditCommitResult, t
 import type { SchematicDocument } from "./types";
 import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
 import type { RectangleProperty } from "./rectangleComponentModel";
+import type { LibraryShapeStyleProperty } from "./libraryShapeStyleModel";
 import type { SchematicPropertyPanelControllerCallbacks } from "./propertyPanelController";
 
 /** Owns property commands, preview/cancel and the single commit at edit completion. */
@@ -257,6 +258,21 @@ export class SchematicPropertyInteractionController {
         { kind: "component-value", value }
       ),
       onComponentValueCancel: () => this.cancel("component-value"),
+      onLibraryShapeStyleChange: (property, value) => this.run({
+        kind: "library-shape-style", property, value
+      }),
+      onLibraryShapeStyleEditStart: property =>
+        this.begin(libraryShapeStyleEditKind(property)),
+      onLibraryShapeStyleInput: (property, value) => this.preview(
+        libraryShapeStyleEditKind(property),
+        { kind: "library-shape-style", property, value }
+      ),
+      onLibraryShapeStyleCommit: (property, value) => this.commit(
+        libraryShapeStyleEditKind(property),
+        { kind: "library-shape-style", property, value }
+      ),
+      onLibraryShapeStyleCancel: property =>
+        this.cancel(libraryShapeStyleEditKind(property)),
       onRectanglePropertyEditStart: (property) =>
         this.begin(rectanglePropertyEditKind(property)),
       onTrianglePinsEditStart: edge => this.begin(`triangle-pins:${edge}`),
@@ -302,6 +318,11 @@ export class SchematicPropertyInteractionController {
         { kind: "note-background", color: value }
       ),
       onNoteBackgroundCancel: () => this.cancel("note-background"),
+      onNoteFillEnabledChange: enabled => this.run({ kind: "note-fill-enabled", enabled }),
+      onNoteFillOpacityEditStart: () => this.begin("note-fill-opacity"),
+      onNoteFillOpacityInput: value => this.preview("note-fill-opacity", { kind: "note-fill-opacity", value }),
+      onNoteFillOpacityCommit: value => this.commit("note-fill-opacity", { kind: "note-fill-opacity", value }),
+      onNoteFillOpacityCancel: () => this.cancel("note-fill-opacity"),
       onNetLabelChange: (value) => this.setSelectedNetLabelName(value),
       onNetLabelEditStart: () => this.begin("net-label"),
       onNetLabelInput: (value) => this.preview(
@@ -315,6 +336,10 @@ export class SchematicPropertyInteractionController {
       onNetLabelCancel: () => this.cancel("net-label")
     };
   }
+}
+
+function libraryShapeStyleEditKind(property: LibraryShapeStyleProperty) {
+  return `library-shape-style:${property}` as const;
 }
 
 const RECTANGLE_EDIT_KINDS = {

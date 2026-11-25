@@ -29,7 +29,6 @@ describe("schematic net label tool controller", () => {
     const controller = new SchematicNetLabelToolController();
 
     expect(controller.arm("BAD NAME").kind).toBe("invalid");
-    controller.updateDraft("CLK");
     expect(controller.arm("CLK").kind).toBe("armed");
 
     expect(controller.begin()).toMatchObject({
@@ -42,7 +41,6 @@ describe("schematic net label tool controller", () => {
   it("cancels arming and drag state while preserving the draft", () => {
     const controller = new SchematicNetLabelToolController();
     const netLabel = label("label-1", "OUT", "signal", { x: 20, y: 0 });
-    controller.updateDraft("CLK");
     controller.arm("CLK");
     controller.beginDrag(netLabel);
 
@@ -54,7 +52,7 @@ describe("schematic net label tool controller", () => {
     });
   });
 
-  it("validates and normalizes arming while draft edits control whether placement stays armed", () => {
+  it("validates and normalizes the confirmed label", () => {
     const controller = new SchematicNetLabelToolController();
 
     const invalid = controller.arm("CLK 1");
@@ -70,8 +68,6 @@ describe("schematic net label tool controller", () => {
       name: "OUT<1>",
       snapshot: { draft: "OUT<1>", armedName: "OUT<1>", error: "" }
     });
-    expect(controller.updateDraft(" OUT<1> ")).toMatchObject({ armedName: "OUT<1>" });
-    expect(controller.updateDraft("OUT<2>")).toMatchObject({ armedName: null });
   });
 
   it("prepares continuous placements without consuming the armed name or mutating the document", () => {

@@ -18,7 +18,7 @@ function fixture() {
     return task;
   };
   const document = createEmptySchematicDocument();
-  document.notes.push({ id: "n", x: 0, y: 0, width: 120, format: "plain", text: "A" });
+  document.notes.push({ id: "n", x: 0, y: 0, width: 120, anchor: "upperLeft", text: "A" });
   persistSchematicDocumentSnapshot("doc", { document, zoom: 1 }, storage);
   const first = createSchematicWorkspacePersistence(storage, lock);
   const second = createSchematicWorkspacePersistence(storage, lock);
@@ -81,6 +81,16 @@ describe("workspace persistence across windows", () => {
     storage.setItem = write;
     await first.persistDocument("doc", a);
     expect(first.readDocument("doc")!.document!.notes[0].text).toBe("B");
+  });
+
+  it("recognizes saved content after a restore reorders object keys", async () => {
+    const { first, a, storage } = fixture();
+    vi.mocked(storage.setItem).mockClear();
+    const note = a.document!.notes[0];
+    const { id, ...rest } = note;
+    a.document!.notes[0] = { ...rest, id };
+    await first.persistDocument("doc", a);
+    expect(storage.setItem).not.toHaveBeenCalled();
   });
 
   it("does not resurrect a document deleted in another window", async () => {

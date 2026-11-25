@@ -1,6 +1,12 @@
 import { SYMBOL_GRID_SIZE, type ComponentDef, type ComponentInstance, type ComponentType, type ComponentVariantDef, type ComponentVariantId, type PinDef, type TerminalClass } from "./types";
+import { arcPoints, arcSize, DEFAULT_ARC_POINTS } from "./arcComponentModel";
+import { circleSize } from "./circleComponentModel";
+import { libraryPathSize } from "./libraryPathPoints";
+import { DEFAULT_POLYGON_POINTS, polygonPoints } from "./polygonComponentModel";
+import { DEFAULT_POLYLINE_POINTS, polylinePoints, polylineSize } from "./polylineComponentModel";
 import { componentScale, scaleComponentDefinition } from "./componentScaleModel";
-import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize, trianglePinGeometry, triangleVertexPinGeometry } from "./triangleComponentModel";
+import { DEFAULT_TRIANGLE_SETTINGS, TRIANGLE_VERTICES, triangleSettings, triangleSettingsValues, triangleSize } from "./triangleComponentModel";
+import { blockGeometry, blockPorts, PORT_TERMINAL, readSheetPort, roleForPort } from "./hierarchyPins";
 import {
   boxedComponentPinPoint,
   boxedComponentSize,
@@ -18,7 +24,6 @@ import {
 import {
   DEFAULT_RECTANGLE_SETTINGS,
   rectangleDefaultValues,
-  rectanglePins,
   rectangleSettings,
   rectangleSize
 } from "./rectangleComponentModel";
@@ -91,7 +96,6 @@ const MOS_SIZE = { width: 100, height: 100 };
 const OPERATOR_SIZE = { width: 4 * SYMBOL_GRID_SIZE, height: 4 * SYMBOL_GRID_SIZE };
 const ANNOTATION_SIZE = { width: 180, height: 30 };
 const DEFAULT_RECTANGLE_SIZE = rectangleSize(DEFAULT_RECTANGLE_SETTINGS);
-const DEFAULT_RECTANGLE_PINS = rectanglePins(DEFAULT_RECTANGLE_SETTINGS);
 
 const TWO_TERMINAL_PINS: PinDef[] = [
   { id: "p", label: "+", role: "p", x: -40, y: 0 },
@@ -282,6 +286,8 @@ function component(options: {
   nameFormat?: ComponentDef["nameFormat"];
   centeredRefLabel?: boolean;
   bodyPolygon?: ComponentDef["bodyPolygon"];
+  bodyPolyline?: ComponentDef["bodyPolyline"];
+  bodyArc?: ComponentDef["bodyArc"];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];
@@ -915,9 +921,8 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     valuePrefix: "X",
     defaultValues: rectangleDefaultValues(),
     nameFormat: "literal",
-    centeredRefLabel: true,
     size: DEFAULT_RECTANGLE_SIZE,
-    pins: DEFAULT_RECTANGLE_PINS,
+    pins: [],
     symbol: "rectangle"
   }),
   triangle: component({
@@ -927,18 +932,72 @@ export const COMPONENT_CATALOG: Record<ComponentType, ComponentDef> = {
     aliases: ["tri", "三角形"],
     terminalClass: "dynamic",
     valuePrefix: "X",
-    defaultValues: {
-      ...triangleSettingsValues(DEFAULT_TRIANGLE_SETTINGS),
-      ...Object.fromEntries(TRIANGLE_VERTICES.map(vertex => [`pinVisible:${vertex}`, "false"]))
-    },
-    editablePinVisibility: true,
-    editablePinVisibilityIds: [...TRIANGLE_VERTICES],
+    defaultValues: triangleSettingsValues(DEFAULT_TRIANGLE_SETTINGS),
     nameFormat: "literal",
-    centeredRefLabel: true,
     size: triangleSize(DEFAULT_TRIANGLE_SETTINGS),
-    pins: [...trianglePinGeometry(DEFAULT_TRIANGLE_SETTINGS), ...triangleVertexPinGeometry(DEFAULT_TRIANGLE_SETTINGS)].map(lead => lead.pin),
+    pins: [],
     bodyPolygon: TRIANGLE_VERTICES.map(vertex => DEFAULT_TRIANGLE_SETTINGS.vertices[vertex]),
     symbol: "triangle"
+  }),
+  polyline: component({
+    type: "polyline",
+    label: "POLYLINE",
+    hotLabel: "polyline",
+    aliases: ["折线"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: polylineSize(DEFAULT_POLYLINE_POINTS),
+    pins: [],
+    bodyPolyline: DEFAULT_POLYLINE_POINTS,
+    symbol: "polyline"
+  }),
+  circle: component({
+    type: "circle",
+    label: "CIRCLE",
+    hotLabel: "circle",
+    aliases: ["ellipse", "圆", "圆形", "椭圆"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: circleSize({ values: {} }),
+    pins: [],
+    symbol: "circle"
+  }),
+  polygon: component({
+    type: "polygon",
+    label: "POLYGON",
+    hotLabel: "polygon",
+    aliases: ["多边形"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: libraryPathSize(DEFAULT_POLYGON_POINTS),
+    pins: [],
+    bodyPolygon: DEFAULT_POLYGON_POINTS,
+    symbol: "polygon"
+  }),
+  arc: component({
+    type: "arc",
+    label: "ARC",
+    hotLabel: "arc",
+    aliases: ["circular arc", "弧形", "圆弧"],
+    terminalClass: "dynamic",
+    valuePrefix: "X",
+    nameFormat: "literal",
+    size: arcSize(DEFAULT_ARC_POINTS),
+    pins: [],
+    bodyArc: DEFAULT_ARC_POINTS,
+    symbol: "arc"
+  }),
+  sheetPort: component({
+    type: "sheetPort", label: "Pin", hotLabel: "pin", terminalClass: "dynamic", nameFormat: "literal",
+    size: { width: 160, height: 40 }, pins: [{ id: PORT_TERMINAL, label: "", role: "io", x: 0, y: 0 }],
+    symbol: "sheet-port"
+  }),
+  sheetBlock: component({
+    type: "sheetBlock", label: "Sheet", hotLabel: "sheet", terminalClass: "dynamic",
+    valuePrefix: "X", size: blockGeometry([]).size, pins: [], symbol: "sheet-block"
   }),
   annotation: component({
     type: "annotation",
@@ -1002,6 +1061,10 @@ export const PALETTE_ORDER: ComponentType[] = [
   "transmissionGate",
   "rectangle",
   "triangle",
+  "circle",
+  "polygon",
+  "polyline",
+  "arc",
   "nmos",
   "pmos",
   "npn",
@@ -1038,9 +1101,32 @@ export function resolveComponentPinOptions(component: ComponentInstance | Compon
 
 function resolveComponentConfiguration(component: ComponentInstance | ComponentType): ComponentDef {
   const base = typeof component === "string" ? COMPONENT_CATALOG[component] : COMPONENT_CATALOG[component.type];
+  if (typeof component !== "string" && component.type === "sheetBlock") {
+    const { size, pins } = blockGeometry(blockPorts(component));
+    return { ...base, size, pins, label: component.values["sheet:name"] || base.label };
+  }
+  if (typeof component !== "string" && component.type === "sheetPort") {
+    const port = readSheetPort(component);
+    return { ...base, pins: [{ id: PORT_TERMINAL, label: port.name, role: roleForPort(port.type), x: 0, y: 0 }] };
+  }
+  if (base.type === "circle" && typeof component !== "string") {
+    return { ...base, size: circleSize(component) };
+  }
+  if (base.type === "polygon" && typeof component !== "string") {
+    const points = polygonPoints(component);
+    return { ...base, size: libraryPathSize(points), bodyPolygon: points };
+  }
+  if (base.type === "arc" && typeof component !== "string") {
+    const points = arcPoints(component);
+    return { ...base, size: arcSize(points), bodyArc: points };
+  }
+  if (base.type === "polyline" && typeof component !== "string") {
+    const points = polylinePoints(component);
+    return { ...base, size: polylineSize(points), bodyPolyline: points };
+  }
   if (base.type === "triangle" && typeof component !== "string") {
     const settings = triangleSettings(component);
-    return { ...base, size: triangleSize(settings), pins: [...trianglePinGeometry(settings), ...triangleVertexPinGeometry(settings)].map(lead => lead.pin), bodyPolygon: TRIANGLE_VERTICES.map(vertex => settings.vertices[vertex]) };
+    return { ...base, size: triangleSize(settings), pins: [], bodyPolygon: TRIANGLE_VERTICES.map(vertex => settings.vertices[vertex]) };
   }
   if (base.type === "inductor" && typeof component !== "string") {
     const tap = inductorTap(component);
@@ -1082,7 +1168,7 @@ function resolveComponentConfiguration(component: ComponentInstance | ComponentT
     return {
       ...base,
       size: rectangleSize(settings),
-      pins: rectanglePins(settings)
+      pins: []
     };
   }
   const requestedVariantId = typeof component === "string"

@@ -10,7 +10,10 @@ const expanded: SchematicLayoutState = {
   leftWidth: 280,
   rightWidth: 330,
   leftCollapsed: false,
-  rightCollapsed: false
+  rightCollapsed: false,
+  rightActiveView: "analysis",
+  sidebarTab: "library",
+  logHeight: 230
 };
 
 describe("schematic layout projection", () => {
@@ -49,13 +52,13 @@ describe("schematic panel resize projection", () => {
   it("collapses below the side-specific minimum and reopens at the same threshold", () => {
     expect(resolveSchematicPanelResize("left", 209)).toEqual({ width: 210, collapsed: true });
     expect(resolveSchematicPanelResize("left", 210)).toEqual({ width: 210, collapsed: false });
-    expect(resolveSchematicPanelResize("right", 259)).toEqual({ width: 260, collapsed: true });
-    expect(resolveSchematicPanelResize("right", 260)).toEqual({ width: 260, collapsed: false });
+    expect(resolveSchematicPanelResize("right", 319)).toEqual({ width: 320, collapsed: true });
+    expect(resolveSchematicPanelResize("right", 320)).toEqual({ width: 320, collapsed: false });
   });
 
   it("keeps expanded widths inside their maximum bounds", () => {
     expect(resolveSchematicPanelResize("left", 900)).toEqual({ width: 520, collapsed: false });
-    expect(resolveSchematicPanelResize("right", 900)).toEqual({ width: 680, collapsed: false });
+    expect(resolveSchematicPanelResize("right", 900)).toEqual({ width: 900, collapsed: false });
   });
 });
 

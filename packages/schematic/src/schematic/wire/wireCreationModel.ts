@@ -1,12 +1,13 @@
-import { samePoint, snapPoint } from "../geometry";
+import { snapPoint } from "../geometry";
 import type { Point, SchematicDocument, WireAppearance, WireRouteMode, WireVariant } from "../types";
 import { applyNormalizedDocumentWires } from "../document/documentWires";
 import { connectGeometry } from "../connectionGraph";
 import { clonePoints, extendWirePath, normalizeWirePath, wireRouteModeForPath } from "./wireGeometry";
+import type { WireAngle } from "./wireAngle";
 
 export interface WireRouteSession {
   variant: WireVariant;
-  routeMode: WireRouteMode;
+  routeMode: WireAngle;
   points: Point[];
 }
 
@@ -40,7 +41,7 @@ export type WireCommitResult =
 
 export function createEmptyWireRouteSession(
   variant: WireVariant = "signal",
-  routeMode: WireRouteMode = "orthogonal"
+  routeMode: WireAngle = "orthogonal"
 ): WireRouteSession {
   return { variant, routeMode, points: [] };
 }
@@ -58,7 +59,8 @@ export function applyWireCommitToDocument(
   points: Point[],
   appearance: WireAppearance,
   createId: () => string,
-  routeMode: WireRouteMode = wireRouteModeForPath(points)
+  routeMode: WireRouteMode = wireRouteModeForPath(points),
+  layerId?: string
 ): WireCommitResult {
   const normalizedPoints = normalizeWirePath(points);
   if (normalizedPoints.length < 2) return { kind: "none" };
@@ -66,6 +68,7 @@ export function applyWireCommitToDocument(
   const wireId = createId();
   document.wires.push({
     id: wireId,
+    ...(layerId === undefined ? {} : { layerId }),
     points: normalizedPoints,
     routeMode,
     appearance
@@ -86,7 +89,7 @@ export function handleWireBlankRouteClick(session: WireRouteSession, point: Poin
       kind: "pending",
       session: { variant: session.variant, routeMode: session.routeMode, points: [snapped] },
       previewPoint: snapped,
-      status: `Wire start ${snapped.x}, ${snapped.y}. Empty clicks add bends; click a pin or press Enter to finish.`
+      status: `Wire start ${snapped.x}, ${snapped.y}. Click to add bends. Double-click or press Enter to finish.`
     };
   }
 
@@ -98,7 +101,7 @@ export function handleWireBlankRouteClick(session: WireRouteSession, point: Poin
       points: extendWirePath(session.points, snapped, session.routeMode)
     },
     previewPoint: snapped,
-    status: `Bend added at ${snapped.x}, ${snapped.y}. Continue routing, click a pin to finish, or press Enter.`
+    status: `Bend added at ${snapped.x}, ${snapped.y}. Double-click or press Enter to finish.`
   };
 }
 
@@ -109,14 +112,21 @@ export function handleWirePinRouteClick(session: WireRouteSession, point: Point)
       kind: "pending",
       session: { variant: session.variant, routeMode: session.routeMode, points: [snapped] },
       previewPoint: snapped,
-      status: "Wire started from pin. Move to preview, click bends, or click another pin to finish."
+      status: "Wire started from pin. Click to add bends. Double-click or press Enter to finish."
     };
   }
-  return finishWireRouteAt(session, snapped);
+  return handleWireBlankRouteClick(session, snapped);
 }
 
-export function finishWireRouteAt(session: WireRouteSession, point: Point): WireRouteIntent {
-  const points = extendWirePath(session.points, snapPoint(point), session.routeMode);
+export function finishWireRoute(session: WireRouteSession, point: Point | null): WireRouteIntent {
+  if (session.points.length < 1) {
+    return {
+      kind: "invalid",
+      session: createEmptyWireRouteSession(session.variant, session.routeMode),
+      status: "Click a start point before finishing a wire."
+    };
+  }
+  const points = point ? extendWirePath(session.points, point, session.routeMode) : clonePoints(session.points);
   if (points.length < 2) {
     return {
       kind: "invalid",
@@ -127,31 +137,8 @@ export function finishWireRouteAt(session: WireRouteSession, point: Point): Wire
   return { kind: "commit", points, routeMode: wireRouteModeForPath(points) };
 }
 
-export function finishWireRouteFromKeyboard(session: WireRouteSession, point: Point | null): WireRouteIntent {
-  if (session.points.length < 1) {
-    return {
-      kind: "invalid",
-      session: createEmptyWireRouteSession(session.variant, session.routeMode),
-      status: "Click a start point before finishing a wire."
-    };
-  }
-  const fallbackPoint = session.points[session.points.length - 1];
-  const target = snapPoint(point ?? fallbackPoint);
-  const points = samePoint(target, fallbackPoint)
-    ? clonePoints(session.points)
-    : extendWirePath(session.points, target, session.routeMode);
-  if (points.length < 2) {
-    return {
-      kind: "invalid",
-      session: { variant: session.variant, routeMode: session.routeMode, points: clonePoints(session.points) },
-      status: "Move to a second point or click a bend before pressing Enter."
-    };
-  }
-  return { kind: "commit", points, routeMode: wireRouteModeForPath(points) };
-}
-
 export function wireRoutePreviewPath(session: WireRouteSession, point: Point | null) {
   if (session.points.length === 0 || !point) return null;
-  const points = extendWirePath(session.points, point, session.routeMode);
+  const points = normalizeWirePath(extendWirePath(session.points, point, session.routeMode));
   return points.length >= 2 ? points : null;
 }

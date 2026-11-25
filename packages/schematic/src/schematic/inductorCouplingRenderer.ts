@@ -3,6 +3,7 @@ import { inductorCouplingColor } from "./inductorCouplingModel";
 import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { escapeAttribute, escapeHtml } from "./uiUtils";
 import type { ComponentInstance, InductorCoupling } from "./types";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 
 export const INDUCTOR_COUPLING_COLOR = "#111111";
 export const INDUCTOR_COUPLING_SELECTED_COLOR = "#005f9e";
@@ -70,7 +71,7 @@ export function renderInductorCouplingSvg(
     ? `<path data-coupling-arrows d="${escapeAttribute(geometry.arrowPath)}" fill="${color}" stroke="none" />`
     : "";
   const label = geometry.label
-    ? `<text data-coupling-label x="${geometry.labelPosition.x}" y="${geometry.labelPosition.y}" fill="${color}" stroke="none" font-family="Arial, Helvetica, sans-serif" font-size="${INDUCTOR_COUPLING_LABEL_FONT_SIZE}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeHtml(geometry.label)}</text>`
+    ? `<text data-coupling-label x="${geometry.labelPosition.x}" y="${geometry.labelPosition.y}" fill="${color}" stroke="none" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${INDUCTOR_COUPLING_LABEL_FONT_SIZE}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapeHtml(geometry.label)}</text>`
     : "";
   return `<g data-inductor-coupling-id="${escapeAttribute(coupling.id)}">${core}${arc}${arrows}${label}</g>`;
 }

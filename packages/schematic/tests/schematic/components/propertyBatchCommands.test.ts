@@ -6,7 +6,7 @@ import { applyNormalizedDocumentWires } from "../../../src/schematic/document/do
 import { createSchematicDocumentHistoryAdapter } from "../support/documentHistory";
 import { junctionId } from "../../../src/schematic/renderer";
 import { componentPinPoint } from "../../../src/schematic/netlist";
-import { rectangleSettings, setRectangleProperty } from "../../../src/schematic/rectangleComponentModel";
+import { rectangleSettings } from "../../../src/schematic/rectangleComponentModel";
 import {
   filterKindForInstance,
   functionBlockTimeDomainForInstance
@@ -20,10 +20,6 @@ import {
   junctionCustomColor,
   wireCustomColor
 } from "../../../src/schematic/networkColorModel";
-import {
-  noteFontSizePx,
-  noteWidthPx
-} from "../../../src/schematic/notes/noteSizing";
 import { resolvedWireAppearance } from "../../../src/schematic/wire/wireDecoration";
 import type {
   ComponentInstance,
@@ -380,13 +376,13 @@ describe("executeSchematicPropertyBatchCommand", () => {
     expect(wire).toEqual(previousWire);
   });
 
-  it("resizes rectangles, expands pin capacity, and moves surviving pin wires", () => {
+  it("resizes pure rectangles without changing unrelated wires", () => {
     const rectangle = fixtureComponent("rectangle", "X1", 200, 200);
-    const right = componentPinPoint(rectangle, "right-1");
     const document = documentWith(fixtureDocument({
       components: [rectangle],
-      wires: [fixtureWire("right-wire", [right, { x: 340, y: 200 }])]
+      wires: [fixtureWire("unrelated-wire", [{ x: 0, y: 0 }, { x: 40, y: 0 }])]
     }));
+    const previousWire = structuredClone(document.wires[0]);
 
     const result = executeSchematicPropertyBatchCommand(
       document,
@@ -396,36 +392,17 @@ describe("executeSchematicPropertyBatchCommand", () => {
     expect(result).toMatchObject({
       kind: "changed",
       renderScope: "document",
-      changedIds: [rectangle.id, "right-wire"]
+      changedIds: [rectangle.id]
     });
     expect(rectangleSettings(rectangle).widthGrid).toBe(8);
-    expect(document.wires[0].points[0]).toEqual(componentPinPoint(rectangle, "right-1"));
-
-    executeSchematicPropertyBatchCommand(
-      document,
-      graphSelection(rectangle.id),
-      { kind: "rectangle-top-pins", value: 7 }
-    );
-    expect(rectangleSettings(rectangle)).toMatchObject({
-      widthGrid: 8,
-      topPins: 7
-    });
+    expect(document.wires[0]).toEqual(previousWire);
   });
 
-  it("rejects conflicting Rectangle pin moves atomically", () => {
+  it("resizes every selected rectangle at a shared origin without pin topology conflicts", () => {
     const first = fixtureComponent("rectangle", "X1", 200, 200);
     const second = fixtureComponent("rectangle", "X2", 200, 200);
     second.mirrored = true;
-    const anchor = componentPinPoint(first, "right-1");
-    const secondRight = componentPinPoint(second, "right-1");
-    second.x += anchor.x - secondRight.x;
-    expect(componentPinPoint(second, "right-1")).toEqual(anchor);
-    const wire = fixtureWire("shared-rectangle-anchor", [
-      anchor,
-      { x: anchor.x, y: anchor.y + 100 }
-    ]);
-    const document = documentWith(fixtureDocument({ components: [first, second], wires: [wire] }));
-    const before = structuredClone(document);
+    const document = documentWith(fixtureDocument({ components: [first, second], wires: [] }));
 
     const result = executeSchematicPropertyBatchCommand(
       document,
@@ -433,44 +410,28 @@ describe("executeSchematicPropertyBatchCommand", () => {
       { kind: "rectangle-width", value: 8 }
     );
 
-    expect(result).toMatchObject({
-      kind: "rejected",
-      rejectionReason: "topology-conflict",
-      historyIntent: "none"
-    });
-    expect(document).toEqual(before);
+    expect(result).toMatchObject({ kind: "changed", historyIntent: "push" });
     expect([first, second].map((component) => rectangleSettings(component).widthGrid))
-      .toEqual([4, 4]);
+      .toEqual([8, 8]);
   });
 
-  it("moves surviving rectangle pin wires and leaves removed pin wires dangling", () => {
+  it("rejects legacy rectangle pin commands without changing the document", () => {
     const rectangle = fixtureComponent("rectangle", "X1", 200, 200);
-    setRectangleProperty(rectangle, "leftPins", 4);
-    const oldPins = ["left-1", "left-2", "left-3", "left-4"].map((id) =>
-      componentPinPoint(rectangle, id)
-    );
-    const document = documentWith(fixtureDocument({
-      components: [rectangle],
-      wires: oldPins.map((pin, index) =>
-        fixtureWire(`left-wire-${index + 1}`, [{ x: 80, y: pin.y }, pin])
-      )
-    }));
+    const document = documentWith(fixtureDocument({ components: [rectangle], wires: [] }));
+    const before = structuredClone(document);
 
-    executeSchematicPropertyBatchCommand(
+    const result = executeSchematicPropertyBatchCommand(
       document,
       graphSelection(rectangle.id),
       { kind: "rectangle-left-pins", value: 1 }
     );
 
-    expect(document.wires.find((wire) => wire.id === "left-wire-1")?.points.at(-1)).toEqual(
-      componentPinPoint(rectangle, "left-1")
-    );
-    expect(document.wires.find((wire) => wire.id === "left-wire-2")?.points.at(-1))
-      .toEqual(oldPins[1]);
-    expect(document.wires.find((wire) => wire.id === "left-wire-3")?.points.at(-1))
-      .toEqual(oldPins[2]);
-    expect(document.wires.find((wire) => wire.id === "left-wire-4")?.points.at(-1))
-      .toEqual(oldPins[3]);
+    expect(result).toMatchObject({
+      kind: "rejected",
+      rejectionReason: "invalid-value",
+      historyIntent: "none"
+    });
+    expect(document).toEqual(before);
   });
 
   it("assigns the exact same component name in document order and reports one history intent", () => {
@@ -879,52 +840,6 @@ describe("executeSchematicPropertyBatchCommand", () => {
     });
     expect(renamed.status).toContain("may merge networks");
     expect(labels.map((label) => label.name)).toEqual(["SHARED", "SHARED"]);
-  });
-
-  it("applies Note format, fill, size, and Markdown width to the complete group", () => {
-    const first = fixtureNote("note-1");
-    const second = { ...fixtureNote("note-2"), backgroundColor: null, fontSizePx: 20 };
-    const document = documentWith({ notes: [first, second] });
-
-    const unavailableWidth = executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-width", value: 400 }
-    );
-    expect(unavailableWidth).toMatchObject({
-      kind: "rejected",
-      rejectionReason: "incompatible-selection"
-    });
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(second.id, first.id),
-      { kind: "note-format", format: "markdown" }
-    )).toMatchObject({
-      kind: "changed",
-      changedNoteIds: [first.id, second.id]
-    });
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-width", value: "333" }
-    ).kind).toBe("changed");
-    expect(document.notes.map(noteWidthPx)).toEqual([340, 340]);
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-font-size", value: "18" }
-    ).kind).toBe("changed");
-    expect(document.notes.map(noteFontSizePx)).toEqual([18, 18]);
-
-    expect(executeSchematicPropertyBatchCommand(
-      document,
-      noteSelection(first.id, second.id),
-      { kind: "note-background", color: null }
-    ).kind).toBe("changed");
-    expect(document.notes.map((note) => note.backgroundColor)).toEqual([null, null]);
-    expect(document.notes.map((note) => note.text)).toEqual(["rewrite note", "rewrite note"]);
   });
 
   it("updates common Pin fields and preserves temporarily deleted object participation", () => {

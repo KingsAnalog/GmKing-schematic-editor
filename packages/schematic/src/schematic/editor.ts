@@ -1,3 +1,6 @@
+import { SchematicNoteDialog, type NoteDraft } from "./notes/noteDialog";
+import { typesetNotesForExport } from "./notes/noteTypeset";
+import { DEFAULT_NOTE_ANCHOR } from "./notes/noteGeometry";
 import { SchematicInductorInteractionController } from "./inductorInteractionController";
 import { ComponentRefAllocator } from "./componentRefAllocator";
 import { switchStateCycleCommand } from "./switchInteractionModel";
@@ -8,14 +11,65 @@ import {
   type CellGeometryInteractionLiveResult
 } from "./cellGeometryInteractionCoordinator";
 import { InstanceSelector, type InstancePaletteItem } from "./instanceSelector";
+import { InstanceBrowser } from "./instanceBrowser";
+import { applyTranslatedWireAnchors } from "./wire/wireMoveTopology";
+import { syncDeviceModelFields, syncMosParameterFields } from "./componentNetlistFields";
+import { applyPlacementProperties, type PlacementProperties } from "./placementModel";
+import { SidebarLibrary } from "./sidebarLibrary";
+import { RightDockController, type RightDockState, type RightDockView } from "./rightDock";
+import { SchematicEventLog, type LogEntry } from "./eventLog";
+import { NetlistPanelController } from "./netlist/panel";
+import { DEFAULT_NETLIST_PROCESS, isDeviceKind, isNetlistModelText, isProcessId, NETLIST_MODEL_VALUE_KEY, type ProcessId } from "./netlist/profiles";
+import { ARC_THROUGH_POINT_STEP, createArcGeometry } from "./arcComponentModel";
+import { createCircleGeometry } from "./circleComponentModel";
+import { LIBRARY_PATH_MAX_POINTS } from "./libraryPathPoints";
+import { createPolygonGeometry } from "./polygonComponentModel";
+import { quadraticArcSymbol } from "./symbols/arcSymbols";
+import { createPolylineGeometry } from "./polylineComponentModel";
+import { isLibraryShapeType, isVertexLibraryShapeType, type LibraryShapeType } from "./libraryShapeStyleModel";
+import { componentName, t, uiFormat } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
+import { getComponentDef } from "./catalog";
+import { RECTANGLE_RESIZE_HANDLE_SELECTORS } from "./componentRenderer";
+import {
+  RECTANGLE_HEIGHT_VALUE_KEY,
+  RECTANGLE_WIDTH_VALUE_KEY
+} from "./rectangleComponentModel";
+import {
+  TRIANGLE_VERTICES,
+  triangleVertexKey
+} from "./triangleComponentModel";
+import { DEFAULT_LAYER_ID, defaultSchematicLayer, nextLayerId, normalizeLayers, type SchematicLayer } from "./layers";
+import {
+  buildSchematicLayerObjectTree,
+  layerObjectStackIds,
+  type SchematicLayerObjectNode
+} from "./layerObjectTreeModel";
+import {
+  applyLayerAssignment,
+  applyLayerObjectMove,
+  planLayerAssignment,
+  planLayerObjectMove,
+  projectLayerAssignment,
+  type LayerObjectMoveDirection
+} from "./layerObjectCommands";
+import {
+  resolveLayerObjects,
+  setLayerObjectVisible as setLayerObjectVisibleState
+} from "./layerObjectStateModel";
+import { setComponentPinVisibility } from "./pinConfigurationModel";
 import type { SchematicGraphAdapter } from "./graphAdapter";
 import { SchematicIncrementalRenderCoordinator } from "./incrementalRenderCoordinator";
 import { SchematicJunctionRenderCoordinator } from "./junctionRenderCoordinator";
 import { resolveSchematicNets, type NetResolution } from "./netResolution";
 import {
   bindStandaloneNetLabelsAtPoint,
+  nearestWireAttachment,
   netLabelPosition
 } from "./netLabelModel";
+import { SchematicNetLabelDialog } from "./netLabelDialog";
+import type { WireAngle } from "./wire/wireAngle";
+import { wireRouteModeForPath } from "./wire/wireGeometry";
 import { SchematicNetLabelToolController } from "./netLabelToolController";
 import {
   SchematicNetLabelCommitCoordinator,
@@ -25,15 +79,17 @@ import { SchematicNoteLayer } from "./notes/noteLayer";
 import { SchematicNoteInteractionController } from "./notes/noteInteractionController";
 import {
   NotePropertyBatchSession,
-  type NotePropertyBatchProjectionContext
 } from "./notes/notePropertyBatchSession";
-import { noteFontSizePx } from "./notes/noteSizing";
+import { isSchematicTextFont } from "./schematicFont";
+import { wireHopPaths } from "./wire/wireCrossings";
 import { createSchematicPaperSurface, type SchematicPaperSurface } from "./paperLifecycle";
 import { SchematicPreviewRenderer } from "./previewRenderer";
 import { SchematicPropertyInteractionController } from "./propertyInteractionController";
 import { SchematicPropertyPanelController } from "./propertyPanelController";
 import {
-  createPlainSchematicNoteDocumentOp,
+  commitSelectionMoveDocumentOp,
+  createSchematicNoteDocumentOp,
+  projectPointerSelectionMove,
   resetSchematicDocument,
   restoreSchematicDocumentOp,
   transformSelectionDocumentGeometryOp,
@@ -47,12 +103,13 @@ import {
   SchematicPlacementCommitCoordinator,
   type SchematicPlacementCommitOutcome
 } from "./placementCommitCoordinator";
+import { GRID_SIZE, SYMBOL_GRID_SIZE } from "./types";
 import type { SchematicPropertyBatchCommandResult } from "./propertyBatchCommands";
 import {
   ShapeResizeSession,
   type ShapeResizeHandle
 } from "./shapeResizeSession";
-import { pointKey, snapPoint } from "./geometry";
+import { pointKey, samePoint, snapPoint } from "./geometry";
 import { junctionCustomColor, pruneJunctionAppearances } from "./networkColorModel";
 import type {
   SchematicEditorCommand,
@@ -71,6 +128,7 @@ import type {
   SchematicHostedEditor
 } from "./schematicHostedEditor";
 import { SchematicToolbarController } from "./toolbar";
+import { SCHEMATIC_PLUS_CURSOR, syncSchematicToolCursor, type ToolCursorFeedback } from "./toolCursor";
 import {
   SchematicTransientToolSessionCoordinator,
   type TransientInteractionCleanupPolicy
@@ -82,6 +140,7 @@ import {
   buildPlacementToolEntryIntent,
   buildWireToolEntryIntent,
   isDeleteToolMode as isSchematicDeleteToolMode,
+  isMoveOrRotateMode,
   projectSchematicEscapeKeyIntent,
   projectSchematicKeyboardShortcut,
   projectSchematicToolbarCommandIntent,
@@ -101,7 +160,9 @@ import {
   selectedExportJunctionPoints
 } from "./selection/selectionCopyExportModel";
 import { SchematicCopyController } from "./copyController";
+import { projectSchematicSelection, selectionPlacementAnchor } from "./selection/selectionProjection";
 import {
+  captureCopyLayers,
   copySourceCenterAnchor,
   copySourceCount,
   copySourceFromDocument
@@ -130,8 +191,8 @@ import {
   projectLinkPointerClickTarget,
   projectPinPointerClickTarget
 } from "./pointerClickTargetProjection";
-import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
-import type { SelectionGesture } from "./selection/selectionModel";
+import { beginSelectionMoveTransaction, type SelectionMoveBehavior, type SelectionMoveTransaction } from "./selection/selectionMoveTransaction";
+import { createSchematicSelectionState, type SelectionGesture } from "./selection/selectionModel";
 import { SchematicSelectionBoxController } from "./selection/selectionBoxController";
 import { projectFinishedSelectionBox, type FinishedSelectionBoxIntent } from "./selection/selectionBoxModel";
 import { SchematicSelectionSessionCoordinator } from "./selection/selectionSessionCoordinator";
@@ -145,20 +206,20 @@ import {
 } from "./selection/selectionDeleteModel";
 import type { GroupTransformKind } from "./selection/selectionTransformModel";
 import {
+  assignRestoredSchematicDocument,
   cloneSchematicDocument,
   contentFromDocument,
   documentFromContent,
   normalizeSchematicContent
 } from "./document/documentModel";
-import { applyNormalizedDocumentWires } from "./document/documentWires";
+import { applyNormalizedDocumentWires, reconcileDocumentConnectionEdit } from "./document/documentWires";
 import {
   captureTransformRenderSnapshot,
   changedTransformWireIds,
   type TransformRenderSnapshot
 } from "./transformRenderModel";
-import { schematicDocumentVisualBounds } from "./view-geometry";
+import { componentVisualBounds, schematicDocumentVisualBounds } from "./view-geometry";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
-import { reconcileConnectionEdit } from "./connectionGraph";
 import type { WireEndpointConnections } from "./wire/wireDecoration";
 import {
   beginWireSegmentMove,
@@ -210,7 +271,7 @@ import type {
   SchematicContent,
   SchematicDocument,
   SchematicNote,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   SchematicViewState,
   Wire,
   WireRouteMode
@@ -221,10 +282,23 @@ const MIN_FIT_ZOOM = 0.00001;
 const MAX_ZOOM = 280;
 const FIT_PADDING_PX = 48;
 const FIT_BOUNDS_MARGIN = 28;
-const NOTE_COMMIT_DEBOUNCE_MS = 400;
+// Shape creation follows the visible 10 px canvas grid.
+const LIBRARY_SHAPE_DRAW_GRID_SIZE = GRID_SIZE;
+const VERTEX_SHAPE_GEOMETRY = {
+  arc: createArcGeometry,
+  circle: createCircleGeometry,
+  polygon: createPolygonGeometry,
+  polyline: createPolylineGeometry
+};
+const SHAPE_FINISH_MIN_VERTICES = { polyline: 2, polygon: 3 };
+
+function isPathDraft(kind: LibraryShapeType | undefined): kind is keyof typeof SHAPE_FINISH_MIN_VERTICES {
+  return kind === "polyline" || kind === "polygon";
+}
 
 type SchematicEditorOptions = SchematicEditorMountElements;
 type MoveBehavior = SelectionMoveBehavior;
+const ROTATE_PICK_STATUS = "Rotate mode: click a component, then click to place it. Esc cancels.";
 type SchematicContextTarget = SchematicViewTarget;
 
 interface SchematicDocumentRenderRuntime {
@@ -253,6 +327,24 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly deleteCommitCoordinator: SchematicDeleteCommitCoordinator;
   private readonly noteLayer: SchematicNoteLayer;
   private readonly instanceSelector: InstanceSelector;
+  private readonly sidebarLibrary: SidebarLibrary;
+  private readonly instanceBrowser: InstanceBrowser;
+  private readonly rightDock: RightDockController | null;
+  private readonly eventLog: SchematicEventLog;
+  private readonly netlistPanel: NetlistPanelController | null;
+  private netlistRefreshTimer: number | null = null;
+  private toolCursorFeedback?: { cursor: ToolCursorFeedback; timer: number };
+  private activeLayerId = "layer-1";
+  private readonly collapsedLayerTreeNodes = new Set<string>();
+  private libraryShapeDraw: { kind: LibraryShapeType; points: Point[]; properties?: PlacementProperties } | null = null;
+  private libraryShapeDragStart: Point | null = null;
+  private shapeDraftOverlay: SVGSVGElement | null = null;
+  private routingSnapMarker: SVGCircleElement | null = null;
+  private shapeFinishButton: HTMLButtonElement | null = null;
+  private placementPointerStart: { x: number; y: number; blank: boolean; maxDistance: number } | null = null;
+  private hierarchyPlacement: ComponentInstance | null = null;
+  private lastLoggedStatus = "";
+  private lastHadSelection = false;
   private readonly contextMenuController;
   private readonly propertyPanelController: SchematicPropertyPanelController;
   private readonly analysisController;
@@ -261,6 +353,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly placementCommitCoordinator: SchematicPlacementCommitCoordinator;
   private presentationMode = false;
   private lastPointerPoint: Point | null = null;
+  private routingPointer: { point: Point; wireId?: string } | null = null;
   private readonly wireToolController = new SchematicWireToolController();
   private readonly wireCommitCoordinator: SchematicWireCommitCoordinator;
   private readonly previewRenderer: SchematicPreviewRenderer<any>;
@@ -268,6 +361,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly selectionBoxController: SchematicSelectionBoxController<any>;
   private readonly viewportController: SchematicViewportController;
   private readonly noteInteractionController: SchematicNoteInteractionController;
+  private readonly noteDialog: SchematicNoteDialog;
+  private noteDraft?: NoteDraft;
   private readonly notePropertyBatchSession: NotePropertyBatchSession;
   private readonly propertyInteractions: SchematicPropertyInteractionController;
   private readonly shapeResizeSession = new ShapeResizeSession(this.document);
@@ -276,16 +371,23 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly junctionRenderCoordinator: SchematicJunctionRenderCoordinator<any>;
   private wireSegmentMove: WireSegmentMoveTransaction | null = null;
   private readonly netLabelToolController = new SchematicNetLabelToolController();
+  private readonly netLabelDialog: SchematicNetLabelDialog;
   private readonly netLabelCommitCoordinator: SchematicNetLabelCommitCoordinator;
   private netResolutionCache: NetResolution | undefined;
   private activeHostedDocumentId = "";
-  private readonly copyMarkdownPreviewContent = new Map<string, HTMLElement>();
-  private copyMarkdownPreviewGeneration = 0;
+  private readonly hostedActiveLayerIds = new Map<string, string>();
   private copyPreviewNeedsPointer = false;
+  private copyAfterDrop: "select" | "pick" | "paste" = "select";
+  private pointerMove: {
+    transaction: SelectionMoveTransaction;
+    repeat: boolean;
+    displayed(id: string): boolean;
+  } | null = null;
   private readonly inductorInteractions: SchematicInductorInteractionController;
   private readonly lifecycleController: AbortController;
   private readonly stateListeners = new Set<SchematicEditorStateListener>();
   private readonly scheduledFrames = new Set<number>();
+  private wireCrossingFramePending = false;
   private destroyResult: Promise<void> | null = null;
   private initialized = false;
   private destroyed = false;
@@ -293,7 +395,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private lastOrigin = "init";
   private lastReason = "init";
   private statusMessage = "";
-  private noteCommitTimer: number | null = null;
 
   private get paper() {
     return this.activeRenderRuntime.surface.paper as any;
@@ -324,10 +425,11 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private readonly handleShapeResizePointerDown = (event: PointerEvent) => {
     const handle = (event.target as Element | null)?.closest<SVGElement>(
-      "[data-rectangle-resize-handle], [data-triangle-resize-handle]"
+      "[data-rectangle-resize-handle], [data-triangle-resize-handle], [data-shape-vertex]"
     );
     if (
       !handle
+      || this.libraryShapeDraw
       || event.button !== 0
       || this.transientToolSession.mode !== "select"
       || this.selectionSession.selectedIds.size !== 1
@@ -336,11 +438,15 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
     const componentId = handle.getAttribute("data-component-id") ?? "";
-    const corner = (handle.getAttribute("data-rectangle-resize-handle") ?? handle.getAttribute("data-triangle-resize-handle")) as ShapeResizeHandle;
-    if (!this.shapeResizeSession.begin(componentId, corner)) return;
+    const vertex = handle.getAttribute("data-shape-vertex");
+    const resizeHandle: ShapeResizeHandle = vertex === null
+      ? (handle.getAttribute("data-rectangle-resize-handle") ?? handle.getAttribute("data-triangle-resize-handle")) as ShapeResizeHandle
+      : Number(vertex);
+    if (!this.shapeResizeSession.begin(componentId, resizeHandle)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     this.shapeResizePointerId = event.pointerId;
+    this.syncToolCursor();
     this.host.ownerWindow.addEventListener("pointermove", this.handleShapeResizePointerMove, true);
     this.host.ownerWindow.addEventListener("pointerup", this.handleShapeResizePointerUp, true);
     this.host.ownerWindow.addEventListener("pointercancel", this.handleShapeResizePointerCancel, true);
@@ -355,7 +461,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const result = this.shapeResizeSession.move(this.pointFromClientEvent(event));
+    const result = this.shapeResizeSession.move(this.localPointFromClient(event.clientX, event.clientY));
     if (!result.active) return;
     this.renderDocument();
     this.renderPropertyEditor();
@@ -398,7 +504,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   private readonly handleCanvasMouseMove = (event: MouseEvent) => {
     if (this.viewportController.isMousePanActive() || this.selectionBoxController.isActive()) return;
     if (this.isDeleteToolMode()) this.setDeleteHoverFromEvent(event);
-    this.handlePointerMove(this.pointFromClientEvent(event));
+    const point = this.localPointFromClient(event.clientX, event.clientY);
+    this.routingPointer = { point, wireId: this.wireIdAt(event.target) };
+    this.handlePointerMove(point);
   };
 
   private readonly handleGlobalNotePointerMove = (event: PointerEvent) => {
@@ -450,30 +558,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setStatus((geometryCommit?.affectedGraphIds.length ?? 0) > 0 ? geometryCommit!.status : noteCommit.status);
   };
 
-  private readonly handleGlobalNoteWidthPointerMove = (event: PointerEvent) => {
-    const result = this.noteInteractionController.moveWidthDrag({
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      zoom: this.zoom
-    });
-    if (!result.valid) return;
-    event.preventDefault();
-    if (result.changed) {
-      this.persistWorkspaceState();
-      this.renderPropertyEditor();
-    }
-  };
-
-  private readonly handleGlobalNoteWidthPointerUp = (event: PointerEvent) => {
-    const result = this.noteInteractionController.endWidthDrag(event.pointerId);
-    if (result.kind === "ignored") return;
-    event.preventDefault();
-    this.removeNoteWidthDragListeners();
-    this.commitNotePropertyResult(result.commit);
-    this.renderPropertyEditor();
-  };
-
   constructor(
     private readonly options: SchematicEditorOptions,
     private readonly host: SchematicEditorRuntimeServices,
@@ -483,6 +567,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       throw new Error("Schematic editor host services must belong to the mount root document.");
     }
     this.lifecycleController = host.createAbortController();
+    this.noteDialog = new SchematicNoteDialog(options.shellEl);
+    this.netLabelDialog = new SchematicNetLabelDialog(options.shellEl);
     this.analysisController = hostBridge.analysis ?? createNoopAnalysisBridge();
     this.contextMenuController = hostBridge.contextMenu ?? createNoopContextMenuBridge();
     this.deleteCommitCoordinator = new SchematicDeleteCommitCoordinator(this.document);
@@ -498,7 +584,8 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.wireCommitCoordinator = new SchematicWireCommitCoordinator(
       this.document,
       this.wireToolController,
-      () => this.host.idFactory()
+      () => this.host.idFactory(),
+      () => this.activeLayerId
     );
     this.netLabelCommitCoordinator = new SchematicNetLabelCommitCoordinator(
       this.document,
@@ -518,7 +605,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       makeComponentCell: (component) => this.makeComponentCell(component),
       makeWireCell: (wire) => this.makeWireCell(wire),
       makeJunctionCell: makeJunctionViewCell,
-      isWireSelected: (wireId) => this.selectionSession.isCellSelected(wireId)
+      isWireSelected: (wireId) => this.selectionSession.isCellSelected(wireId),
+      isBusWire: (wireId) => this.netResolutionCache?.busWireIds.has(wireId) ?? false
     });
     this.cellGeometryInteractionCoordinator = new SchematicCellGeometryInteractionCoordinator({
       document: this.document,
@@ -541,7 +629,16 @@ export class SchematicEditor implements SchematicHostedEditor {
     };
     this.selectionBoxController = new SchematicSelectionBoxController({
       graphAdapter: this.graphAdapter,
-      listeners: viewportListeners
+      listeners: {
+        add: () => {
+          viewportListeners.add();
+          this.syncToolCursor();
+        },
+        remove: () => {
+          viewportListeners.remove();
+          this.syncToolCursor();
+        }
+      }
     });
     this.viewportController = new SchematicViewportController({
       host: this.options.paperEl,
@@ -572,31 +669,16 @@ export class SchematicEditor implements SchematicHostedEditor {
       maxZoom: MAX_ZOOM
     });
     setSchematicPresentationClass(this.options.paperEl, this.presentationMode);
-    this.options.paperEl.style.setProperty(
-      "--schematic-delete-cursor",
-      this.host.cursors?.delete ?? "crosshair"
-    );
-    this.options.paperEl.style.setProperty(
-      "--schematic-temp-delete-cursor",
-      this.host.cursors?.temporaryDelete ?? "crosshair"
-    );
-    this.noteLayer = new SchematicNoteLayer(this.options.paperEl, {
-      runtimeAdapter: this.host.noteRuntimeAdapter,
-      onMarkdownChange: (noteId, markdown) => this.updateMarkdownNoteText(noteId, markdown),
-      onMarkdownResize: (noteId, height) => this.updateMarkdownNoteHeight(noteId, height)
-    });
+    this.options.paperEl.style.setProperty("--schematic-plus-cursor", SCHEMATIC_PLUS_CURSOR);
+    this.noteLayer = new SchematicNoteLayer(this.options.paperEl, { defaultTextFont: () => this.document.display?.textFont });
     const frameScheduler = {
       request: (callback: () => void) => this.requestOwnedFrame(() => callback()),
       cancel: (handle: number) => this.cancelOwnedFrame(handle)
     };
-    this.noteInteractionController = new SchematicNoteInteractionController(
-      this.document,
-      this.noteLayer,
-      (callback) => this.requestOwnedFrame(() => callback())
-    );
+    this.noteInteractionController = new SchematicNoteInteractionController(this.document);
     this.notePropertyBatchSession = new NotePropertyBatchSession(
       this.document,
-      (note, context) => this.projectNotePropertyBatch(note, context),
+      note => this.projectNotePropertyBatch(note),
       frameScheduler
     );
     this.inductorInteractions = new SchematicInductorInteractionController({
@@ -631,13 +713,11 @@ export class SchematicEditor implements SchematicHostedEditor {
       noteLayerElement: this.noteLayer.element,
       makeComponentCell: (component) => this.makeComponentCell(component),
       makeWireCell: (wire, options) => this.makeWireCell(wire, options),
-      makeNetLabelCell: (label, options) => makeNetLabelCell(label, options),
+      makeNetLabelCell: (label, options) => makeNetLabelCell(label, { ...options, documentFont: this.document.display?.textFont }),
+      defaultTextFont: () => this.document.display?.textFont,
       presentationMode: () => this.presentationMode,
       worldToScreenPoint: (point) => this.worldToScreenPoint(point),
-      zoom: () => this.zoom,
-      cloneRenderedNoteContent: (note) =>
-        this.copyMarkdownPreviewContent.get(note.text)?.cloneNode(true) as HTMLElement | undefined
-        ?? this.noteLayer.cloneRenderedMarkdownByText(note.text)
+      zoom: () => this.zoom
     });
     this.propertyPanelController = new SchematicPropertyPanelController(this.options.propertyEl, this.propertyInteractions.callbacks({
       ...this.inductorInteractions.callbacks(),
@@ -645,24 +725,21 @@ export class SchematicEditor implements SchematicHostedEditor {
       onNoteFontSizeEditStart: () => this.beginNoteFontSizePropertyEdit(),
       onNoteFontSizeInput: (value) => this.setSelectedNoteFontSize(value, { commit: false }),
       onNoteFontSizeCommit: (value) => this.setSelectedNoteFontSize(value, { commit: true }),
-      onNoteFormatChange: (format) => this.setSelectedNoteFormat(format),
-      onNoteWidthEditStart: () => this.beginNoteWidthPropertyEdit(),
-      onNoteWidthInput: (value) => this.setSelectedNoteWidth(value, { commit: false }),
-      onNoteWidthCommit: (value) => this.setSelectedNoteWidth(value, { commit: true }),
-      onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit(),
-      onNoteWidthCancel: () => this.cancelNoteWidthPropertyEdit(),
-      onLabelToolInput: (value) => this.netLabelToolController.updateDraft(value),
-      onLabelToolSubmit: (value) => this.armLabelPlacement(value)
+      onNoteAnchorChange: anchor => this.setSelectedNoteAnchor(anchor),
+      onNoteTextChange: text => this.setSelectedNoteText(text),
+      onNoteFontSizeCancel: () => this.cancelNoteFontSizePropertyEdit()
     }));
     this.junctionRenderCoordinator = new SchematicJunctionRenderCoordinator({
       document: this.document,
       graphAdapter: this.graphAdapter,
       makeJunctionCell: makeJunctionViewCell,
       getPresentationMode: () => this.presentationMode,
+      onLiveRefresh: () => this.applyLayerObjectStackOrder(),
       requestAnimationFrame: (callback) => this.host.requestAnimationFrame(callback),
       cancelAnimationFrame: (handle) => this.host.cancelAnimationFrame(handle)
     });
     this.transientToolSession = new SchematicTransientToolSessionCoordinator({
+      clearToolCursorFeedback: () => this.clearToolCursorFeedback(),
       clearWireSegmentMove: () => {
         this.wireSegmentMove = null;
       },
@@ -670,6 +747,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       clearActiveNetPick: () => this.analysisController.clearActivePick(),
       clearDeleteHover: () => this.clearDeleteHover(),
       clearPlacementPreview: () => this.removePlacementPreview(),
+      clearShapeDraft: () => { this.clearLibraryShapeDraw(); this.clearNotePlacement(); },
       clearWirePreview: () => this.removeWirePreview(),
       clearCopyPreview: () => this.removeCopyPreview(),
       clearCopyState: () => this.clearCopyState(),
@@ -681,6 +759,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       updatePlacementPreview: (point) => this.updatePlacementPreview(point),
       updateWirePreview: (point) => this.updateWirePreview(point),
       updateCopyPreview: (point) => this.updateCopyPreview(point),
+      updateMovePreview: (point) => this.updateMovePreview(point),
       updateLabelPreview: (point) => this.updateNetLabelPreview(point)
     });
     this.instanceSelector = new InstanceSelector(this.options.paletteEl, {
@@ -696,6 +775,50 @@ export class SchematicEditor implements SchematicHostedEditor {
       closeAfterActivation: this.hostBridge.closeInstanceSearchAfterActivation,
       onPanelVisibilityChange: (open) => this.hostBridge.onInstanceSearchVisibilityChange?.(open)
     });
+    const layout = this.options.layout;
+    this.sidebarLibrary = new SidebarLibrary(this.options.paletteEl, {
+      symbolTemplate: () => this.document.symbolTemplate,
+      initialTab: layout?.getSidebarTab?.() ?? "library",
+      onTabChange: (tab) => layout?.setSidebarTab?.(tab),
+      hierarchy: this.hostBridge.hierarchyLibrary,
+      onHierarchyPick: this.hostBridge.placeHierarchySheet,
+      onPick: (item) => {
+        this.beginPlacement(item);
+        this.focusCanvas();
+      }
+    });
+    this.instanceBrowser = new InstanceBrowser(this.options.shellEl, {
+      symbolTemplate: () => this.document.symbolTemplate,
+      netlistProcess: () => this.document.netlistProcess,
+      onPick: (item, properties) => {
+        this.beginPlacement(item, { properties });
+        this.focusCanvas();
+      },
+      onClose: () => {
+        this.syncToolCursor();
+        this.focusCanvas();
+      }
+    });
+    const { analysisEl } = this.options;
+    this.rightDock = analysisEl
+      ? new RightDockController(analysisEl, {
+          initial: layout?.getRightDockState?.(),
+          onChange: (state) => this.handleRightDockChange(state)
+        })
+      : null;
+    this.eventLog = new SchematicEventLog(this.options.shellEl, {
+      initialHeight: layout?.getLogHeight?.() ?? 230,
+      onHeightChange: (height) => layout?.setLogHeight?.(height)
+    });
+    this.netlistPanel = analysisEl
+      ? new NetlistPanelController(analysisEl, {
+          onSelect: (componentId, sheetId) => sheetId
+            ? this.hostBridge.selectProjectDiagnostic?.(sheetId, componentId)
+            : this.selectNetlistDiagnostic(componentId),
+          buildDesign: document => this.hostBridge.projectNetlist?.(document) ?? null
+        })
+      : null;
+
     const toolbarRoot = this.options.paperEl.closest(".schematic-shell");
     this.toolbarController = toolbarRoot
       ? new SchematicToolbarController(toolbarRoot, {
@@ -741,7 +864,14 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.initialized = true;
     this.activeRenderRuntime.host.hidden = false;
     this.activeRenderRuntime.surface.paper.unfreeze?.();
+    this.sidebarLibrary.mount();
+    this.instanceBrowser.mount();
+    this.rightDock?.mount();
+    this.eventLog.mount();
+    this.netlistPanel?.mount();
+    this.netlistPanel?.refresh(this.document);
     this.renderPalette();
+    this.renderLayersPanel();
     this.bindEvents();
     this.syncToolUi();
     this.renderSelectionSummary();
@@ -755,28 +885,36 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.flushTransientEdits("destroy");
     this.destroyed = true;
     this.destroyResult = Promise.resolve();
-    this.copyMarkdownPreviewGeneration += 1;
     this.lifecycleController.abort();
     this.cancelOwnedFrames();
-    this.cancelScheduledNoteCommit();
     this.cancelShapeResize();
     this.removeNoteDragListeners();
-    this.removeNoteWidthDragListeners();
     this.selectionBoxController.cancel();
     this.viewportController.cancelActiveGestures();
     this.junctionRenderCoordinator.cancelScheduledRefresh();
     this.notePropertyBatchSession.dispose();
     this.propertyInteractions.dispose();
-    this.noteInteractionController.dispose();
+    this.noteInteractionController.cancelDrag();
+    this.clearNotePlacement();
     this.instanceSelector.destroy();
+    this.sidebarLibrary.destroy();
+    this.instanceBrowser.destroy();
+    this.clearToolCursorFeedback();
+    syncSchematicToolCursor(this.options.paperEl);
+    this.options.paperEl.style.removeProperty("--schematic-plus-cursor");
+    this.rightDock?.destroy();
+    this.eventLog.destroy();
+    if (this.netlistRefreshTimer !== null) this.host.clearTimeout(this.netlistRefreshTimer);
+    this.netlistPanel?.destroy();
     this.toolbarController?.destroy();
     this.propertyPanelController.destroy();
+    this.netLabelDialog.close();
+    this.routingSnapMarker?.parentElement?.remove();
     this.activeRenderRuntime.surface.destroy();
     this.activeRenderRuntime.host.remove();
     this.destroyResult = this.noteLayer.destroy().catch((error) => {
       console.error("Schematic Note runtime cleanup failed.", error);
     });
-    this.copyMarkdownPreviewContent.clear();
     this.stateListeners.clear();
     return this.destroyResult;
   }
@@ -832,7 +970,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const before = this.getContent();
     const draft = structuredClone(before);
     mutate(draft);
-    reconcileConnectionEdit(draft, before);
+    reconcileDocumentConnectionEdit(draft, before);
     this.replaceContent(draft, {
       ...options,
       commit: options.commit ?? options.history !== "none",
@@ -883,6 +1021,10 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.revision = revision;
     this.lastOrigin = origin;
     this.lastReason = reason;
+    if (this.pointerMove) {
+      this.transientToolSession.transition("select", "restore");
+      this.syncToolUi();
+    }
     this.emitStateChange();
     return true;
   }
@@ -918,7 +1060,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.beginLabelTool();
         return true;
       case "note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         return true;
       case "copy":
         this.beginCopyCommand();
@@ -950,6 +1092,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.redo();
         return true;
       case "cancel":
+        this.cancelHierarchyPlacement();
         this.cancelTool();
         return true;
     }
@@ -957,10 +1100,11 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private renderPalette() {
     this.instanceSelector.render();
+    this.sidebarLibrary.refresh();
   }
 
   private changeSymbolTemplate(templateId: SymbolTemplateId) {
-    const errorEl = this.options.paletteEl.querySelector<HTMLElement>("[data-symbol-template-error]");
+    const errorEl = this.options.shellEl.querySelector<HTMLElement>("[data-symbol-template-error]");
     if (errorEl) { errorEl.hidden = true; errorEl.textContent = ""; }
     try {
       const template = resolveSymbolTemplate(templateId);
@@ -990,7 +1134,10 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private bindEvents() {
+    this.bindHierarchyPlacement();
     this.bindControllerEvents();
+    this.bindDisplaySettings();
+    this.bindLibraryShapeDrawEvents();
     this.bindGlobalDocumentWindowInteractions();
     this.bindNoteLayerInteractions();
     this.bindCellGeometrySelectionMovePaperHooks();
@@ -998,13 +1145,1038 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.bindPaperPointerMoveDownClickJointJsInteractions();
   }
 
+  private bindHierarchyPlacement() {
+    const { signal } = this.lifecycleController;
+    const paper = this.options.paperEl;
+    paper.addEventListener("pointermove", event => {
+      if (this.hierarchyPlacement && !event.buttons) this.previewHierarchyPlacement(this.pointFromClientEvent(event));
+    }, { signal });
+    paper.addEventListener("pointerdown", event => {
+      const pending = this.hierarchyPlacement;
+      if (!pending || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const layer = this.editablePlacementLayer();
+      if (!layer) return;
+      const point = this.pointFromClientEvent(event);
+      this.cancelHierarchyPlacement();
+      const component = { ...pending, ...point, values: { ...pending.values, "layer:id": layer.id } };
+      this.transact(content => content.components.push(component), { origin: "editor", reason: "hierarchy-place" });
+      this.hostSelectHierarchyComponent(component.id);
+    }, { capture: true, signal });
+  }
+
+  private previewHierarchyPlacement(point: Point) {
+    if (this.hierarchyPlacement) {
+      this.previewRenderer.renderPlacement({ components: [{ ...this.hierarchyPlacement, ...point }], wires: [] });
+    }
+  }
+
+  private cancelHierarchyPlacement() {
+    if (!this.hierarchyPlacement) return;
+    this.hierarchyPlacement = null;
+    this.previewRenderer.clearPlacement();
+    this.options.paperEl.classList.remove("is-hierarchy-placing");
+    this.syncToolCursor();
+  }
+
+  hostArmHierarchyPlacement(component: ComponentInstance) {
+    this.cancelTool();
+    this.hierarchyPlacement = component;
+    if (this.options.layout?.isNarrow?.()) this.options.layout.closePanel("left");
+    this.options.paperEl.classList.add("is-hierarchy-placing");
+    this.syncToolCursor();
+    this.previewHierarchyPlacement(this.lastPointerPoint ?? this.viewportCenterPoint());
+    this.focusCanvas();
+  }
+
+  hostSelectedHierarchyComponent() {
+    return this.selectedSingleComponent();
+  }
+
+  hostShowHierarchy() {
+    this.openRightView("hierarchy");
+  }
+
+  hostRefreshHierarchy() {
+    this.sidebarLibrary.refresh();
+    this.scheduleNetlistRefresh();
+    this.syncToolUi();
+  }
+
+  hostSelectHierarchyComponent(id: string, center = false) {
+    if (center) this.selectNetlistDiagnostic(id);
+    else {
+      this.selectionSession.setMixed([id], []);
+      this.finishSelectionChange();
+      this.sidebarLibrary.showProperties();
+    }
+  }
+
+  private bindDisplaySettings() {
+    const { signal } = this.lifecycleController;
+    this.options.shellEl.addEventListener("change", event => {
+      const select = event.target;
+      if (!(select instanceof this.host.ownerWindow.HTMLSelectElement)) return;
+      const { value } = select;
+      if (select.hasAttribute("data-schematic-wire-crossings") && (value === "plain" || value === "hop")) {
+        if (value === (this.document.display?.wireCrossings ?? "plain")) return;
+        this.commitDisplayChange(() => {
+          this.document.display = { ...this.document.display, wireCrossings: value };
+        });
+      } else if (select.hasAttribute("data-schematic-text-font") && isSchematicTextFont(value)) {
+        if (value === (this.document.display?.textFont ?? "sans")) return;
+        this.commitDisplayChange(() => {
+          this.document.display = { ...this.document.display, textFont: value };
+          this.document.notes.filter(note => !note.fontFamily).forEach(note => {
+            this.noteLayer.resizeNoteToContent(note);
+          });
+        });
+      } else if (select.hasAttribute("data-netlist-process") && isProcessId(value)) {
+        this.changeNetlistProcess(value);
+      } else if (select.hasAttribute("data-property-text-font") && (value === "" || isSchematicTextFont(value))) {
+        const target = this.selectedTextObject();
+        if (!target || select.dataset.propertyTextFont !== target.kind || value === (target.object.fontFamily ?? "")) return;
+        this.commitDisplayChange(() => {
+          if (value === "") delete target.object.fontFamily;
+          else target.object.fontFamily = value;
+          if (target.kind === "note") this.noteLayer.resizeNoteToContent(target.object);
+        });
+      }
+    }, { signal });
+  }
+
+  private selectedTextObject() {
+    const { selectedIds, selectedNoteIds } = this.selectionSession;
+    if (this.transientToolSession.mode !== "select" || selectedIds.size + selectedNoteIds.size !== 1) return null;
+    const note = this.document.notes.find(candidate => selectedNoteIds.has(candidate.id));
+    if (note) return { kind: "note", object: note } as const;
+    const label = this.document.netLabels.find(candidate => selectedIds.has(candidate.id));
+    return label ? { kind: "label", object: label } as const : null;
+  }
+
+  private commitDisplayChange(change: () => void) {
+    this.hostFinishActiveEdits();
+    const previous = this.getContent();
+    change();
+    if (!this.commitCurrentContent("display-settings")) {
+      this.restoreDocumentState(documentFromContent(previous));
+    }
+    this.renderDocument();
+    this.syncToolUi();
+  }
+
   private bindControllerEvents() {
-    this.options.paletteEl.querySelector<HTMLSelectElement>("[data-symbol-template]")?.addEventListener("change", event => {
+    this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]")?.addEventListener("change", event => {
       this.execute({ kind: "symbol-template", templateId: (event.currentTarget as HTMLSelectElement).value as SymbolTemplateId });
     }, { signal: this.lifecycleController.signal });
     this.instanceSelector.bind();
     this.toolbarController?.bind();
     this.propertyPanelController.bind();
+    this.bindMosParamEvents();
+    this.bindDeviceModelEvents();
+    this.bindLayerEvents();
+    this.bindLayerAssignmentEvents();
+  }
+
+  private layers(): SchematicLayer[] {
+    return normalizeLayers(this.document.layers);
+  }
+
+  private bindLayerEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.paletteEl;
+    root.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const add = target.closest<HTMLElement>("[data-layer-add]");
+      const remove = target.closest<HTMLElement>("[data-layer-delete]");
+      const up = target.closest<HTMLElement>("[data-layer-up]");
+      const down = target.closest<HTMLElement>("[data-layer-down]");
+      const select = target.closest<HTMLElement>("[data-layer-select]");
+      const treeToggle = target.closest<HTMLElement>("[data-layer-tree-toggle]");
+      const objectSelect = target.closest<HTMLElement>("[data-layer-object-select]");
+      const objectMove = target.closest<HTMLElement>("[data-layer-object-up], [data-layer-object-down]");
+      const row = target.closest<HTMLElement>("[data-layer-id]");
+      if (add) { event.preventDefault(); this.addLayer(); return; }
+      if (remove) { event.preventDefault(); this.deleteLayer(); return; }
+      if (up || down) {
+        event.preventDefault();
+        const id = up?.dataset.layerUp ?? down?.dataset.layerDown ?? "";
+        this.moveLayer(id, up ? 1 : -1);
+        return;
+      }
+      if (objectMove) {
+        event.preventDefault();
+        const layerId = objectMove.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId ?? "";
+        const direction: LayerObjectMoveDirection = objectMove.dataset.layerObjectUp !== undefined ? "up" : "down";
+        const objectId = direction === "up"
+          ? objectMove.dataset.layerObjectUp ?? ""
+          : objectMove.dataset.layerObjectDown ?? "";
+        this.moveLayerObject(layerId, objectId, direction);
+        return;
+      }
+      if (treeToggle) {
+        event.preventDefault();
+        const id = treeToggle.dataset.layerTreeToggle ?? "";
+        if (id) {
+          if (this.layerTreeCollapseState().has(id)) this.layerTreeCollapseState().delete(id);
+          else this.layerTreeCollapseState().add(id);
+          this.renderLayersPanel();
+        }
+        return;
+      }
+      if (objectSelect) {
+        event.preventDefault();
+        this.selectLayerObject(objectSelect);
+        return;
+      }
+      if (select) { this.activeLayerId = select.dataset.layerSelect ?? this.activeLayerId; this.renderLayersPanel(); return; }
+      if (row && !target.closest("input, button")) {
+        this.activeLayerId = row.dataset.layerId ?? this.activeLayerId;
+        this.renderLayersPanel();
+        return;
+      }
+    }, { signal });
+    root.addEventListener("dblclick", (event) => {
+      const select = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-layer-select]");
+      const id = select?.dataset.layerSelect;
+      if (!select || !id) return;
+      const name = this.host.ownerWindow.prompt("Layer name", select.dataset.layerName ?? select.textContent ?? "");
+      if (name?.trim()) this.updateLayer(id, { name: name.trim() });
+    }, { signal });
+    root.addEventListener("change", (event) => {
+      const target = event.target as HTMLInputElement | HTMLSelectElement | null;
+      if (!target) return;
+      const objectId = target.dataset.layerObjectVisible;
+      if (objectId) {
+        this.updateLayerObjectVisibility(objectId, (target as HTMLInputElement).checked);
+        return;
+      }
+      const layerId = target.dataset.layerVisible ?? target.dataset.layerLock ?? target.dataset.layerName;
+      if (layerId) {
+        if (target.dataset.layerVisible) this.updateLayer(layerId, { visible: (target as HTMLInputElement).checked });
+        else if (target.dataset.layerLock) this.updateLayer(layerId, { locked: (target as HTMLInputElement).checked });
+        else this.updateLayer(layerId, { name: target.value });
+        return;
+      }
+    }, { signal });
+  }
+
+  private bindLayerAssignmentEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    if (!root) return;
+    root.addEventListener("change", (event) => {
+      const target = event.target as HTMLSelectElement | null;
+      if (!target?.hasAttribute("data-property-layer")) return;
+      const plan = planLayerAssignment(this.document, this.selectedLayerObjectIds(), target.value);
+      if (!plan) {
+        this.syncLayerAssignment();
+        return;
+      }
+      this.hostFinishActiveEdits();
+      applyLayerAssignment(this.document, plan);
+      applyNormalizedDocumentWires(this.document);
+      this.renderDocument();
+      this.commitCurrentContent("assign-layer", "editor");
+      this.setStatus(`Moved ${plan.ids.size} object(s) to ${plan.target.name}.`);
+    }, { signal });
+  }
+
+  private beginLibraryShapeDraw(kind: LibraryShapeType, properties?: PlacementProperties) {
+    if (!this.editablePlacementLayer()) return;
+    this.transientToolSession.transition("select", "enter-tool");
+    this.syncToolUi();
+    this.instanceSelector.closePanel();
+    this.instanceSelector.closeDropdown();
+    this.instanceSelector.closeOptions();
+    this.instanceBrowser.close();
+    this.libraryShapeDraw = { kind, points: [], properties };
+    this.libraryShapeDragStart = null;
+    this.ensureShapeDraftOverlay();
+    if (this.shapeDraftOverlay) this.shapeDraftOverlay.removeAttribute("hidden");
+    this.options.shellEl.classList.add("is-drawing-shape");
+    const layout = this.options.layout;
+    if (isVertexLibraryShapeType(kind) && layout?.isNarrow?.()) layout.closePanel("left");
+    if (isPathDraft(kind)) {
+      const button = this.ensureShapeFinishButton();
+      button.className = `schematic-shape-finish schematic-${kind}-finish`;
+      button.textContent = kind === "polyline" ? t("polyline.finish", "Finish polyline") : t("polygon.finish", "Finish polygon");
+      button.hidden = false;
+      button.disabled = true;
+    }
+    const instructions = {
+      rectangle: "Rectangle: click the first grid point, then drag or click the opposite point. Esc cancels.",
+      triangle: "Triangle: click three grid points. Esc cancels.",
+      polyline: "Polyline: click to add vertices, press Enter or choose Finish polyline. Esc cancels.",
+      arc: "Arc: click the left endpoint.",
+      circle: "Circle: click a grid point to set the center.",
+      polygon: "Polygon: add vertices, then click the first point, press Enter, or choose Finish polygon. Esc cancels."
+    };
+    this.setStatus(instructions[kind]);
+    this.focusCanvas();
+  }
+
+  private bindLibraryShapeDrawEvents() {
+    const { signal } = this.lifecycleController;
+    this.options.paperEl.addEventListener("pointerdown", (event) => {
+      const draft = this.libraryShapeDraw;
+      if (!draft || event.button !== 0 || event.target === this.shapeFinishButton) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const point = this.libraryShapeSnap(this.localPointFromClient(event.clientX, event.clientY));
+      if (draft.kind === "rectangle") {
+        if (draft.points.length === 0) {
+          draft.points = [point];
+          this.libraryShapeDragStart = point;
+          this.previewLibraryShapeDraw(point);
+        } else {
+          this.finishLibraryShapeDraw([draft.points[0], point]);
+        }
+        return;
+      }
+      if (isPathDraft(draft.kind)) {
+        this.placePathPoint(draft.kind, draft.points, point);
+        return;
+      }
+      if (draft.kind === "circle") {
+        if (draft.points.length === 0) {
+          draft.points.push(point);
+          this.previewLibraryShapeDraw(point);
+          this.setStatus("Circle: move to preview and click to set the radius.");
+        } else {
+          this.finishLibraryShapeDraw([draft.points[0], point]);
+        }
+        return;
+      }
+      if (draft.kind === "arc") {
+        this.placeArcPoint(draft.points, point);
+        return;
+      }
+      draft.points.push(point);
+      if (draft.points.length >= 3) this.finishLibraryShapeDraw(draft.points);
+      else this.previewLibraryShapeDraw(point);
+    }, { capture: true, signal });
+    this.options.paperEl.addEventListener("click", (event) => {
+      if (!this.libraryShapeDraw || event.target === this.shapeFinishButton) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture: true, signal });
+    this.options.paperEl.addEventListener("dblclick", (event) => {
+      if (!this.libraryShapeDraw || event.target === this.shapeFinishButton) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.finishPathDraw();
+    }, { capture: true, signal });
+    this.options.paperEl.addEventListener("pointermove", (event) => {
+      if (!this.libraryShapeDraw) return;
+      this.previewLibraryShapeDraw(
+        this.libraryShapeSnap(this.localPointFromClient(event.clientX, event.clientY))
+      );
+    }, { capture: true, signal });
+    this.host.ownerWindow.addEventListener("pointerup", (event) => {
+      const draft = this.libraryShapeDraw;
+      const start = this.libraryShapeDragStart;
+      if (draft?.kind !== "rectangle" || !start || draft.points.length !== 1) return;
+      const end = this.libraryShapeSnap(this.localPointFromClient(event.clientX, event.clientY));
+      if (Math.abs(end.x - start.x) >= LIBRARY_SHAPE_DRAW_GRID_SIZE || Math.abs(end.y - start.y) >= LIBRARY_SHAPE_DRAW_GRID_SIZE) {
+        this.finishLibraryShapeDraw([start, end]);
+      }
+    }, { signal });
+  }
+
+  private placePathPoint(kind: keyof typeof SHAPE_FINISH_MIN_VERTICES, points: Point[], point: Point) {
+    const minimum = SHAPE_FINISH_MIN_VERTICES[kind];
+    const key = pointKey(point);
+    if (kind === "polygon" && points.length >= minimum && pointKey(points[0]) === key) {
+      this.finishPathDraw();
+      return;
+    }
+    const from = kind === "polygon" ? 0 : Math.max(0, points.length - 1);
+    if (points.length < LIBRARY_PATH_MAX_POINTS && !points.slice(from).some(vertex => pointKey(vertex) === key)) {
+      points.push(point);
+    }
+    if (this.shapeFinishButton) this.shapeFinishButton.disabled = points.length < minimum;
+    this.previewLibraryShapeDraw(point);
+  }
+
+  private placeArcPoint(points: Point[], point: Point) {
+    if (points.length === 2) {
+      this.finishLibraryShapeDraw([...points, point]);
+      return;
+    }
+    if (points.length === 1 && pointKey(points[0]) === pointKey(point)) {
+      this.setStatus("Choose a different right endpoint.");
+      return;
+    }
+    points.push(point);
+    const start = points[0];
+    const preview = points.length === 1 ? point : { x: (start.x + point.x) / 2, y: (start.y + point.y) / 2 };
+    this.previewLibraryShapeDraw(preview);
+    this.setStatus(points.length === 1
+      ? "Arc: click the right endpoint."
+      : "Arc: click the third point on the curve.");
+  }
+
+  private ensureShapeFinishButton() {
+    if (this.shapeFinishButton) return this.shapeFinishButton;
+    const button = this.host.ownerDocument.createElement("button");
+    button.type = "button";
+    const { signal } = this.lifecycleController;
+    button.addEventListener("pointerdown", event => event.stopPropagation(), { signal });
+    button.addEventListener("mousedown", event => event.stopPropagation(), { signal });
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.finishPathDraw();
+    }, { signal });
+    this.options.paperEl.append(button);
+    this.shapeFinishButton = button;
+    return button;
+  }
+
+  private finishPathDraw() {
+    const draft = this.libraryShapeDraw;
+    if (draft && isPathDraft(draft.kind) && draft.points.length >= SHAPE_FINISH_MIN_VERTICES[draft.kind]) {
+      this.finishLibraryShapeDraw(draft.points);
+    }
+  }
+
+  private libraryShapeSnap(point: Point) {
+    const draft = this.libraryShapeDraw;
+    const step = draft?.kind === "arc" && draft.points.length === 2 ? ARC_THROUGH_POINT_STEP : LIBRARY_SHAPE_DRAW_GRID_SIZE;
+    return snapPoint(point, step);
+  }
+
+  private ensureShapeDraftOverlay() {
+    if (this.shapeDraftOverlay) return;
+    const doc = this.host.ownerDocument;
+    const overlay = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    overlay.setAttribute("class", "schematic-shape-draft");
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.setAttribute("hidden", "");
+    this.options.paperEl.append(overlay);
+    this.shapeDraftOverlay = overlay;
+  }
+
+  private previewLibraryShapeDraw(current: Point) {
+    const overlay = this.shapeDraftOverlay;
+    const draft = this.libraryShapeDraw;
+    if (!overlay || !draft) return;
+    const rect = this.options.paperEl.getBoundingClientRect();
+    overlay.setAttribute("viewBox", `0 0 ${Math.max(1, rect.width)} ${Math.max(1, rect.height)}`);
+    overlay.replaceChildren();
+    const doc = this.host.ownerDocument;
+    const snappedCurrent = this.libraryShapeSnap(current);
+    const line = (points: Point[]) => {
+      const element = doc.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      element.setAttribute("points", points.map((point) => {
+        const screen = this.worldToScreenPoint(point);
+        return `${screen.x},${screen.y}`;
+      }).join(" "));
+      element.setAttribute("class", "schematic-shape-draft-shape");
+      return element;
+    };
+    if (draft.kind === "rectangle" && draft.points.length > 0) {
+      const start = draft.points[0];
+      const x1 = Math.min(start.x, snappedCurrent.x);
+      const x2 = Math.max(start.x, snappedCurrent.x);
+      const y1 = Math.min(start.y, snappedCurrent.y);
+      const y2 = Math.max(start.y, snappedCurrent.y);
+      const topLeft = this.worldToScreenPoint({ x: x1, y: y1 });
+      const bottomRight = this.worldToScreenPoint({ x: x2, y: y2 });
+      const preview = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
+      preview.setAttribute("x", String(topLeft.x));
+      preview.setAttribute("y", String(topLeft.y));
+      preview.setAttribute("width", String(Math.max(0, bottomRight.x - topLeft.x)));
+      preview.setAttribute("height", String(Math.max(0, bottomRight.y - topLeft.y)));
+      preview.setAttribute("class", "schematic-shape-draft-shape");
+      overlay.append(preview);
+    } else if (draft.kind === "circle" && draft.points.length > 0) {
+      const center = this.worldToScreenPoint(draft.points[0]);
+      const edge = this.worldToScreenPoint(snappedCurrent);
+      const preview = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+      preview.setAttribute("cx", String(center.x));
+      preview.setAttribute("cy", String(center.y));
+      preview.setAttribute("r", String(Math.hypot(edge.x - center.x, edge.y - center.y)));
+      preview.setAttribute("class", "schematic-shape-draft-shape");
+      overlay.append(preview);
+    } else if (isPathDraft(draft.kind) && draft.points.length > 0) {
+      const { points } = draft;
+      const first = points[0];
+      const last = points.at(-1)!;
+      const atFirst = pointKey(first) === pointKey(snappedCurrent);
+      const atLast = pointKey(last) === pointKey(snappedCurrent);
+      if (points.length > 1) overlay.append(line(points));
+      if (draft.kind === "polyline") {
+        if (points.length < LIBRARY_PATH_MAX_POINTS && !atLast) overlay.append(line([last, snappedCurrent]));
+      } else {
+        if (!atLast && !(atFirst && points.length === 2)) overlay.append(line([last, snappedCurrent]));
+        if (!atFirst && points.length >= 2 && !(atLast && points.length === 2)) overlay.append(line([snappedCurrent, first]));
+      }
+    } else if (draft.kind === "arc" && draft.points.length > 0) {
+      const arc = [...draft.points, snappedCurrent];
+      const path = createArcGeometry(arc)
+        ? quadraticArcSymbol(0, 0, arc.map(point => this.worldToScreenPoint(point)))
+        : "";
+      if (path) {
+        const preview = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+        preview.setAttribute("d", path);
+        preview.setAttribute("class", "schematic-shape-draft-shape");
+        overlay.append(preview);
+      } else {
+        overlay.append(line([draft.points[0], draft.points[1] ?? snappedCurrent]));
+      }
+    } else if (draft.kind === "triangle" && draft.points.length > 0) {
+      const segments: Array<readonly [Point, Point]> = [];
+      const appendSegment = (start: Point, end: Point) => {
+        if (start.x === end.x && start.y === end.y) return;
+        const duplicate = segments.some(([existingStart, existingEnd]) =>
+          (existingStart.x === start.x && existingStart.y === start.y && existingEnd.x === end.x && existingEnd.y === end.y)
+          || (existingStart.x === end.x && existingStart.y === end.y && existingEnd.x === start.x && existingEnd.y === start.y)
+        );
+        if (duplicate) return;
+        segments.push([start, end]);
+        overlay.append(line([start, end]));
+      };
+      for (let index = 1; index < draft.points.length; index += 1) {
+        appendSegment(draft.points[index - 1], draft.points[index]);
+      }
+      draft.points.forEach(point => appendSegment(point, snappedCurrent));
+    }
+    const screenSnap = this.worldToScreenPoint(snappedCurrent);
+    const snapMarker = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+    snapMarker.setAttribute("class", "schematic-shape-draft-grid-point");
+    snapMarker.setAttribute("cx", String(screenSnap.x));
+    snapMarker.setAttribute("cy", String(screenSnap.y));
+    snapMarker.setAttribute("r", "4");
+    overlay.append(snapMarker);
+  }
+
+  private clearLibraryShapeDraw() {
+    this.libraryShapeDraw = null;
+    this.libraryShapeDragStart = null;
+    if (this.shapeFinishButton) this.shapeFinishButton.hidden = true;
+    if (this.shapeDraftOverlay) {
+      this.shapeDraftOverlay.setAttribute("hidden", "");
+      this.shapeDraftOverlay.replaceChildren();
+    }
+    this.options.shellEl.classList.remove("is-drawing-shape");
+  }
+
+  private finishLibraryShapeDraw(points: Point[]) {
+    const draft = this.libraryShapeDraw;
+    const layer = draft && this.editablePlacementLayer();
+    if (!draft || !layer) return;
+    const kind = draft.kind;
+    const geometry = isVertexLibraryShapeType(kind) ? VERTEX_SHAPE_GEOMETRY[kind](points) : null;
+    if (isVertexLibraryShapeType(kind) && !geometry) {
+      const invalid = {
+        arc: "Choose a third point within the supported drawing area.",
+        circle: "Choose a different radius point within the supported dimensions.",
+        polygon: "Choose at least three non-collinear vertices within the supported dimensions.",
+        polyline: "Polyline exceeds the supported dimensions."
+      };
+      this.setStatus(invalid[kind]);
+      return;
+    }
+    this.clearLibraryShapeDraw();
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const center = geometry?.center ?? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    if (!geometry && (width < LIBRARY_SHAPE_DRAW_GRID_SIZE || height < LIBRARY_SHAPE_DRAW_GRID_SIZE)) {
+      this.setStatus("Shape needs a non-zero grid size.");
+      return;
+    }
+    const component = applyPlacementProperties({
+      id: this.host.idFactory(),
+      type: kind,
+      ref: this.nextComponentRef(kind),
+      x: center.x,
+      y: center.y,
+      rotation: 0,
+      mirrored: false,
+      values: { ...getComponentDef(kind).defaultValues }
+    }, draft.properties);
+    const { values } = component;
+    values["layer:id"] = layer.id;
+    if (kind === "rectangle") {
+      values[RECTANGLE_WIDTH_VALUE_KEY] = String(width / SYMBOL_GRID_SIZE);
+      values[RECTANGLE_HEIGHT_VALUE_KEY] = String(height / SYMBOL_GRID_SIZE);
+    } else if (geometry) {
+      Object.assign(values, geometry.values);
+    } else {
+      const local = points.map(point => ({ x: point.x - center.x, y: point.y - center.y }));
+      TRIANGLE_VERTICES.forEach((vertex, index) => {
+        values[triangleVertexKey(vertex, "x")] = String(local[index].x);
+        values[triangleVertexKey(vertex, "y")] = String(local[index].y);
+      });
+    }
+    this.transact((draftDocument) => { draftDocument.components.push(component); }, {
+      origin: "editor",
+      reason: `draw-${kind}`
+    });
+    this.selectionSession.setMixed([component.id], []);
+    this.finishSelectionChange();
+    this.sidebarLibrary.showProperties();
+    this.focusCanvas();
+    const created = {
+      rectangle: "Rectangle created.",
+      triangle: "Triangle created.",
+      polyline: "Polyline created.",
+      arc: "Arc created.",
+      circle: "Circle created. Drag the handles to resize it into an ellipse.",
+      polygon: "Polygon created."
+    };
+    this.setStatus(created[kind]);
+  }
+
+  private addLayer() {
+    const layers = this.layers();
+    const layer: SchematicLayer = {
+      id: nextLayerId(layers),
+      name: uiFormat("layer.numbered", "Layer {number}", { number: String(layers.length + 1) }),
+      visible: true,
+      locked: false
+    };
+    this.transact((draft) => {
+      draft.layers = [...(draft.layers ?? []), layer];
+    }, { origin: "editor", reason: "add-layer" });
+    this.activeLayerId = layer.id;
+    this.renderLayersPanel();
+  }
+
+  private deleteLayer() {
+    const layers = this.layers();
+    if (layers.length <= 1) {
+      this.setStatus("At least one layer is required.");
+      return;
+    }
+    const id = this.activeLayerId;
+    if (buildSchematicLayerObjectTree(this.document).some(group => group.layer.id === id && group.objectCount > 0)) {
+      this.setStatus("Move or delete objects on this layer first.");
+      return;
+    }
+    this.transact((draft) => {
+      draft.layers = (draft.layers ?? []).filter(layer => layer.id !== id);
+    }, { origin: "editor", reason: "delete-layer" });
+    this.activeLayerId = defaultSchematicLayer(this.layers()).id;
+    this.renderLayersPanel();
+  }
+
+  private moveLayer(id: string, direction: number) {
+    const layers = this.layers();
+    const index = layers.findIndex(layer => layer.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= layers.length) return;
+    const reordered = [...layers];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    this.transact((draft) => { draft.layers = reordered; }, { origin: "editor", reason: "reorder-layer" });
+    this.renderLayersPanel();
+  }
+
+  private moveLayerObject(
+    layerId: string,
+    objectId: string,
+    direction: LayerObjectMoveDirection
+  ) {
+    const layer = this.layers().find(candidate => candidate.id === layerId);
+    if (!layer || layer.locked) return;
+    const plan = planLayerObjectMove(this.document, layerId, objectId, direction);
+    if (!plan) return;
+    this.transact(
+      draft => applyLayerObjectMove(draft, plan),
+      { origin: "editor", reason: "reorder-layer-object" }
+    );
+  }
+
+  private updateLayerObjectVisibility(objectId: string, visible: boolean) {
+    const groups = buildSchematicLayerObjectTree(this.document);
+    const group = groups.find(candidate => candidate.objects.some(object =>
+      object.id === objectId || object.children.some(child => child.id === objectId)
+    ));
+    const node = group?.objects.find(object => object.id === objectId)
+      ?? group?.objects.flatMap(object => object.children).find(child => child.id === objectId);
+    if (!group || !node || group.layer.locked || !node.visibilityEditable) return;
+
+    if (objectId.startsWith("pin:")) {
+      const separator = objectId.indexOf(":", 4);
+      if (separator < 0) return;
+      const componentId = objectId.slice(4, separator);
+      const pinId = objectId.slice(separator + 1);
+      this.transact((draft) => {
+        const component = draft.components.find(candidate => candidate.id === componentId);
+        if (component) setComponentPinVisibility(component, pinId, visible);
+      }, { origin: "editor", reason: "layer-pin-visibility" });
+      return;
+    }
+
+    this.transact(
+      draft => { setLayerObjectVisibleState(draft, objectId, visible); },
+      { origin: "editor", reason: "layer-object-visibility" }
+    );
+  }
+
+  private updateLayer(id: string, patch: Partial<SchematicLayer>) {
+    this.transact((draft) => {
+      const layer = (draft.layers ?? []).find(item => item.id === id);
+      if (layer) Object.assign(layer, patch);
+    }, { origin: "editor", reason: "update-layer" });
+    this.renderLayersPanel();
+  }
+
+  private renderLayersPanel() {
+    const list = this.options.paletteEl.querySelector<HTMLElement>("[data-layer-list]");
+    if (!list) return;
+    const layers = this.layers();
+    if (!layers.some(layer => layer.id === this.activeLayerId)) this.activeLayerId = defaultSchematicLayer(layers).id;
+    const doc = list.ownerDocument;
+    const groups = buildSchematicLayerObjectTree(this.document);
+    list.replaceChildren();
+    groups.forEach((group) => {
+      const { layer } = group;
+      const displayName = this.layerDisplayName(layer);
+      const container = doc.createElement("section");
+      container.className = "layer-stack-group";
+      container.dataset.layerId = layer.id;
+      const row = doc.createElement("div");
+      row.className = "layer-stack-row";
+      row.classList.toggle("is-active", layer.id === this.activeLayerId);
+      row.append(this.createLayerTreeToggle(doc, `layer:${layer.id}`, uiFormat("layer.toggleObjects", "Toggle {name} objects", { name: displayName })));
+      const visible = doc.createElement("input");
+      visible.type = "checkbox";
+      visible.checked = layer.visible;
+      visible.dataset.layerVisible = layer.id;
+      visible.title = t("layer.visible", "Visible");
+      visible.ariaLabel = visible.title;
+      const lock = doc.createElement("input");
+      lock.type = "checkbox";
+      lock.checked = layer.locked;
+      lock.dataset.layerLock = layer.id;
+      lock.title = t("layer.locked", "Locked");
+      lock.ariaLabel = lock.title;
+      const select = doc.createElement("button");
+      select.type = "button";
+      select.className = "layer-select";
+      select.dataset.layerSelect = layer.id;
+      select.dataset.layerName = layer.name;
+      select.textContent = `${displayName} (${group.objectCount})`;
+      select.title = displayName;
+      const up = doc.createElement("button");
+      up.type = "button";
+      up.textContent = "↑";
+      up.dataset.layerUp = layer.id;
+      up.title = t("layer.raise", "Raise layer");
+      const down = doc.createElement("button");
+      down.type = "button";
+      down.textContent = "↓";
+      down.dataset.layerDown = layer.id;
+      down.title = t("layer.lower", "Lower layer");
+      row.append(visible, lock, select, up, down);
+      container.append(row);
+      if (!this.layerTreeCollapseState().has(`layer:${layer.id}`)) {
+        const objects = doc.createElement("div");
+        objects.className = "layer-object-tree";
+        objects.dataset.layerObjects = layer.id;
+        if (group.objects.length === 0) {
+          const empty = doc.createElement("div");
+          empty.className = "layer-object-empty";
+          empty.textContent = localizeSchematicStatus("No objects");
+          objects.append(empty);
+        } else {
+          group.objects.forEach((object, index) => objects.append(
+            this.createLayerObjectRow(doc, object, layer, index, group.objects.length)
+          ));
+        }
+        container.append(objects);
+      }
+      list.append(container);
+    });
+    this.syncLayerObjectSelection();
+  }
+
+  private layerTreeCollapseState() {
+    return this.collapsedLayerTreeNodes ?? new Set<string>();
+  }
+
+  private createLayerTreeToggle(doc: Document, id: string, label: string) {
+    const collapsed = this.layerTreeCollapseState().has(id);
+    const toggle = doc.createElement("button");
+    toggle.type = "button";
+    toggle.className = "layer-tree-toggle";
+    toggle.dataset.layerTreeToggle = id;
+    toggle.textContent = collapsed ? "▸" : "▾";
+    toggle.title = label;
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    return toggle;
+  }
+
+  private createLayerObjectRow(
+    doc: Document,
+    node: SchematicLayerObjectNode,
+    layer: SchematicLayer,
+    index = 0,
+    count = 1,
+    parentVisible = true
+  ) {
+    const container = doc.createElement("div");
+    container.className = "layer-object-node";
+    const row = doc.createElement("div");
+    row.className = "layer-object-row";
+    row.dataset.layerObjectKind = node.kind;
+    row.dataset.layerObjectId = node.id;
+    row.classList.toggle("is-temporarily-deleted", node.temporarilyDeleted);
+    row.classList.toggle("is-object-hidden", !parentVisible || !node.visible);
+    const label = this.layerObjectLabel(node);
+    if (node.children.length > 0) {
+      row.append(this.createLayerTreeToggle(doc, node.id, uiFormat("layer.togglePins", "Toggle {name} pins", { name: label })));
+    } else {
+      const spacer = doc.createElement("span");
+      spacer.className = "layer-tree-leaf";
+      spacer.setAttribute("aria-hidden", "true");
+      row.append(spacer);
+    }
+
+    const visible = doc.createElement("input");
+    visible.type = "checkbox";
+    visible.className = "layer-object-visibility";
+    visible.checked = node.visible;
+    visible.dataset.layerObjectVisible = node.id;
+    visible.disabled = layer.locked || !node.visibilityEditable;
+    visible.title = node.visibilityEditable
+      ? uiFormat(node.visible ? "layer.hideObject" : "layer.showObject", node.visible ? "Hide {name}" : "Show {name}", { name: label })
+      : t("layer.pinFixed", "Pin visibility is fixed");
+    visible.setAttribute("aria-label", visible.title);
+
+    const select = doc.createElement("button");
+    select.type = "button";
+    select.className = "layer-object-select";
+    select.dataset.layerObjectSelect = node.id;
+    select.dataset.layerObjectTarget = node.targetId;
+    select.dataset.layerObjectTargetType = node.targetType;
+    select.disabled = layer.locked || !node.displayed || !parentVisible || !node.visible;
+    select.title = !layer.visible
+      ? t("layer.hiddenHint", "Layer is hidden")
+      : layer.locked
+        ? t("layer.lockedHint", "Layer is locked")
+        : !parentVisible || !node.visible
+          ? t("layer.objectHidden", "Object is hidden")
+          : label;
+    select.textContent = label;
+
+    const up = doc.createElement("button");
+    up.type = "button";
+    up.textContent = "↑";
+    up.dataset.layerObjectUp = node.id;
+    up.disabled = layer.locked || !node.reorderable || index <= 0;
+    up.title = node.reorderable ? uiFormat("layer.raiseObject", "Raise {name}", { name: label }) : t("layer.pinOrder", "Pins cannot be reordered");
+    up.setAttribute("aria-label", up.title);
+    const down = doc.createElement("button");
+    down.type = "button";
+    down.textContent = "↓";
+    down.dataset.layerObjectDown = node.id;
+    down.disabled = layer.locked || !node.reorderable || index >= count - 1;
+    down.title = node.reorderable ? uiFormat("layer.lowerObject", "Lower {name}", { name: label }) : t("layer.pinOrder", "Pins cannot be reordered");
+    down.setAttribute("aria-label", down.title);
+
+    row.append(visible, select, up, down);
+    container.append(row);
+    if (node.children.length > 0 && !this.layerTreeCollapseState().has(node.id)) {
+      const children = doc.createElement("div");
+      children.className = "layer-object-children";
+      node.children.forEach(child => children.append(
+        this.createLayerObjectRow(doc, child, layer, 0, 1, parentVisible && node.visible)
+      ));
+      container.append(children);
+    }
+    return container;
+  }
+
+  private selectLayerObject(button: HTMLElement) {
+    const targetId = button.dataset.layerObjectTarget;
+    if (!targetId) return;
+    const layerId = button.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId;
+    if (layerId) this.activeLayerId = layerId;
+    const note = button.dataset.layerObjectTargetType === "note";
+    this.selectionSession.setMixed(note ? [] : [targetId], note ? [targetId] : []);
+    this.finishSelectionChange();
+    this.sidebarLibrary.showLayers();
+    this.syncLayerObjectSelection();
+  }
+
+  private syncLayerObjectSelection() {
+    this.options.paletteEl.querySelectorAll<HTMLElement>("[data-layer-object-select]").forEach((button) => {
+      const id = button.dataset.layerObjectTarget ?? "";
+      const selected = button.dataset.layerObjectTargetType === "note"
+        ? this.selectionSession.isNoteSelected(id)
+        : this.selectionSession.isCellSelected(id);
+      button.closest<HTMLElement>(".layer-object-row")?.classList.toggle("is-selected", selected);
+      if (selected) button.setAttribute("aria-current", "true");
+      else button.removeAttribute("aria-current");
+    });
+  }
+
+  private selectedLayerObjectIds() {
+    return new Set([...this.selectionSession.selectedIds, ...this.selectionSession.selectedNoteIds]);
+  }
+
+  private syncLayerAssignment() {
+    const row = this.options.propertyEl.querySelector<HTMLElement>("[data-property-layer-row]");
+    const select = this.options.propertyEl.querySelector<HTMLSelectElement>("[data-property-layer]");
+    if (!row || !select) return;
+    if (this.transientToolSession.mode !== "select" || !this.selectionSession.hasAny()) {
+      row.hidden = true;
+      return;
+    }
+    const { groups, objects } = projectLayerAssignment(this.document, this.selectedLayerObjectIds());
+    row.hidden = objects.length === 0;
+    if (!objects.length) return;
+    const first = objects[0].layer.id;
+    const mixed = objects.some(object => object.layer.id !== first);
+    const createOption = (id: string, label: string, disabled: boolean) => {
+      const option = select.ownerDocument.createElement("option");
+      option.value = id;
+      option.textContent = label;
+      option.disabled = disabled;
+      return option;
+    };
+    const options = groups.map(({ layer }) => {
+      const suffix = layer.locked ? t("layer.lockedSuffix", " (locked)")
+        : layer.visible ? "" : t("layer.hiddenSuffix", " (hidden)");
+      return createOption(layer.id, this.layerDisplayName(layer) + suffix, layer.locked);
+    });
+    if (mixed) options.unshift(createOption("", t("layer.mixed", "Multiple layers"), true));
+    select.replaceChildren(...options);
+    select.value = mixed ? "" : first;
+    select.disabled = objects.some(object => object.layer.locked || !object.displayed)
+      || !groups.some(({ layer }) => !layer.locked && (mixed || layer.id !== first));
+  }
+
+  private editablePlacementLayer() {
+    const layers = this.layers();
+    const layer = layers.find(candidate => candidate.id === this.activeLayerId) ?? defaultSchematicLayer(layers);
+    if (layer.locked) {
+      this.setStatus("The active layer is locked. Unlock it or select another layer.");
+      return null;
+    }
+    this.activeLayerId = layer.id;
+    return layer;
+  }
+
+  private bindMosParamEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    if (!root) return;
+    root.addEventListener("change", (event) => {
+      const input = (event.target as HTMLElement | null)?.closest<HTMLInputElement>("[data-property-mos-param]");
+      if (input) this.commitMosParam(input);
+    }, { signal });
+    root.addEventListener("keydown", (event) => {
+      const input = (event.target as HTMLElement | null)?.closest<HTMLInputElement>("[data-property-mos-param]");
+      if (!input) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.commitMosParam(input);
+        input.blur();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.syncMosParams(true);
+        input.blur();
+      }
+    }, { signal });
+  }
+
+  private commitMosParam(input: HTMLInputElement) {
+    const parameter = input.dataset.propertyMosParam;
+    const component = this.selectedMosComponent();
+    if (!parameter || !component) return;
+    const key = `mos:${parameter}`;
+    const value = input.value.trim();
+    if ((component.values[key] ?? "") === value) return;
+    this.transact((draft) => {
+      const target = draft.components.find(item => item.id === component.id);
+      if (!target) return;
+      if (value) target.values[key] = value;
+      else delete target.values[key];
+    }, { origin: "editor", reason: "mos-param" });
+    this.selectionSession.setMixed([component.id], []);
+    this.finishSelectionChange();
+  }
+
+  private selectedMosComponent() {
+    const components = this.selectedTransformObjects().components;
+    if (components.length !== 1) return null;
+    const component = components[0];
+    return component.type === "nmos" || component.type === "pmos" ? component : null;
+  }
+
+  private syncMosParams(force = false) {
+    syncMosParameterFields(this.options.propertyEl, this.selectedMosComponent(), force);
+  }
+
+  private changeNetlistProcess(process: ProcessId) {
+    const previous = this.document.netlistProcess;
+    if (process === (previous ?? DEFAULT_NETLIST_PROCESS)) return;
+    this.hostFinishActiveEdits();
+    this.document.netlistProcess = process === DEFAULT_NETLIST_PROCESS ? undefined : process;
+    if (!this.commitCurrentContent("netlist-process")) this.document.netlistProcess = previous;
+    this.syncToolUi();
+  }
+
+  private bindDeviceModelEvents() {
+    const { signal } = this.lifecycleController;
+    const root = this.options.propertyEl;
+    root.addEventListener("change", event => {
+      const control = (event.target as Element | null)?.closest<HTMLInputElement | HTMLSelectElement>(
+        "[data-property-model-select], [data-property-model-input]"
+      );
+      if (control) this.commitDeviceModel(control);
+    }, { signal });
+    root.addEventListener("keydown", event => {
+      const input = (event.target as Element | null)?.closest<HTMLInputElement>("[data-property-model-input]");
+      if (!input || (event.key !== "Enter" && event.key !== "Escape")) return;
+      event.preventDefault();
+      if (event.key === "Enter") this.commitDeviceModel(input);
+      else this.syncDeviceModel(true);
+      input.blur();
+    }, { signal });
+  }
+
+  private selectedModelDevice() {
+    if (!this.netlistPanel || this.transientToolSession.mode !== "select") return null;
+    const component = this.selectedSingleComponent();
+    if (!component || !isDeviceKind(component.type) || this.graphAdapter.getCell(component.id)?.get("layerLocked")) return null;
+    return { component, kind: component.type };
+  }
+
+  private commitDeviceModel(control: HTMLInputElement | HTMLSelectElement) {
+    const selected = this.selectedModelDevice();
+    if (!selected || control.dataset.componentId !== selected.component.id || control.hidden) return;
+    const { component } = selected;
+    const key = NETLIST_MODEL_VALUE_KEY;
+    const previous = component.values[key] ?? "";
+    const model = control.value.trim();
+    if (model !== previous && isNetlistModelText(model)) {
+      if (model) component.values[key] = model;
+      else delete component.values[key];
+      if (!this.commitCurrentContent("device-model")) {
+        if (previous) component.values[key] = previous;
+        else delete component.values[key];
+      }
+      this.syncToolUi();
+    }
+    this.syncDeviceModel(true);
+  }
+
+  private syncDeviceModel(force = false) {
+    syncDeviceModelFields(this.options.propertyEl, this.selectedModelDevice()?.component ?? null, this.document.netlistProcess, force);
   }
 
   private bindGlobalDocumentWindowInteractions() {
@@ -1032,10 +2204,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.noteLayer.element.addEventListener("pointerdown", (event) => this.handleNotePointerDown(event), { signal });
     this.noteLayer.element.addEventListener("pointermove", (event) => this.handleNotePointerMove(event), { signal });
     this.noteLayer.element.addEventListener("click", (event) => this.handleNoteClick(event), { signal });
-    this.noteLayer.element.addEventListener("dblclick", (event) => this.handleNoteDoubleClick(event), { signal });
-    this.noteLayer.element.addEventListener("blur", (event) => this.handleNoteBlur(event), { capture: true, signal });
-    this.noteLayer.element.addEventListener("input", (event) => this.handleNoteInput(event), { signal });
-    this.noteLayer.element.addEventListener("compositionend", () => this.flushScheduledNoteCommit(), { signal });
     ["mousedown", "mouseup", "pointerup"].forEach((type) => {
       this.noteLayer.element.addEventListener(
         type,
@@ -1051,7 +2219,9 @@ export class SchematicEditor implements SchematicHostedEditor {
     const { surface } = runtime;
     const paper = surface.paper as any;
     surface.onGeometryChange((cell) => {
-      if (runtime === this.activeRenderRuntime) this.handleLiveCellGeometry(cell);
+      if (runtime !== this.activeRenderRuntime) return;
+      this.handleLiveCellGeometry(cell);
+      this.scheduleWireCrossings();
     });
 
     paper.on("cell:pointerup", (view: any) => {
@@ -1061,7 +2231,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
     paper.on("element:pointerdown", (view: any, event: MouseEvent) => {
       if (runtime !== this.activeRenderRuntime) return;
-      if (event.button !== 0) return;
+      if (event.button !== 0 || view.model.get("layerLocked")) return;
       if (this.inductorInteractions.pendingSourceId) return;
       const componentId = view.model.get("componentId");
       const netLabelId = view.model.get("netLabelId");
@@ -1087,10 +2257,42 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.handleShapeResizePointerDown,
       { capture: true, signal }
     );
+    this.options.paperEl.addEventListener("click", event => {
+      if (!this.noteDraft || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.placeNote(this.localPointFromClient(event.clientX, event.clientY));
+    }, { capture: true, signal });
     this.options.paperEl.addEventListener("pointerdown", (event) => {
       this.focusCanvas();
       this.viewportController.handleTouchPointerDown(event);
+      if (event.button === 0 && this.transientToolSession.mode === "place") {
+        const target = event.target as Element | null;
+        this.placementPointerStart = {
+          x: event.clientX,
+          y: event.clientY,
+          blank: !target?.closest?.(".joint-cell"),
+          maxDistance: 0
+        };
+      }
     }, { signal });
+    this.host.ownerWindow.addEventListener("pointermove", (event) => {
+      const start = this.placementPointerStart;
+      if (!start) return;
+      start.maxDistance = Math.max(start.maxDistance, Math.hypot(event.clientX - start.x, event.clientY - start.y));
+    }, { signal });
+    // JointJS suppresses `blank:pointerclick` after even one mousemove (its
+    // clickThreshold defaults to 0). A normal mouse click often jitters by a
+    // pixel or two, so placement needs a pointerup fallback for small moves.
+    this.host.ownerWindow.addEventListener("pointerup", (event) => {
+      const start = this.placementPointerStart;
+      this.placementPointerStart = null;
+      if (!start?.blank || this.transientToolSession.mode !== "place" || event.button !== 0) return;
+      if (start.maxDistance <= 0.5 || start.maxDistance > 12) return;
+      if (!this.options.paperEl.contains(event.target as Node | null)) return;
+      this.placeActiveItem(snapPoint(this.localPointFromClient(event.clientX, event.clientY)));
+    }, { signal });
+    this.host.ownerWindow.addEventListener("pointercancel", () => { this.placementPointerStart = null; }, { signal });
     this.options.paperEl.addEventListener("pointermove", (event) => this.viewportController.handleTouchPointerMove(event), { passive: false, signal });
     this.options.paperEl.addEventListener("pointerup", (event) => this.viewportController.handleTouchPointerEnd(event), { signal });
     this.options.paperEl.addEventListener("pointercancel", (event) => this.viewportController.handleTouchPointerEnd(event), { signal });
@@ -1098,7 +2300,22 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.focusCanvas();
       if (isViewportPanMouseEvent(event)) this.viewportController.startMousePan(event);
     }, { signal });
+    this.options.paperEl.addEventListener("dblclick", (event) => {
+      if (event.button !== 0 || this.transientToolSession.mode !== "wire") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.finishWire(this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target));
+    }, { capture: true, signal });
     this.options.paperEl.addEventListener("mousemove", this.handleCanvasMouseMove, { signal });
+    this.options.paperEl.addEventListener("pointerleave", () => {
+      this.routingPointer = null;
+      if (this.noteDraft) this.showRoutingSnap(null);
+      const mode = this.transientToolSession.mode;
+      if (isMoveOrRotateMode(mode)) this.lastPointerPoint = null;
+      if (mode === "wire" || mode === "label" || isMoveOrRotateMode(mode)) {
+        this.transientToolSession.projectActivePreview(null);
+      }
+    }, { signal });
     this.options.paperEl.addEventListener("scroll", () => this.updateNoteLayerTransform(), { signal });
     this.options.paperEl.addEventListener("auxclick", (event) => {
       if (isViewportPanMouseEvent(event)) event.preventDefault();
@@ -1156,9 +2373,15 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handleBlankPointerDown(event: MouseEvent, x: number, y: number) {
-    if (this.inductorInteractions.pendingSourceId) return;
-    if ((this.transientToolSession.mode !== "select" && !this.isDeleteToolMode()) || event.button !== 0) return;
-    this.startDragSelection(event, snapPoint({ x, y }));
+    const mode = this.transientToolSession.mode;
+    if (event.button !== 0) return;
+    if (this.inductorInteractions.pendingSourceId || (mode === "select" && this.analysisController.hasActivePick())) return;
+    const pickingTargets = (mode === "move" && !this.pointerMove) || (mode === "copy" && !this.copyController.hasSource);
+    if (mode === "select" || this.isDeleteToolMode() || pickingTargets) {
+      this.startDragSelection(event, snapPoint({ x, y }));
+    } else if (mode === "copy" || mode === "move") {
+      this.viewportController.setNextBlankClickSuppressed(false);
+    }
   }
 
   private handleBlankPointerMove(x: number, y: number) {
@@ -1173,7 +2396,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private handleLinkPointerDown(view: any, event: MouseEvent, x: number, y: number) {
     this.wireSegmentMove = null;
-    if (event.button !== 0 || this.transientToolSession.mode !== "select" || view.model.get("preview")) return;
+    if (event.button !== 0 || this.transientToolSession.mode !== "select" || view.model.get("preview") || view.model.get("layerLocked")) return;
     const wireId = view.model.get("wireId");
     const wire = this.document.wires.find((candidate) => candidate.id === wireId);
     if (wire) {
@@ -1226,6 +2449,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private handleElementPointerClick(view: any, event: MouseEvent) {
     if (event.button !== 0) return;
+    if (this.transientToolSession.mode === "wire" && (event.target as Element | null)?.closest?.("[port]")) return;
     event.stopPropagation();
     const clickPoint = this.pointFromClientEvent(event);
     const target = projectElementPointerClickTarget({
@@ -1242,11 +2466,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (event.button !== 0) return;
     event.stopPropagation();
     const point = snapPoint({ x, y });
+    const { selectable } = resolveLayerObjects(this.document);
     this.applyPointerClickTarget(
       projectLinkPointerClickTarget({
         model: view.model,
         point,
-        junctions: this.document.junctions,
+        junctions: this.document.junctions.filter(junction => selectable(junctionId(junction))),
         junctionHitPoint: this.localPointFromClient(event.clientX, event.clientY),
         junctionHitRadius: JUNCTION_MARKER_RADIUS
       }),
@@ -1268,16 +2493,35 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyPointerClickTarget(target: PointerClickTarget, event: MouseEvent) {
+    const objectId = target.kind === "pin" ? target.componentId : target.kind === "junction" ? target.selectionId : "id" in target ? target.id : null;
+    const mode = this.transientToolSession.mode;
+    if (isMoveOrRotateMode(mode)) {
+      const point = this.pointFromClientEvent(event);
+      if (this.pointerMove) this.finishPointerMove(point);
+      else if (objectId && (mode === "move" || target.kind === "component" || target.kind === "pin")) {
+        this.pickMoveTarget([objectId], [], point);
+      }
+      return;
+    }
+    if (objectId && !(mode === "copy" && this.copyController.hasSource) && !resolveLayerObjects(this.document).selectable(objectId)) return;
     if (this.inductorInteractions.pendingSourceId) {
       this.inductorInteractions.applyInductorCouplingPartnerPick(target);
       return;
+    }
+    if (this.transientToolSession.mode === "label") {
+      const attachment = this.routingWireAttachment(
+        this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target)
+      );
+      if (attachment) {
+        this.placeNetLabel(attachment.point, attachment.wireId);
+        return;
+      }
     }
     this.applyPointerClickIntent(
       decideSchematicPointerClick({
         mode: this.transientToolSession.mode,
         target,
         copyHasSource: this.copyController.hasSource,
-        copyAwaitingReference: this.copyController.awaitingReference,
         analysisPickActive: this.analysisController.hasActivePick(),
         deleteMode: this.isDeleteToolMode(),
         selectionModified: event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
@@ -1296,9 +2540,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       case "clear-selection":
         this.setSelection([]);
         return;
-      case "set-copy-reference":
-        this.setCopyReference(intent.point);
-        return;
       case "place-copy":
         this.placeCopyAt(intent.point);
         return;
@@ -1306,13 +2547,13 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.placeActiveItem(intent.point);
         return;
       case "wire-blank-click":
-        this.handleWireBlankClick(intent.point);
+        this.applyWireTarget(this.localPointFromClient(event.clientX, event.clientY), this.wireIdAt(event.target));
         return;
       case "wire-pin-click":
         this.handleWirePinClick(intent.point);
         return;
       case "place-label":
-        this.placeNetLabel(intent.point, intent.wireId);
+        this.setStatus("Net labels can only be placed on an active wire or junction.");
         return;
       case "begin-copy":
         this.beginCopyFromTargets([...intent.ids], [], intent.point);
@@ -1342,15 +2583,52 @@ export class SchematicEditor implements SchematicHostedEditor {
     const ownsKeyboardTarget = this.hostBridge.ownsKeyboardTarget?.(target)
       ?? this.options.shellEl.contains(target);
     if (!ownsKeyboardTarget) return;
+    if (target.closest("[data-schematic-options-dialog][open], [data-hierarchy-dialog][open], [data-schematic-net-label-dialog][open], [data-schematic-note-dialog][open], [data-schematic-agent-dialog][open]")) return;
     const editable = isEditableTarget(target, this.options.shellEl);
     const key = event.key.toLowerCase();
+    if (key === "escape" && (this.transientToolSession.mode === "label" || this.noteDraft)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelTool();
+      return;
+    }
+    if (key === "escape" && this.hierarchyPlacement) {
+      event.preventDefault();
+      this.cancelHierarchyPlacement();
+      this.setStatus("Tool canceled.");
+      return;
+    }
+    if (key === "enter" && !editable && isPathDraft(this.libraryShapeDraw?.kind)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.finishPathDraw();
+      return;
+    }
+    if (key === "escape" && this.libraryShapeDraw) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearLibraryShapeDraw();
+      this.setStatus("Shape drawing canceled.");
+      return;
+    }
+    if (key === "escape" && this.instanceBrowser.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.instanceBrowser.close();
+      return;
+    }
+    if (key === "escape" && this.eventLog.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.eventLog.close();
+      return;
+    }
     if (key === "escape" && this.shapeResizeSession.isActive) {
       event.preventDefault();
       event.stopPropagation();
       this.cancelShapeResize();
       return;
     }
-    if (key === "escape" && (target?.closest("[data-math-source-editor]") || this.noteLayer.element.querySelector(".is-source-editing [data-math-source-editor]"))) return;
 
     const escapeIntent = projectSchematicEscapeKeyIntent({
       key,
@@ -1358,23 +2636,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       queryTarget: this.instanceSelector.isQueryTarget(target),
       dropdownOpen: this.instanceSelector.hasDropdownOpen(),
       optionsOpen: this.instanceSelector.hasOptionsOpen(),
-      editable,
-      noteEditorTarget: !!target && this.noteLayer.element.contains(target),
-      noteEditingActive: this.noteInteractionController.hasActiveEdit()
+      editable
     });
     if (escapeIntent.kind !== "none") {
       this.applySchematicEscapeKeyIntent(event, escapeIntent);
-      return;
-    }
-
-    if (
-      !editable
-      && this.noteInteractionController.hasActiveEdit()
-      && isUnmodifiedPrintableKey(event)
-      && this.noteInteractionController.insertText(event.key)
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
       return;
     }
 
@@ -1393,6 +2658,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.transientToolSession.mode
     );
     if (shortcutIntent.kind === "none") return;
+    if (this.hierarchyPlacement) this.cancelHierarchyPlacement();
 
     this.applySchematicKeyboardShortcutIntent(event, shortcutIntent);
   }
@@ -1411,7 +2677,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.redo();
         return;
       case "finish-wire":
-        this.finishWireFromKeyboard();
+        this.finishWire(this.routingPointer?.point ?? this.lastPointerPoint, this.routingPointer?.wireId);
         return;
       case "delete-selected-or-begin-tool":
         this.deleteSelectedOrBeginTool();
@@ -1432,19 +2698,22 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.beginLabelTool();
         return;
       case "create-note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         return;
       case "set-move-behavior":
         this.setMoveBehavior(shortcutIntent.behavior);
         return;
       case "rotate":
-        this.rotateSelectedOrPreview();
+        if (!event.repeat) this.rotateSelectedOrPreview();
         return;
       case "mirror":
         this.mirrorSelectedOrPreview(shortcutIntent.axis);
         return;
       case "fit":
         this.fit();
+        return;
+      case "toggle-log":
+        this.eventLog.toggle();
         return;
     }
   }
@@ -1463,11 +2732,6 @@ export class SchematicEditor implements SchematicHostedEditor {
       case "close-instance-options":
         this.instanceSelector.closeOptions();
         break;
-      case "finish-note-edit": {
-        const noteId = this.noteInteractionController.editingNoteId;
-        if (noteId) this.finishNoteEditing(noteId);
-        break;
-      }
       case "cancel-tool":
         this.cancelTool();
         return;
@@ -1479,6 +2743,8 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private runCommand(command: string) {
+    this.cancelHierarchyPlacement();
+    this.eventLog.info("command", command);
     const intent = projectSchematicToolbarCommandIntent(command);
     this.applySchematicToolbarCommandIntent(intent);
   }
@@ -1495,10 +2761,11 @@ export class SchematicEditor implements SchematicHostedEditor {
         this.toggleLabelTool();
         break;
       case "create-note":
-        this.createNoteAtCurrentPoint();
+        this.openNotePlacement();
         break;
       case "rotate":
-        this.rotateSelectedOrPreview();
+        if (this.transientToolSession.mode === "rotate") this.cancelTool();
+        else this.rotateSelectedOrPreview();
         break;
       case "mirror":
         this.mirrorSelectedOrPreview(intent.axis);
@@ -1523,6 +2790,15 @@ export class SchematicEditor implements SchematicHostedEditor {
         break;
       case "redo":
         this.redo();
+        break;
+      case "open-library":
+        this.openLibraryPanel();
+        break;
+      case "open-right-view":
+        this.openRightView(intent.view);
+        break;
+      case "toggle-log":
+        this.eventLog.toggle();
         break;
       case "none":
         break;
@@ -1615,28 +2891,38 @@ export class SchematicEditor implements SchematicHostedEditor {
         return color ? [[pointKey(point), color] as const] : [];
       })
     );
+    const projection = resolveLayerObjects(this.document, resolution.connectivity.junctionMembers);
+    const { displayed } = projection;
+    const visible = <T extends { id: string }>(objects: T[]) => objects.filter(object => displayed(object.id));
     const input = buildSelectionExportInput(
-      { ...selection, junctionPoints },
+      {
+        ...selection,
+        junctionPoints: junctionPoints.filter(point => displayed(junctionId(point))),
+        components: visible(selection.components),
+        wires: visible(selection.wires),
+        netLabels: visible(selection.netLabels),
+        notes: visible(selection.notes),
+        relatedInductorCouplings: visible(selection.relatedInductorCouplings)
+      },
       this.presentationMode,
       netLabelStatuses,
       junctionColors,
       this.document.connections,
       this.document.symbolTemplate
     );
-    const renderedNotes = await Promise.all(input.notes.map(async (note) => {
-      const rendered = await this.noteLayer.waitForRenderedNoteExport(note, { inlineStyles: true });
-      return {
-        id: note.id,
-        html: rendered.content ? new this.host.ownerWindow.XMLSerializer().serializeToString(rendered.content) : "",
-        text: rendered.text,
-        textStyle: rendered.textStyle
-      };
-    }));
+    const layerObjectOrder = layerObjectStackIds({ ...this.document, junctions: input.junctionPoints }, projection);
+    const display = this.document.display && { ...this.document.display };
+    const crossingJunctions = this.document.junctions.map(point => ({ ...point }));
+    const wireEndpoints = new Map(input.wires.map(wire => [wire.id, wireEndpointConnections(this.document, wire)]));
+    const noteGraphics = await typesetNotesForExport(input.notes, this.host.ownerDocument, display?.textFont);
     return {
       ...input,
-      renderedNoteHtml: Object.fromEntries(renderedNotes.map(({ id, html }) => [id, html])),
-      renderedNoteText: Object.fromEntries(renderedNotes.map(({ id, text }) => [id, text])),
-      renderedNoteTextStyles: Object.fromEntries(renderedNotes.map(({ id, textStyle }) => [id, textStyle]))
+      display,
+      crossingJunctions,
+      wireEndpoints,
+      busWireIds: resolution.busWireIds,
+      layerObjectOrder,
+      noteGraphics
     };
   }
 
@@ -1653,7 +2939,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.document.connections,
       this.document.symbolTemplate
     );
-    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile(source) : null;
+    return copySourceCount(source) > 0 ? serializeSchematicDocumentFile({
+      ...captureCopyLayers(source, this.document),
+      netlistProcess: this.document.netlistProcess
+    }) : null;
   }
 
   private contextTargetFromEvent(event: MouseEvent): SchematicContextTarget | null {
@@ -1665,6 +2954,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     const target = event.target;
     if (!(target instanceof this.host.ownerWindow.Element)) return null;
     const view = this.paper.findView?.(target);
+    if (view?.model?.get("layerLocked")) return null;
     return projectSchematicContextMenuTarget({ model: view?.model });
   }
 
@@ -1715,6 +3005,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       cell.prop("ports/groups/pin/attrs/portBody", attrs.portBody);
     });
     this.junctionRenderCoordinator.refreshViews();
+    this.applyLayerObjectStackOrder();
     if (clearedDeleteHover) {
       this.syncSelectionStyles({ cellIds: previousHoverIds, resolution: this.netResolutionCache });
       this.syncNoteSelectionStyles();
@@ -1722,7 +3013,46 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private openInstancePalette() {
-    this.beginPlacement(this.placementToolController.selectedItem, { armPaletteKeyboard: true, prefillQuery: true });
+    this.clearLibraryShapeDraw();
+    this.clearToolCursorFeedback();
+    this.instanceBrowser.open();
+    this.syncToolCursor();
+  }
+
+  private openLibraryPanel() {
+    if (this.options.layout) this.options.layout.openPanel("left");
+    else this.options.shellEl.classList.add("is-left-panel-visible");
+    this.sidebarLibrary.showLibrary();
+  }
+
+  private openRightView(view: RightDockView) {
+    const dock = this.rightDock;
+    if (!dock) return;
+    const layout = this.options.layout;
+    const { analysisEl } = this.options;
+    const visible = layout
+      ? layout.isPanelVisible("right")
+      : this.options.shellEl.classList.contains("is-right-panel-visible");
+    if (visible && dock.activeView() === view) {
+      if (layout) layout.closePanel("right");
+      else {
+        this.options.shellEl.classList.remove("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "true");
+      }
+      return;
+    }
+    dock.setView(view);
+    if (!visible) {
+      if (layout) layout.openPanel("right");
+      else {
+        this.options.shellEl.classList.add("is-right-panel-visible");
+        analysisEl?.setAttribute("aria-hidden", "false");
+      }
+    }
+  }
+
+  private handleRightDockChange(state: RightDockState) {
+    this.options.layout?.setRightDockState?.(state);
   }
 
   private toggleInstanceTool() {
@@ -1733,12 +3063,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.openInstancePalette();
   }
 
-  private beginPlacement(item: InstancePaletteItem, options: { armPaletteKeyboard?: boolean; prefillQuery?: boolean } = {}) {
-    this.applyPlacementToolEntryIntent(buildPlacementToolEntryIntent(item, options));
+  private beginPlacement(item: InstancePaletteItem, options: {
+    armPaletteKeyboard?: boolean; prefillQuery?: boolean; properties?: PlacementProperties;
+  } = {}) {
+    if (isLibraryShapeType(item)) {
+      this.beginLibraryShapeDraw(item, options.properties);
+      return;
+    }
+    this.applyPlacementToolEntryIntent(buildPlacementToolEntryIntent(item, options), options.properties);
   }
 
-  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>) {
-    this.placementToolController.setItem(intent.placementItem);
+  private applyPlacementToolEntryIntent(intent: PlacementToolEntryIntent<InstancePaletteItem>, properties?: PlacementProperties) {
+    this.placementToolController.setItem(intent.placementItem, properties);
     this.transientToolSession.transition(intent.nextMode, "enter-tool");
     this.instanceSelector.beginPlacement(intent.placementItem, intent.instanceSelectorBeginPlacementOptions);
     if (intent.updatePlacementPreview) this.updatePlacementPreview(this.lastPointerPoint);
@@ -1748,6 +3084,10 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private activatePlacementItem(item: InstancePaletteItem, options: { selectAll?: boolean } = {}) {
+    if (isLibraryShapeType(item)) {
+      this.beginLibraryShapeDraw(item);
+      return;
+    }
     this.placementToolController.setItem(item);
     this.enterPalettePlacementMode();
     this.updatePlacementPreview(this.lastPointerPoint);
@@ -1781,15 +3121,19 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyCommand() {
+    const selection = this.selectedTransformObjects();
+    if (!this.canCopyObjects(selection.components)) return;
     const result = this.copyController.prepareSelectionEntry({
-      selection: this.selectedTransformObjects(),
+      selection,
       junctionAppearances: this.document.junctionAppearances,
       inductorCouplings: this.document.inductorCouplings,
       connections: this.document.connections,
-      lastPointerPoint: this.lastPointerPoint
+      lastPointerPoint: this.lastPointerPoint,
+      document: this.document,
+      documentId: this.activeHostedDocumentId
     });
     if (result.kind === "no-source") {
-      this.applyCopyToolEntryIntent(result.intent);
+      this.applyCopyToolEntryIntent(result.intent, undefined, undefined, "pick");
       return;
     }
     if (result.kind === "empty-source") {
@@ -1800,23 +3144,27 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private beginCopyFromTargets(ids: string[], noteIds: string[], anchor: Point) {
-    const result = this.copyController.prepareTargetEntry(this.document, ids, noteIds, anchor, this.lastPointerPoint ?? anchor);
+    if (!this.canCopyObjects(this.document.components.filter(component => ids.includes(component.id)))) return;
+    const result = this.copyController.prepareTargetEntry(
+      this.document, ids, noteIds, anchor, anchor, this.activeHostedDocumentId
+    );
     if (result.kind === "empty-target") {
       this.setStatus(result.status);
       return;
     }
 
-    this.selectionSession.setMixed(result.ids, result.noteIds);
-    this.syncSelectionUi();
-    this.applyCopyToolEntryIntent(result.entry.intent, result.entry.attachSource, result.entry.previewPoint);
+    this.applyCopyToolEntryIntent(result.entry.intent, result.entry.attachSource, result.entry.previewPoint, "pick");
   }
 
-  private applyCopyToolEntryIntent(intent: CopyToolEntryIntent, attachSource?: () => void, previewPoint?: Point) {
+  private applyCopyToolEntryIntent(
+    intent: CopyToolEntryIntent, attachSource?: () => void, previewPoint?: Point,
+    afterDrop: typeof this.copyAfterDrop = "select"
+  ) {
     this.transientToolSession.transition(intent.nextMode, "enter-tool");
+    this.copyAfterDrop = afterDrop;
     if (intent.closeInstancePanel) this.instanceSelector.closePanel();
     this.viewportController.setNextBlankClickSuppressed(intent.suppressNextBlankClick);
-    if (intent.hasSource || intent.awaitingReference) attachSource?.();
-    if (intent.hasSource || intent.awaitingReference) this.cacheCopyMarkdownPreviewContent();
+    if (intent.hasSource) attachSource?.();
     this.copyPreviewNeedsPointer = false;
     if (intent.syncToolUi) this.syncToolUi();
     if (intent.focusTarget === "canvas") this.focusCanvas();
@@ -1826,19 +3174,11 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private placeCopyAt(point: Point) {
     this.copyPreviewNeedsPointer = false;
-    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitCopy(point));
+    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitCopy(point, this.copyLayerTarget()));
   }
 
-  private setCopyReference(point: Point) {
-    const result = this.copyController.setReferencePoint(point);
-    if (!result.ok) {
-      this.setStatus(result.status);
-      return;
-    }
-    this.copyPreviewNeedsPointer = false;
-    this.updateCopyPreview(point);
-    this.syncToolUi();
-    this.setStatus(result.status);
+  private copyLayerTarget() {
+    return { documentId: this.activeHostedDocumentId, activeLayerId: this.activeLayerId };
   }
 
   private copyInstantiationFactories(): { nextComponentRef: (type: ComponentType) => string; createId: () => string } {
@@ -1865,8 +3205,15 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (this.transientToolSession.mode !== "wire") return false;
     if (routeMode === "toggle") this.wireToolController.toggleRouteMode();
     else this.wireToolController.setRouteMode(routeMode);
-    this.updateWirePreview(this.lastPointerPoint);
+    this.updateWirePreview(this.routingPointer?.point ?? this.lastPointerPoint);
     return true;
+  }
+
+  hostSetWireAngle(angle: WireAngle) {
+    this.wireToolController.setRouteMode(angle);
+    if (this.transientToolSession.mode === "wire") {
+      this.updateWirePreview(this.routingPointer?.point ?? this.lastPointerPoint);
+    }
   }
 
   private toggleLabelTool() {
@@ -1880,38 +3227,35 @@ export class SchematicEditor implements SchematicHostedEditor {
   private beginLabelTool() {
     this.transientToolSession.transition("label", "enter-tool");
     this.instanceSelector.closePanel();
-    this.netLabelToolController.begin();
+    const { draft } = this.netLabelToolController.begin();
     this.setSelection([], false);
     this.syncToolUi();
-    this.renderPropertyEditor();
-    this.requestOwnedFrame(() => this.propertyPanelController.focusLabelToolInput());
-    this.setStatus("Label mode: enter a net name, press Enter, then click wires or junctions. Esc cancels.");
+    this.netLabelDialog.open(draft, name => this.armLabelPlacement(name), () => this.cancelTool());
   }
 
   private armLabelPlacement(value: string) {
     const result = this.netLabelToolController.arm(value);
-    this.renderPropertyEditor();
-    if (result.kind === "invalid") {
-      this.propertyPanelController.focusLabelToolInput();
-      return;
-    }
+    if (result.kind === "invalid") return result.message;
+    this.netLabelDialog.close();
     this.focusCanvas();
-    this.updateNetLabelPreview(this.lastPointerPoint);
+    this.updateNetLabelPreview(this.routingPointer?.point ?? this.lastPointerPoint);
     this.setStatus(`Label ${result.name}: click a wire or junction to place; Esc cancels.`);
   }
 
   private placeNetLabel(point: Point, preferredWireId?: string) {
+    const layer = this.editablePlacementLayer();
+    if (!layer) return;
     this.applyNetLabelCommitOutcome(
-      this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId)
+      this.netLabelCommitCoordinator.commitPlacement(point, preferredWireId, layer.id)
     );
   }
 
   private applyNetLabelCommitOutcome(outcome: SchematicNetLabelCommitOutcome) {
     if (outcome.kind === "status") {
       this.setStatus(outcome.status);
-      if (outcome.focusInput) this.propertyPanelController.focusLabelToolInput();
       return;
     }
+    this.transientToolSession.transition("select", "selection");
     this.setSelection([], false);
     this.renderDocument();
     this.consumeHistoryIntent(outcome.result);
@@ -1970,6 +3314,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyDeleteSelectionCommand(mode: DeleteToolMode) {
+    this.clearToolCursorFeedback();
     const intent = this.deleteToolController.commandForSelection(mode, this.hasExportableSelection());
     switch (intent.kind) {
       case "begin-tool":
@@ -1978,9 +3323,12 @@ export class SchematicEditor implements SchematicHostedEditor {
         return;
       case "delete-selected":
         this.deleteSelected();
+        if (this.transientToolSession.mode !== "delete") this.showToolCursorFeedback("delete");
         return;
       case "temporary-delete-selected":
+        this.transientToolSession.transition("select", "selection");
         this.toggleTemporaryDeleteSelected();
+        this.showToolCursorFeedback("plus");
         return;
     }
   }
@@ -1990,12 +3338,104 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private applyMoveBehaviorToolEntryIntent(intent: MoveBehaviorToolEntryIntent) {
+    this.hostFinishActiveEdits();
     this.transientToolSession.setMoveBehavior(intent.moveBehavior);
     this.transientToolSession.transition(intent.nextMode, "move-behavior");
     if (intent.closeInstancePanel) this.instanceSelector.closePanel();
+    const anchor = this.beginPointerMove(this.selectionSession.selectedIds, this.selectionSession.selectedNoteIds);
+    if (anchor) this.updateMovePreview(this.lastPointerPoint ?? anchor);
     if (intent.syncToolUi) this.syncToolUi();
     if (intent.focusTarget === "canvas") this.focusCanvas();
-    this.setStatus(intent.status);
+    this.setStatus(anchor ? "Click to place the moved objects. Esc cancels." : intent.status);
+  }
+
+  private beginPointerMove(ids: Iterable<string>, noteIds: Iterable<string>, pickupPoint?: Point) {
+    const { selectable, displayed } = resolveLayerObjects(this.document);
+    const selection = createSchematicSelectionState({
+      selectedIds: new Set([...ids].filter(selectable)),
+      selectedNoteIds: new Set([...noteIds].filter(selectable))
+    });
+    const anchor = selectionPlacementAnchor(projectSchematicSelection(this.document, selection), pickupPoint);
+    if (!anchor) return null;
+    const transaction = beginSelectionMoveTransaction({
+      document: this.document,
+      selectedIds: selection.selectedIds,
+      selectedNoteIds: selection.selectedNoteIds,
+      pointer: anchor
+    });
+    if (!transaction) return null;
+    this.pointerMove = { transaction, repeat: pickupPoint !== undefined, displayed };
+    return anchor;
+  }
+
+  private pickMoveTarget(ids: string[], noteIds: string[], point: Point) {
+    if (!this.beginPointerMove(ids, noteIds, point)) return;
+    this.updateMovePreview(point);
+    this.setStatus(this.transientToolSession.mode === "rotate"
+      ? "Click to place the rotated component. Esc cancels."
+      : "Click to place the moved objects. Esc cancels.");
+  }
+
+  private projectPointerMove(move: NonNullable<typeof this.pointerMove>, point: Point) {
+    const rotating = this.transientToolSession.mode === "rotate";
+    return projectPointerSelectionMove(
+      this.document, move.transaction, point,
+      rotating ? "moveOnly" : this.transientToolSession.moveBehavior,
+      rotating ? "rotate" : undefined
+    );
+  }
+
+  private updateMovePreview(point: Point | null) {
+    const move = this.pointerMove;
+    if (!move || !point) {
+      this.removeCopyPreview();
+      this.showRoutingSnap(null);
+      return;
+    }
+    this.showRoutingSnap(point);
+    const { draft, affectedIds, wireAnchors } = this.projectPointerMove(move, point);
+    const anchorIds = new Set(wireAnchors.map(({ wire }) => wire.id));
+    draft.wires.push(...wireAnchors.map(({ wire }) => wire));
+    const prefix = this.transientToolSession.mode === "rotate" ? "rotate-preview-" : "move-preview-";
+    this.previewRenderer.renderCopy(draft, id => anchorIds.has(id) || (affectedIds.has(id) && move.displayed(id)), prefix);
+  }
+
+  private finishPointerMove(point: Point) {
+    const move = this.pointerMove;
+    if (!move) return;
+    const rotating = this.transientToolSession.mode === "rotate";
+    const { draft, result, wireAnchors, changed } = this.projectPointerMove(move, point);
+    this.pointerMove = null;
+    this.removeCopyPreview();
+    this.showRoutingSnap(null);
+    if (move.repeat) this.selectionSession.setMixed([], []);
+    else this.transientToolSession.transition("select", "selection");
+    const commit = commitSelectionMoveDocumentOp({
+      geometryChanged: false, selectionMoveChanged: changed, liveGeometryDirty: false
+    });
+    if (commit.changed) {
+      reconcileDocumentConnectionEdit(draft, this.document);
+      applyTranslatedWireAnchors(draft, wireAnchors);
+      assignRestoredSchematicDocument(this.document, draft);
+      this.document.junctions = buildVisibleJunctions(this.document);
+      pruneJunctionAppearances(this.document);
+      if (!move.repeat) this.selectionSession.remapJunctions(result.transformedJunctionIds);
+      this.renderDocument();
+      this.consumeHistoryIntent(commit);
+    } else {
+      this.syncSelectionStyles();
+      this.syncNoteSelectionStyles();
+    }
+    this.syncToolUi();
+    if (rotating) {
+      this.setStatus(commit.changed ? "Component rotated. Click another component to rotate. Esc cancels." : ROTATE_PICK_STATUS);
+    } else if (move.repeat) {
+      this.setStatus(commit.changed
+        ? "Objects moved. Click another object or drag a box to continue. Esc cancels."
+        : buildMoveBehaviorToolEntryIntent(this.transientToolSession.moveBehavior).status);
+    } else {
+      this.setStatus(commit.status || this.selectionStatus());
+    }
   }
 
   private prepareAnalysisNetPick() {
@@ -2019,17 +3459,39 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setStatus(intent.status);
   }
 
-  private createNoteAtCurrentPoint() {
+  private openNotePlacement() {
+    if (!this.editablePlacementLayer()) return;
     this.transientToolSession.transition("select", "create-note");
+    this.syncToolCursor();
     this.instanceSelector.closePanel();
-    const anchor = snapPoint(this.lastPointerPoint ?? this.viewportCenterPoint());
-    const noteId = this.host.idFactory();
-    const result = createPlainSchematicNoteDocumentOp(this.document, noteId, anchor);
-    this.setNoteSelection(result.noteIds);
+    this.noteDialog.open(draft => {
+      this.noteDialog.close();
+      this.noteDraft = draft;
+      this.showRoutingSnap(this.lastPointerPoint);
+      this.focusCanvas();
+      this.setStatus("Click the canvas to place the Note. Esc cancels.");
+    }, () => this.cancelTool());
+  }
+
+  private clearNotePlacement() {
+    this.noteDialog.close();
+    if (!this.noteDraft) return;
+    this.noteDraft = undefined;
+    this.showRoutingSnap(null);
+  }
+
+  private placeNote(point: Point) {
+    const draft = this.noteDraft;
+    const layer = draft && this.editablePlacementLayer();
+    if (!draft || !layer) return;
+    this.clearNotePlacement();
+    const result = createSchematicNoteDocumentOp(this.document, this.host.idFactory(), snapPoint(point), draft, layer.id);
+    this.setNoteSelection(layer.visible ? result.noteIds : []);
     this.renderNotes();
+    this.renderLayersPanel();
     this.consumeHistoryIntent(result);
-    this.beginNoteEditing(noteId);
-    this.setStatus(result.status);
+    this.focusCanvas();
+    this.setStatus(layer.visible ? result.status : "Note created on a hidden layer. Show the layer to edit it.");
   }
 
   private nextComponentRef(type: ComponentType) {
@@ -2042,9 +3504,17 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
-    this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
+    const pickNextCopySource = outcome.source === "copy" && this.copyAfterDrop === "pick";
+    if (outcome.source === "copy" && this.copyAfterDrop !== "paste") {
+      this.transientToolSession.transition(pickNextCopySource ? "copy" : "select", "enter-tool");
+      if (pickNextCopySource) this.copyAfterDrop = "pick";
+    }
+    this.setMixedSelection(
+      pickNextCopySource ? [] : outcome.result.selectedIds, pickNextCopySource ? [] : outcome.result.noteIds, false
+    );
     applyNormalizedDocumentWires(this.document);
     this.renderDocument();
+    if (outcome.source === "placement") this.renderLayersPanel();
     this.consumeHistoryIntent(outcome.result);
     if (outcome.nextPlacementItem) {
       this.instanceSelector.prepareNextPlacementInput(outcome.nextPlacementItem);
@@ -2052,17 +3522,28 @@ export class SchematicEditor implements SchematicHostedEditor {
     if (outcome.source === "placement") this.updatePlacementPreview(outcome.previewPoint);
     else this.updateCopyPreview(outcome.previewPoint);
     if (outcome.syncToolUiAfterPreview) this.syncToolUi();
-    this.setStatus(outcome.result.status);
+    const status = pickNextCopySource
+      ? "Copy placed. Click another object or drag a box to continue. Esc cancels."
+      : outcome.source === "copy" && this.transientToolSession.mode === "select" ? "Copy placed." : outcome.result.status;
+    this.setStatus(status);
   }
 
   private commitPlacementItem(point: Point) {
-    this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitPlacement(point));
+    const layer = this.editablePlacementLayer();
+    if (layer) this.applyPlacementCommitOutcome(this.placementCommitCoordinator.commitPlacement(point, layer.id));
   }
 
   private handlePointerMove(point: Point) {
-    this.lastPointerPoint = point;
+    const previousPoint = this.lastPointerPoint;
+    this.lastPointerPoint = snapPoint(point);
+    if (this.noteDraft) {
+      this.showRoutingSnap(this.lastPointerPoint);
+      return;
+    }
     if (this.transientToolSession.mode === "copy") this.copyPreviewNeedsPointer = false;
-    this.transientToolSession.projectActivePreview(point);
+    const mode = this.transientToolSession.mode;
+    if (isMoveOrRotateMode(mode) && previousPoint && samePoint(previousPoint, this.lastPointerPoint)) return;
+    this.transientToolSession.projectActivePreview(mode === "wire" || mode === "label" ? point : this.lastPointerPoint);
   }
 
   private setDeleteHover(ids: string[], noteIds: string[] = []) {
@@ -2105,15 +3586,19 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private handleWireBlankClick(point: Point) {
+    if (!this.editablePlacementLayer()) return;
     this.applyWireCommitOutcome(this.wireCommitCoordinator.applyBlankClick(point));
   }
 
   private handleWirePinClick(point: Point) {
+    if (!this.editablePlacementLayer()) return;
     this.applyWireCommitOutcome(this.wireCommitCoordinator.applyPinClick(point));
   }
 
-  private finishWireFromKeyboard() {
-    this.applyWireCommitOutcome(this.wireCommitCoordinator.finishFromKeyboard(this.lastPointerPoint));
+  private finishWire(point: Point | null, preferredWireId?: string) {
+    if (!this.editablePlacementLayer()) return;
+    const target = point && this.wireTargetAt(point, preferredWireId);
+    this.applyWireCommitOutcome(this.wireCommitCoordinator.finish(target?.point ?? null));
   }
 
   private applyWireCommitOutcome(outcome: SchematicWireCommitOutcome) {
@@ -2133,7 +3618,9 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private rotateSelectedOrPreview() {
+    if (this.transientToolSession.mode === "rotate") return;
     if (this.transientToolSession.mode === "place") {
+      this.showToolCursorFeedback("rotate");
       const result = this.placementToolController.rotatePreview();
       if (result.kind === "template") {
         this.setStatus("Place the template, then rotate or mirror the selected objects.");
@@ -2143,7 +3630,8 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(`Preview rotation ${result.pose.rotation} deg. Click to place.`);
       return;
     }
-    if (this.transientToolSession.mode === "copy" && (this.copyController.hasSource || this.copyController.awaitingReference)) {
+    if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
+      this.showToolCursorFeedback("rotate");
       const result = this.copyController.rotateSource();
       if (!result.ok) {
         this.setStatus(result.status);
@@ -2154,11 +3642,17 @@ export class SchematicEditor implements SchematicHostedEditor {
       return;
     }
 
-    const selection = this.selectedTransformObjects();
-    if (selection.count === 0) {
-      this.setStatus("Select at least one object before rotating.");
+    this.hostFinishActiveEdits();
+    if (!this.selectionSession.hasAny()) {
+      this.transientToolSession.transition("rotate", "enter-tool");
+      this.instanceSelector.closePanel();
+      this.viewportController.setNextBlankClickSuppressed(false);
+      this.focusCanvas();
+      this.setStatus(ROTATE_PICK_STATUS);
       return;
     }
+    this.transientToolSession.transition("select", "selection");
+    const selection = this.selectedTransformObjects();
     if (!this.hasSingleSelectedComponentOnly()) {
       this.transformSelectedObjects("rotate", selection);
       return;
@@ -2170,11 +3664,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     const before = this.getContent();
     const result = transformSingleComponentOrientationDocumentOp([instance], "rotate");
-    reconcileConnectionEdit(this.document, before);
+    reconcileDocumentConnectionEdit(this.document, before);
     this.commitChangedTransformedDocument(result, renderSnapshot);
   }
 
   private mirrorSelectedOrPreview(axis: "x" | "y") {
+    this.clearToolCursorFeedback();
     if (this.transientToolSession.mode === "place") {
       const result = this.placementToolController.mirrorPreview(axis);
       if (result.kind === "template") {
@@ -2185,7 +3680,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(`Preview mirrored ${axis === "x" ? "left-right" : "up-down"}. Click to place.`);
       return;
     }
-    if (this.transientToolSession.mode === "copy" && (this.copyController.hasSource || this.copyController.awaitingReference)) {
+    if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
       const result = this.copyController.mirrorSource(axis);
       if (!result.ok) {
         this.setStatus(result.status);
@@ -2215,7 +3710,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       [instance],
       axis === "x" ? "mirror-x" : "mirror-y"
     );
-    reconcileConnectionEdit(this.document, before);
+    reconcileDocumentConnectionEdit(this.document, before);
     this.commitChangedTransformedDocument(result, renderSnapshot);
   }
 
@@ -2274,6 +3769,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     if (outcome.targets.componentIds.length > 0) this.renderInductorCouplings();
     if (outcome.targets.noteIds.length > 0) this.renderNotes();
+    if (outcome.targets.wireIds.length > 0) this.scheduleWireCrossings();
   }
 
   private deleteSelected() {
@@ -2321,10 +3817,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.setStatus(TEMPORARY_DELETE_TARGET_EMPTY_STATUS);
       return;
     }
-    this.setSelection(ids, false);
-    this.toggleTemporaryDeleteSelected();
-    this.transientToolSession.setMode("temp-delete");
-    this.syncToolUi();
+    this.applyDeleteCommitOutcome(this.deleteCommitCoordinator.toggleTemporary(ids), false);
   }
 
   private toggleTemporaryDeleteSelected() {
@@ -2338,12 +3831,12 @@ export class SchematicEditor implements SchematicHostedEditor {
     );
   }
 
-  private applyDeleteCommitOutcome(outcome: SchematicDeleteCommitOutcome) {
+  private applyDeleteCommitOutcome(outcome: SchematicDeleteCommitOutcome, selectAffected = true) {
     if (outcome.kind === "status") {
       this.setStatus(outcome.status);
       return;
     }
-    this.setMixedSelection(outcome.result.selectedIds, outcome.result.noteIds, false);
+    this.setMixedSelection(selectAffected ? outcome.result.selectedIds : [], selectAffected ? outcome.result.noteIds : [], false);
     this.commitChangedRenderedDocumentTail(outcome.result, outcome.result.status);
   }
 
@@ -2439,6 +3932,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         === JSON.stringify({ ...this.getContent(), symbolTemplate: undefined });
     restoreSchematicDocumentOp(this.document, parsed);
     this.rebuildCounters();
+    this.renderLayersPanel();
     if (!templateOnly) this.setMixedSelection([], [], false);
   }
 
@@ -2461,11 +3955,12 @@ export class SchematicEditor implements SchematicHostedEditor {
   hostCaptureView() { return this.currentViewState(); }
 
   hostActivateDocument(input: SchematicHostedDocumentActivation) {
+    this.cancelHierarchyPlacement();
     if (this.destroyed) return;
     const preserveCopy =
       this.transientToolSession.mode === "copy"
-      && this.copyController.hasSource;
-    if (preserveCopy) this.cacheCopyMarkdownPreviewContent();
+      && this.copyController.hasSource
+      && (!this.copyController.hasSheetBlocks || input.id === this.activeHostedDocumentId);
 
     this.hostFinishActiveEdits();
     this.viewportController.cancelActiveGestures();
@@ -2473,19 +3968,21 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.analysisController.cancelPendingCompute();
 
     if (this.activeHostedDocumentId) {
+      this.hostedActiveLayerIds.set(this.activeHostedDocumentId, this.activeLayerId);
       const selectedIds = new Set(this.selectionSession.selectedIds);
       this.selectionSession.setMixed([], []);
       this.syncSelectionStyles({ cellIds: selectedIds, resolution: this.netResolutionCache });
       this.syncNoteSelectionStyles();
       this.junctionRenderCoordinator.cancelScheduledRefresh();
-      this.noteLayer.deactivateDocument(this.activeHostedDocumentId);
-      this.noteLayer.discardDocument(this.activeHostedDocumentId);
+      this.noteLayer.reset();
     }
 
     this.lastPointerPoint = null;
+    this.routingPointer = null;
     this.copyPreviewNeedsPointer = preserveCopy;
     this.activeHostedDocumentId = input.id;
     this.noteLayer.activateDocument(input.id);
+    this.activeLayerId = this.hostedActiveLayerIds.get(input.id) ?? defaultSchematicLayer(normalizeLayers(input.document.layers)).id;
     this.restoreDocumentState(input.document);
     this.presentationMode = input.view.presentationMode;
     setSchematicPresentationState({
@@ -2516,7 +4013,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   hostBeginClipboardCopy(document: SchematicDocument) {
-    if (this.destroyed) return false;
+    if (this.destroyed || !this.canCopyObjects(document.components, "clipboard")) return false;
     const source = copySourceFromDocument(document);
     const anchor = copySourceCenterAnchor(source);
     if (copySourceCount(source) === 0 || !anchor) {
@@ -2533,24 +4030,51 @@ export class SchematicEditor implements SchematicHostedEditor {
       return false;
     }
     this.hostFinishActiveEdits();
-    this.applyCopyToolEntryIntent(entry.intent, entry.attachSource, entry.previewPoint);
+    this.applyCopyToolEntryIntent(entry.intent, entry.attachSource, entry.previewPoint, "paste");
+    return true;
+  }
+
+  private canCopyObjects(components: readonly ComponentInstance[], source: "sheet" | "clipboard" = "sheet") {
+    if (components.some(component => component.type === "sheetPort" || (source === "clipboard" && component.type === "sheetBlock"))) {
+      this.setStatus(t("hierarchy.copyUnsupported", "Place sheet instances from the Hierarchy library and create ports with the Pin tool."));
+      return false;
+    }
     return true;
   }
 
   hostFinishActiveEdits() {
-    const editingNoteId = this.noteInteractionController.editingNoteId;
-    if (editingNoteId) this.finishNoteEditing(editingNoteId);
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.propertyInteractions.flush();
   }
 
-  hostSetStatus(message: string) {
-    this.setStatus(message);
+  hostHasActiveEdit() {
+    const focus = this.host.ownerDocument.activeElement;
+    return this.transientToolSession.mode !== "select" || !!this.libraryShapeDraw || !!this.hierarchyPlacement ||
+      !!this.noteDraft || this.shapeResizeSession.isActive || !!this.wireSegmentMove ||
+      (isEditableTarget(focus, this.options.shellEl) && !focus?.closest("[data-schematic-agent-dialog]"));
+  }
+
+  hostSetStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
+    this.setStatus(message, undefined, log);
+  }
+
+  hostRefreshLanguage() {
+    this.renderPalette();
+    this.renderLayersPanel();
+    this.instanceBrowser.refresh();
+    this.analysisController.refreshLanguage?.();
+    this.eventLog.refreshLanguage();
+    this.netlistPanel?.refreshLanguage();
+    this.renderSelectionSummary(this.netResolutionCache);
+    if (this.options.statusEl) this.options.statusEl.textContent = localizeSchematicStatus(this.statusMessage);
   }
 
   hostPrepareAnalysisNetPick() {
     this.prepareAnalysisNetPick();
+  }
+
+  hostRefreshToolCursor() {
+    if (!this.destroyed) this.syncToolCursor();
   }
 
   hostFocusCanvas() {
@@ -2569,42 +4093,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     return this.prepareSelectionJsonText();
   }
 
-  private cacheCopyMarkdownPreviewContent() {
-    const generation = ++this.copyMarkdownPreviewGeneration;
-    const notesByMarkdown = new Map<string, SchematicNote>();
-    this.copyController.sourceNotes.forEach((note) => {
-      if (
-        note.format === "markdown"
-        && !this.copyMarkdownPreviewContent.has(note.text)
-        && !notesByMarkdown.has(note.text)
-      ) {
-        notesByMarkdown.set(note.text, note);
-      }
-    });
-    const notes = Array.from(notesByMarkdown.values());
-    if (notes.length === 0) return;
-
-    void Promise.all(notes.map(async (note) => {
-      const existing = this.noteLayer.cloneRenderedMarkdownByText(note.text);
-      if (existing) return [note.text, existing] as const;
-      const liveContent = this.noteLayer.getNoteElement(note.id)
-        ? await this.noteLayer.waitForRenderedNoteContent(note).catch(() => null)
-        : null;
-      const content = liveContent ?? await this.noteLayer.renderDetachedMarkdown(note.text);
-      return [note.text, content] as const;
-    })).then((entries) => {
-      if (generation !== this.copyMarkdownPreviewGeneration) return;
-      let changed = false;
-      entries.forEach(([markdown, content]) => {
-        if (!content || !this.copyController.sourceNotes.some((note) => note.format === "markdown" && note.text === markdown)) return;
-        this.copyMarkdownPreviewContent.set(markdown, content);
-        changed = true;
-      });
-      if (changed && this.transientToolSession.mode === "copy") {
-        this.updateCopyPreview(this.lastPointerPoint ?? this.copyController.anchor);
-      }
-    });
-  }
 
   private rebuildCounters() {
     this.componentRefs.rebuild(this.document);
@@ -2634,23 +4122,39 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.selectionBoxController.forgetCell();
     this.deleteToolController.clearHover();
     this.graphAdapter.clear();
+    const resolution = resolveSchematicNets(this.document);
+    const projection = resolveLayerObjects(this.document, resolution.connectivity.junctionMembers);
+    const { displayed, selectable } = projection;
+    const ids = [...this.selectionSession.selectedIds];
+    const noteIds = [...this.selectionSession.selectedNoteIds];
+    if ([...ids, ...noteIds].some(id => !selectable(id))) {
+      this.selectionSession.setMixed(ids.filter(selectable), noteIds.filter(selectable));
+    }
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
+        .filter(coupling => displayed(coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
-    this.graphAdapter.addCells(this.document.components.map((component) => this.makeComponentCell(component)));
-    this.graphAdapter.addCells(this.document.wires.map((wire) => this.makeWireCell(wire)));
-    const resolution = resolveSchematicNets(this.document);
+    this.graphAdapter.addCells(this.document.components.filter(component => displayed(component.id))
+      .map(component => this.makeComponentCell(component)));
     this.netResolutionCache = resolution;
+    this.graphAdapter.addCells(
+      this.document.wires
+        .filter(wire => displayed(wire.id))
+        .map(wire => this.makeWireCell(wire))
+    );
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
-    this.graphAdapter.addCells((this.document.netLabels ?? []).map((label) =>
-      makeNetLabelCell(label, {
+    this.graphAdapter.addCells((this.document.netLabels ?? [])
+      .filter(label => displayed(label.id))
+      .map(label => makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
+        documentFont: this.document.display?.textFont,
         status: resolution.labelStates.get(label.id)?.status
-      })
-    ));
+      }))
+    );
     this.junctionRenderCoordinator.refreshFull(resolution);
+    this.applyLayerObjectStackOrder(projection);
     this.syncSelectionStyles({ resolution });
     this.renderNotes();
     this.transientToolSession.projectActivePreview(
@@ -2658,6 +4162,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.lastPointerPoint ?? this.copyController.anchor
     );
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
+    this.renderLayersPanel();
   }
 
   private renderTransformedDocument(renderSnapshot: TransformRenderSnapshot) {
@@ -2684,17 +4189,23 @@ export class SchematicEditor implements SchematicHostedEditor {
     });
     this.renderInductorCouplings();
 
-    this.incrementalRenderer.updateWireCellsFromDocument(changedTransformWireIds(renderSnapshot, this.document));
     const resolution = resolveSchematicNets(this.document);
+    const previousBusWires = this.netResolutionCache?.busWireIds;
+    const changedWires = new Set(changedTransformWireIds(renderSnapshot, this.document));
+    previousBusWires?.forEach(id => { if (!resolution.busWireIds.has(id)) changedWires.add(id); });
+    resolution.busWireIds.forEach(id => { if (!previousBusWires?.has(id)) changedWires.add(id); });
     this.netResolutionCache = resolution;
+    this.incrementalRenderer.updateWireCellsFromDocument(changedWires);
     this.analysisController.refreshNetSelectorsFromNames(resolution.nets.keys());
     (this.document.netLabels ?? []).forEach((label) => {
       this.incrementalRenderer.replaceGraphCellPreservingZ(label.id, makeNetLabelCell(label, {
         selected: this.selectionSession.isCellSelected(label.id),
+        documentFont: this.document.display?.textFont,
         status: resolution.labelStates.get(label.id)?.status
       }));
     });
     this.junctionRenderCoordinator.refreshFull(resolution);
+    this.applyLayerObjectStackOrder();
 
     renderSnapshot.noteIds.forEach((noteId) => {
       const note = (this.document.notes ?? []).find((candidate) => candidate.id === noteId);
@@ -2768,6 +4279,54 @@ export class SchematicEditor implements SchematicHostedEditor {
     return parseJunctionKey(key);
   }
 
+  private applyLayerObjectStackOrder(projection = resolveLayerObjects(this.document)) {
+    let z = 1;
+    const junctions = this.presentationMode ? presentationJunctions(this.document) : this.document.junctions;
+    const groups = buildSchematicLayerObjectTree({ ...this.document, junctions }, projection);
+    groups.slice().reverse().forEach((group) => {
+      group.objects.slice().reverse().forEach((object) => {
+        if (!object.displayed) return;
+        const cell = this.graphAdapter.getCell(object.id);
+        if (cell) {
+          cell.set("z", z);
+          cell.set("layerLocked", group.layer.locked);
+          if (group.layer.locked) cell.attr({ root: { pointerEvents: "none" } });
+        }
+        z += 1;
+      });
+    });
+    this.scheduleWireCrossings();
+  }
+
+  private scheduleWireCrossings() {
+    if (this.document.display?.wireCrossings !== "hop" || this.wireCrossingFramePending) return;
+    this.wireCrossingFramePending = true;
+    this.requestOwnedFrame(() => {
+      this.wireCrossingFramePending = false;
+      if (this.document.display?.wireCrossings !== "hop") return;
+      const visible = this.document.wires.flatMap(wire => {
+        const cell = this.graphAdapter.getCell(wire.id);
+        return cell ? [{ wire, cell }] : [];
+      }).sort((a, b) => Number(a.cell.get("z")) - Number(b.cell.get("z")));
+      const paths = wireHopPaths(visible.map(({ wire }) => wire), this.document.junctions);
+      for (const { wire, cell } of visible) {
+        const path = paths.get(wire.id) ?? null;
+        if ((cell.get("wireHopPath") ?? null) === path) continue;
+        cell.set("wireHopPath", path);
+        if (path) {
+          // Keep the hit area and endpoint decorations on the electrical route.
+          cell.removeAttr("line/connection");
+          cell.removeAttr("selectionHalo/connection");
+          cell.attr({ line: { d: path }, selectionHalo: { d: path } });
+        } else {
+          cell.removeAttr("line/d");
+          cell.removeAttr("selectionHalo/d");
+          cell.attr({ line: { connection: true }, selectionHalo: { connection: true } });
+        }
+      }
+    });
+  }
+
   private makeComponentCell(instance: ComponentInstance, options: { preview?: boolean } = {}) {
     return makeComponentCell(instance, {
       ...options,
@@ -2776,7 +4335,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       selected: this.selectionSession.isCellSelected(instance.id),
       flipReferenceLabelSide: inductorCouplingFlipsReferenceLabel(this.document, instance),
       resizeHandles:
-        (instance.type === "rectangle" || instance.type === "triangle")
+        isLibraryShapeType(instance.type)
         && this.selectionSession.selectedIds.size === 1
         && this.selectionSession.selectedNoteIds.size === 0
         && this.selectionSession.isCellSelected(instance.id)
@@ -2794,14 +4353,17 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private renderInductorCouplings() {
+    const { displayed } = resolveLayerObjects(this.document);
     this.graphAdapter.getCells().forEach((cell) => {
       if (cell.get("couplingId")) cell.remove();
     });
     this.graphAdapter.addCells(
       (this.document.inductorCouplings ?? [])
+        .filter(coupling => displayed(coupling.id))
         .map((coupling) => this.makeInductorCouplingCell(coupling))
         .filter((cell): cell is NonNullable<typeof cell> => !!cell)
     );
+    this.applyLayerObjectStackOrder();
   }
 
   private renderInductorCouplingEndpoints(couplingId: string) {
@@ -2838,6 +4400,7 @@ export class SchematicEditor implements SchematicHostedEditor {
     return makeWireCell(wire, {
       ...options,
       selected: this.selectionSession.isCellSelected(wire.id),
+      bus: !options.preview && this.netResolutionCache?.busWireIds.has(wire.id),
       endpointConnections: options.endpointConnections
         ?? (options.preview ? undefined : wireEndpointConnections(this.document, wire))
     });
@@ -2853,14 +4416,72 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private updateNetLabelPreview(point: Point | null) {
-    if (this.transientToolSession.mode !== "label") {
-      this.previewRenderer.clearLabel();
-      return;
-    }
-    const preview = this.netLabelToolController.buildPreview(this.document, point);
+    const attachment = this.transientToolSession.mode === "label" && point
+      ? this.routingWireAttachment(point, this.routingPointer?.wireId)
+      : null;
+    const preview = attachment && this.netLabelToolController.buildPreview(this.document, attachment.point, attachment.wireId);
+    this.showRoutingSnap(preview ? preview.attachment.point : null);
     this.previewRenderer.renderLabel(preview
       ? { id: PREVIEW_NET_LABEL_ID, name: preview.name, attachment: preview.attachment }
       : null);
+  }
+
+  private wireIdAt(target: EventTarget | null) {
+    const id = (target as Element | null)?.closest?.("[model-id]")?.getAttribute("model-id");
+    const wireId = id ? this.graphAdapter.getCell(id)?.get("wireId") : undefined;
+    return typeof wireId === "string" ? wireId : undefined;
+  }
+
+  private routingWireAttachment(point: Point, preferredWireId?: string) {
+    const { selectable } = resolveLayerObjects(this.document);
+    return nearestWireAttachment(this.document.wires, point, 10 / this.zoom, selectable, preferredWireId);
+  }
+
+  private wireTargetAt(point: Point, preferredWireId?: string) {
+    const { selectable } = resolveLayerObjects(this.document);
+    const radius = 10 / this.zoom;
+    let pinPoint: Point | undefined;
+    let pinDistance = radius;
+    for (const pin of this.netResolutionCache?.connectivity.pins ?? []) {
+      if (!selectable(pin.componentId)) continue;
+      const distance = Math.hypot(pin.point.x - point.x, pin.point.y - point.y);
+      if (distance <= pinDistance) {
+        pinPoint = pin.point;
+        pinDistance = distance;
+      }
+    }
+    if (pinPoint) return { point: pinPoint, pin: true };
+    const attachment = nearestWireAttachment(this.document.wires, point, radius, selectable, preferredWireId);
+    return { point: attachment?.point ?? snapPoint(point), pin: false };
+  }
+
+  private applyWireTarget(point: Point, preferredWireId?: string) {
+    const target = this.wireTargetAt(point, preferredWireId);
+    if (target.pin) this.handleWirePinClick(target.point);
+    else this.handleWireBlankClick(target.point);
+  }
+
+  private showRoutingSnap(point: Point | null) {
+    if (!point) {
+      this.routingSnapMarker?.parentElement?.setAttribute("hidden", "");
+      return;
+    }
+    if (!this.routingSnapMarker) {
+      const ns = "http://www.w3.org/2000/svg";
+      const overlay = this.host.ownerDocument.createElementNS(ns, "svg");
+      overlay.setAttribute("class", "schematic-shape-draft");
+      overlay.setAttribute("aria-hidden", "true");
+      this.routingSnapMarker = this.host.ownerDocument.createElementNS(ns, "circle");
+      this.routingSnapMarker.setAttribute("class", "schematic-shape-draft-grid-point");
+      this.routingSnapMarker.setAttribute("data-routing-snap", "");
+      this.routingSnapMarker.setAttribute("r", "4");
+      overlay.append(this.routingSnapMarker);
+      this.options.paperEl.append(overlay);
+    }
+    const screen = this.worldToScreenPoint(point);
+    this.routingSnapMarker.setAttribute("cx", String(screen.x));
+    this.routingSnapMarker.setAttribute("cy", String(screen.y));
+    this.routingSnapMarker.parentElement?.removeAttribute("hidden");
   }
 
   private commitNetLabelGeometry(cell: any) {
@@ -2892,26 +4513,28 @@ export class SchematicEditor implements SchematicHostedEditor {
       this.previewRenderer.clearCopy();
       return;
     }
-    const previewInput = this.copyController.preparePreview(point, this.copyInstantiationFactories());
+    const previewInput = this.copyController.preparePreview(point, this.copyInstantiationFactories(), this.document, this.copyLayerTarget());
     if (!previewInput.ok) {
       this.previewRenderer.renderCopy(null);
       return;
     }
     const previewLabels = previewInput.preview.netLabels ?? [];
     bindStandaloneNetLabelsAtPoint(this.document, previewLabels, point);
-    this.previewRenderer.renderCopy(previewInput.preview);
+    this.previewRenderer.renderCopy(previewInput.preview, resolveLayerObjects(previewInput.preview).displayed);
   }
 
   private updateWirePreview(point: Point | null) {
     if (this.transientToolSession.mode !== "wire") {
-      this.previewRenderer.clearWire();
+      this.removeWirePreview();
       return;
     }
-    const points = this.wireToolController.previewPath(point);
+    const snapped = point ? this.wireTargetAt(point, this.routingPointer?.wireId).point : null;
+    this.showRoutingSnap(snapped);
+    const points = this.wireToolController.previewPath(snapped);
     this.previewRenderer.renderWire(
       points,
       this.wireToolController.appearance(),
-      this.wireToolController.routeMode
+      points ? wireRouteModeForPath(points) : undefined
     );
   }
 
@@ -2921,8 +4544,7 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private clearCopyState() {
     this.copyController.cancel();
-    this.copyMarkdownPreviewGeneration += 1;
-    this.copyMarkdownPreviewContent.clear();
+    this.copyAfterDrop = "select";
     this.copyPreviewNeedsPointer = false;
     this.removeCopyPreview();
   }
@@ -2933,12 +4555,15 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private removeWirePreview() {
     this.previewRenderer.clearWire();
+    this.showRoutingSnap(null);
   }
 
   private clearNetLabelTransientState() {
     const draggedLabelId = this.netLabelToolController.snapshot().drag?.id;
     this.netLabelToolController.cancel();
+    this.netLabelDialog.close();
     this.previewRenderer.clearLabel();
+    this.showRoutingSnap(null);
     if (!draggedLabelId) return;
     const label = (this.document.netLabels ?? []).find((candidate) => candidate.id === draggedLabelId);
     const cell = this.graphAdapter.getCell(draggedLabelId);
@@ -2957,20 +4582,24 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private clearNotePointerInteractions(policy: TransientInteractionCleanupPolicy) {
-    const cleanup = this.noteInteractionController.clearPointerInteractions(policy);
-    if (cleanup.dragNoteIds.length > 0) {
+    const noteIds = this.noteInteractionController.clearPointerInteractions(policy);
+    if (noteIds.length > 0) {
       this.removeNoteDragListeners();
       if (policy === "rollback") {
-        cleanup.dragNoteIds.forEach((noteId) => {
+        noteIds.forEach((noteId) => {
           const note = this.noteById(noteId);
           if (note) this.noteLayer.positionNoteElement(note, this.noteLayerState());
         });
       }
     }
-    if (cleanup.widthNoteId) this.removeNoteWidthDragListeners();
   }
 
   private clearCellGeometryInteraction(policy: TransientInteractionCleanupPolicy) {
+    if (this.pointerMove) {
+      this.pointerMove = null;
+      this.removeCopyPreview();
+      this.showRoutingSnap(null);
+    }
     if (policy === "discard") {
       this.cellGeometryInteractionCoordinator.invalidateAgainstDocument();
       return;
@@ -2988,11 +4617,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.host.ownerWindow.removeEventListener("pointerup", this.handleGlobalNotePointerUp, true);
   }
 
-  private removeNoteWidthDragListeners() {
-    this.host.ownerWindow.removeEventListener("pointermove", this.handleGlobalNoteWidthPointerMove, true);
-    this.host.ownerWindow.removeEventListener("pointerup", this.handleGlobalNoteWidthPointerUp, true);
-  }
-
   private commitNotePropertyResult(result: SchematicDocumentOpResult | null) {
     if (!result?.changed) return false;
     this.commitChangedNoteDocument(result);
@@ -3004,25 +4628,37 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.notePropertyBatchSession.invalidateAgainstDocument(
       Array.from(this.selectionSession.selectedNoteIds)
     );
-    const invalidation = this.noteInteractionController.invalidateAgainstDocument();
-    if (invalidation.drag) this.removeNoteDragListeners();
-    if (invalidation.width) this.removeNoteWidthDragListeners();
-    this.noteLayer.render(this.document.notes ?? [], this.noteLayerState());
+    if (this.noteInteractionController.invalidateAgainstDocument()) this.removeNoteDragListeners();
+    this.noteLayer.render(this.displayedNotesInStackOrder(), this.noteLayerState());
+  }
+
+  private displayedNotesInStackOrder() {
+    const projection = resolveLayerObjects(this.document);
+    const order = new Map(
+      layerObjectStackIds(this.document, projection).map((id, index) => [id, index])
+    );
+    return (this.document.notes ?? [])
+      .filter(note => projection.displayed(note.id))
+      .sort((first, second) => (order.get(first.id) ?? -1) - (order.get(second.id) ?? -1));
   }
 
   private updateNoteLayerTransform() {
-    this.noteLayer.updateTransform(this.document.notes ?? [], this.noteLayerState());
+    const { displayed } = resolveLayerObjects(this.document);
+    this.noteLayer.updateTransform(
+      (this.document.notes ?? []).filter(note => displayed(note.id)),
+      this.noteLayerState()
+    );
     if (this.transientToolSession.mode === "copy" && this.copyController.hasSource) {
       this.updateCopyPreview(this.lastPointerPoint ?? this.copyController.anchor);
+    } else if (this.pointerMove) {
+      this.updateMovePreview(this.lastPointerPoint);
     }
   }
 
   private noteLayerState() {
     return {
       selectedIds: this.selectionSession.selectedNoteIds,
-      editingNoteId: this.noteInteractionController.editingNoteId,
       zoom: this.zoom,
-      noteFontSizePx,
       worldToScreenPoint: (point: Point) => this.worldToScreenPoint(point)
     };
   }
@@ -3031,22 +4667,18 @@ export class SchematicEditor implements SchematicHostedEditor {
     const element = this.noteElementFromEvent(event);
     if (!element) return;
     const noteId = element.dataset.noteId;
-    if (!noteId) return;
-    const widthHandle = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-note-width-handle]");
-    if (widthHandle && element.contains(widthHandle)) {
-      this.beginNoteWidthDrag(event, noteId);
-      return;
-    }
+    if (!noteId || this.noteDraft) return;
     event.stopPropagation();
     if (this.isDeleteToolMode()) {
       this.handleDeleteModeNotePointerDown(event, noteId);
       return;
     }
-    if (this.transientToolSession.mode === "copy") {
-      this.handleCopyModeNotePointerDown(event, noteId);
+    const mode = this.transientToolSession.mode;
+    if (mode === "copy" || isMoveOrRotateMode(mode)) {
+      event.preventDefault();
+      this.focusCanvas();
       return;
     }
-    if (this.noteInteractionController.isEditing(noteId)) return;
     event.preventDefault();
     this.focusCanvas();
     const note = this.noteById(noteId);
@@ -3064,16 +4696,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private handleDeleteModeNotePointerDown(event: PointerEvent, noteId: string) {
     event.preventDefault();
     this.applyDeleteToolToIds([], [noteId]);
-  }
-
-  private handleCopyModeNotePointerDown(event: PointerEvent, noteId: string) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    this.focusCanvas();
-    const point = this.pointFromClientEvent(event);
-    if (this.copyController.awaitingReference) this.setCopyReference(point);
-    else if (this.copyController.hasSource) this.placeCopyAt(point);
-    else this.beginCopyFromTargets([], [noteId], point);
   }
 
   private beginNoteDrag(event: PointerEvent, element: HTMLElement, noteId: string) {
@@ -3103,136 +4725,41 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.setDeleteHover([], noteId ? [noteId] : []);
   }
 
-  private beginNoteWidthDrag(event: PointerEvent, noteId: string) {
-    const note = this.noteById(noteId);
-    if (!note || note.format !== "markdown" || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    this.setNoteSelection([noteId]);
-    if (!this.noteInteractionController.beginWidthDrag({
-      noteId,
-      pointerId: event.pointerId,
-      clientX: event.clientX,
-      clientY: event.clientY
-    })) return;
-    this.host.ownerWindow.addEventListener("pointermove", this.handleGlobalNoteWidthPointerMove, true);
-    this.host.ownerWindow.addEventListener("pointerup", this.handleGlobalNoteWidthPointerUp, true);
-  }
-
   private handleNoteClick(event: MouseEvent) {
-    const element = this.noteElementFromEvent(event);
+    const mode = this.transientToolSession.mode;
+    const placing = (isMoveOrRotateMode(mode) && this.pointerMove) || (mode === "copy" && this.copyController.hasSource);
+    const element = placing ? this.noteLayer.noteElementFromEvent(event) : this.noteElementFromEvent(event);
     if (!element) return;
     event.stopPropagation();
-    if (this.transientToolSession.mode === "copy" || this.isDeleteToolMode()) return;
+    if (this.isDeleteToolMode()) return;
     const noteId = element.dataset.noteId;
-    if (!noteId || this.noteInteractionController.isEditing(noteId) || this.noteInteractionController.consumeMoved(noteId)) return;
+    if (!noteId) return;
+    if (isMoveOrRotateMode(mode)) {
+      if (event.button !== 0) return;
+      const point = this.pointFromClientEvent(event);
+      if (this.pointerMove) this.finishPointerMove(point);
+      else if (mode === "move") this.pickMoveTarget([], [noteId], point);
+      return;
+    }
+    if (mode === "copy") {
+      if (event.button !== 0) return;
+      const point = this.pointFromClientEvent(event);
+      if (this.copyController.hasSource) this.placeCopyAt(point);
+      else this.beginCopyFromTargets([], [noteId], point);
+      return;
+    }
+    if (this.noteInteractionController.consumeMoved(noteId)) return;
     this.setNoteSelectionFromEvent(noteId, event);
   }
 
-  private handleNoteDoubleClick(event: MouseEvent) {
-    const element = this.noteElementFromEvent(event);
-    if (!element) return;
-    event.stopPropagation();
-    if (this.transientToolSession.mode === "copy" || this.isDeleteToolMode()) return;
-    const noteId = element.dataset.noteId;
-    if (noteId && this.noteInteractionController.isEditing(noteId)) return;
-    event.preventDefault();
-    if (noteId) this.beginNoteEditing(noteId);
-  }
-
-  private handleNoteBlur(event: FocusEvent) {
-    const element = this.noteElementFromEvent(event);
-    const noteId = element?.dataset.noteId;
-    const nextTarget = event.relatedTarget;
-    const notePropertySelector = "[data-property-note-form]";
-    if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) {
-      if (element && nextTarget instanceof this.host.ownerWindow.Node && element.contains(nextTarget)) return;
-      if (nextTarget instanceof this.host.ownerWindow.Element && nextTarget.closest(notePropertySelector)) return;
-      if (noteId) {
-        queueMicrotask(() => {
-          const currentElement = this.noteLayer.getNoteElement(noteId);
-          const activeElement = currentElement?.ownerDocument.activeElement;
-          if (currentElement && activeElement instanceof this.host.ownerWindow.Node && currentElement.contains(activeElement)) return;
-          if (activeElement instanceof this.host.ownerWindow.Element && activeElement.closest(notePropertySelector)) return;
-          if (this.noteInteractionController.isEditing(noteId)) this.finishNoteEditing(noteId);
-        });
-      }
-      return;
-    }
-    if (element && nextTarget instanceof this.host.ownerWindow.Node && element.contains(nextTarget)) return;
-    if (
-      nextTarget instanceof this.host.ownerWindow.Element
-      && nextTarget.closest(notePropertySelector)
-    ) return;
-    if (noteId && this.noteInteractionController.isEditing(noteId)) {
-      this.finishNoteEditing(noteId);
-    }
-  }
-
-  private handleNoteInput(event: Event) {
-    if ((event.target as Element | null)?.closest?.("[data-math-source-editor]")) return;
-    const element = this.noteElementFromEvent(event);
-    const noteId = element?.dataset.noteId;
-    if (!noteId || !this.noteInteractionController.isEditing(noteId)) return;
-    this.updateNoteFromElement(noteId);
-  }
-
-  private beginNoteEditing(noteId: string) {
-    this.setNoteSelection([noteId]);
-    if (!this.noteInteractionController.beginEdit(noteId)) return;
-    this.syncNoteSelectionStyles();
-    this.renderPropertyEditor();
-  }
-
-  private finishNoteEditing(noteId: string) {
-    this.flushScheduledNoteCommit();
-    const result = this.noteInteractionController.finishEdit(noteId);
-    if (!result) return;
-    this.commitNotePropertyResult(result);
-    this.syncNoteSelectionStyles();
-    this.renderPropertyEditor();
-  }
-
-  private updateNoteFromElement(noteId: string) {
-    if (this.noteInteractionController.readEditor(noteId)) this.scheduleNoteCommit();
-  }
-
   private noteElementFromEvent(event: Event) {
-    return this.noteLayer.noteElementFromEvent(event);
+    const element = this.noteLayer.noteElementFromEvent(event);
+    const id = element?.dataset.noteId;
+    return id && resolveLayerObjects(this.document).selectable(id) ? element : null;
   }
 
   private noteById(id: string) {
     return (this.document.notes ?? []).find((note) => note.id === id);
-  }
-
-  private updateMarkdownNoteText(noteId: string, markdown: string) {
-    if (this.noteInteractionController.acceptMarkdownChange(noteId, markdown)) {
-      this.scheduleNoteCommit();
-    }
-  }
-
-  private updateMarkdownNoteHeight(noteId: string, height: number) {
-    this.noteInteractionController.acceptMarkdownResize(noteId, height);
-  }
-
-  private scheduleNoteCommit() {
-    this.cancelScheduledNoteCommit();
-    this.noteCommitTimer = this.host.setTimeout(() => {
-      this.noteCommitTimer = null;
-      this.commitNotePropertyResult(this.noteInteractionController.checkpointEdit());
-    }, NOTE_COMMIT_DEBOUNCE_MS);
-  }
-
-  private flushScheduledNoteCommit() {
-    if (this.noteCommitTimer === null) return false;
-    this.cancelScheduledNoteCommit();
-    return this.commitNotePropertyResult(this.noteInteractionController.checkpointEdit());
-  }
-
-  private cancelScheduledNoteCommit() {
-    if (this.noteCommitTimer === null) return;
-    this.host.clearTimeout(this.noteCommitTimer);
-    this.noteCommitTimer = null;
   }
 
   private beginNoteFontSizePropertyEdit() {
@@ -3240,9 +4767,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private finishNoteFontSizePropertyEdit() {
-    const result = this.notePropertyBatchSession.activeKind === "font-size"
-      ? this.notePropertyBatchSession.commit()
-      : this.noteInteractionController.finishFontSizePropertyEdit();
+    const result = this.notePropertyBatchSession.commit();
     this.commitNotePropertyResult(result);
     this.renderPropertyEditor();
   }
@@ -3254,52 +4779,27 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.renderPropertyEditor();
   }
 
-  private beginNoteWidthPropertyEdit() {
-    this.beginSelectedNotePropertyBatch("width");
-  }
-
-  private finishNoteWidthPropertyEdit() {
-    const result = this.notePropertyBatchSession.activeKind === "width"
-      ? this.notePropertyBatchSession.commit()
-      : this.noteInteractionController.finishWidthPropertyEdit();
-    this.commitNotePropertyResult(result);
-    this.renderPropertyEditor();
-  }
-
-  private cancelNoteWidthPropertyEdit() {
-    if (this.notePropertyBatchSession.activeKind === "width") {
-      this.notePropertyBatchSession.cancel();
-    }
-    this.renderPropertyEditor();
-  }
-
-  private setSelectedNoteWidth(value: string, options: { commit?: boolean } = { commit: true }) {
-    if (this.notePropertyBatchSession.activeKind !== "width") {
-      const started = this.beginSelectedNotePropertyBatch("width");
-      if (!started) {
-        if (options.commit) this.renderPropertyEditor();
-        return;
-      }
-    }
-    if (options.commit) {
-      this.commitNotePropertyResult(this.notePropertyBatchSession.commit(value));
-      this.renderPropertyEditor();
-      return;
-    }
-    this.notePropertyBatchSession.input(value);
-  }
-
-  private setSelectedNoteFormat(format: SchematicNoteFormat) {
+  private setSelectedNoteAnchor(anchor: SchematicNoteAnchor) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
-    const editingNoteId = this.noteInteractionController.editingNoteId;
-    if (editingNoteId && this.selectionSession.isNoteSelected(editingNoteId)) {
-      this.finishNoteEditing(editingNoteId);
-    }
-    this.propertyInteractions.run({ kind: "note-format", format });
-    if (editingNoteId && this.selectionSession.isNoteSelected(editingNoteId)) {
-      this.beginNoteEditing(editingNoteId);
-    }
+    const notes = this.selectionSession.project().notes.filter(note => (note.anchor ?? DEFAULT_NOTE_ANCHOR) !== anchor);
+    if (!notes.length) return;
+    for (const note of notes) note.anchor = anchor;
+    this.renderNotes();
+    this.renderPropertyEditor();
+    this.commitCurrentContent("note-anchor");
+    this.setStatus("Note anchor updated.");
+  }
+
+  private setSelectedNoteText(text: string) {
+    this.finishNoteFontSizePropertyEdit();
+    const notes = this.selectionSession.project().notes;
+    if (notes.length !== 1 || notes[0].text === text) return;
+    notes[0].text = text;
+    this.renderNotes();
+    this.renderPropertyEditor();
+    this.renderLayersPanel();
+    this.commitCurrentContent("note-text");
+    this.setStatus("Note updated.");
   }
 
   private setSelectedNoteFontSize(value: string, options: { commit?: boolean } = { commit: true }) {
@@ -3318,50 +4818,31 @@ export class SchematicEditor implements SchematicHostedEditor {
     this.notePropertyBatchSession.input(value);
   }
 
-  private beginSelectedNotePropertyBatch(kind: "font-size" | "width") {
+  private beginSelectedNotePropertyBatch(kind: "font-size") {
     if (this.selectionSession.selectedIds.size !== 0) return false;
     const result = this.notePropertyBatchSession.begin(
       kind,
       Array.from(this.selectionSession.selectedNoteIds)
     );
     if (!result.ok) {
-      this.setStatus(
-        result.reason === "requires-markdown"
-          ? "Width is available only when every selected Note uses Markdown."
-          : "The selected Notes changed before the property edit began."
-      );
+      this.setStatus("The selected Notes changed before the property edit began.");
       return false;
     }
     return true;
   }
 
-  private projectNotePropertyBatch(
-    note: SchematicNote,
-    context: NotePropertyBatchProjectionContext
-  ) {
-    if (context.kind === "font-size") {
-      const fontSize = noteFontSizePx(note);
-      if (context.phase === "preview" && note.format !== "markdown") {
-        this.noteLayer.resizeNoteToText(note, note.text, fontSize);
-      }
-      this.noteLayer.setNoteFontSize(note, fontSize);
-      if (note.format === "markdown") this.noteLayer.refreshMarkdownLayout(note.id);
-      return;
-    }
-    this.noteLayer.applyNoteElementSize(note);
-    this.noteLayer.refreshMarkdownLayout(note.id);
+  private projectNotePropertyBatch(note: SchematicNote) {
+    this.noteLayer.refresh(note);
   }
 
   private setNoteSelectionFromEvent(id: string, event: MouseEvent | PointerEvent) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.selectionSession.selectNote(id, selectionGestureFromEvent(event));
     this.finishSelectionChange();
   }
 
   private setNoteSelection(ids: string[], updateStyles = true) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.selectionSession.setNotes(ids);
     if (updateStyles) {
       this.syncSelectionUi();
@@ -3372,7 +4853,6 @@ export class SchematicEditor implements SchematicHostedEditor {
 
   private setMixedSelection(ids: string[], noteIds: string[], updateStyles = true) {
     this.finishNoteFontSizePropertyEdit();
-    this.finishNoteWidthPropertyEdit();
     this.clearDeleteHover();
     this.selectionSession.setMixed(ids, noteIds);
     if (updateStyles) {
@@ -3385,7 +4865,6 @@ export class SchematicEditor implements SchematicHostedEditor {
   private syncNoteSelectionStyles() {
     this.noteLayer.syncSelectionStyles(
       this.selectionSession.selectedNoteIds,
-      this.noteInteractionController.editingNoteId,
       this.deleteHoverState()
     );
   }
@@ -3433,7 +4912,7 @@ export class SchematicEditor implements SchematicHostedEditor {
       selectedIds: this.selectionSession.selectedIds,
       hoverIds: this.deleteHoverState(),
       presentationMode: this.presentationMode,
-      resolution: options.resolution
+      resolution: options.resolution ?? this.netResolutionCache
     });
     this.syncShapeResizeHandles();
   }
@@ -3445,20 +4924,20 @@ export class SchematicEditor implements SchematicHostedEditor {
       : undefined;
     const selectedShape = this.document.components.find((component) =>
       component.id === selectedId
-      && (component.type === "rectangle" || component.type === "triangle")
+      && isLibraryShapeType(component.type)
       && !component.temporarilyDeleted
     );
     this.graphAdapter.getCells().forEach((cell) => {
       const componentId = cell.get("componentId");
       if (!componentId) return;
       const selected = componentId === selectedShape?.id && !this.presentationMode;
+      const vertexShape = cell.get("vertexShape");
+      if (typeof vertexShape === "string" && isVertexLibraryShapeType(vertexShape)) {
+        cell.attr(`${vertexShape}Handles/display`, selected ? "inline" : "none");
+        return;
+      }
       const visible = selected && selectedShape?.type === "rectangle";
-      [
-        "rectangleResizeNw",
-        "rectangleResizeNe",
-        "rectangleResizeSe",
-        "rectangleResizeSw"
-      ].forEach((selector) => {
+      RECTANGLE_RESIZE_HANDLE_SELECTORS.forEach((selector) => {
         cell.attr(`${selector}/opacity`, visible ? 1 : 0);
         cell.attr(`${selector}/pointerEvents`, visible ? "all" : "none");
       });
@@ -3466,7 +4945,7 @@ export class SchematicEditor implements SchematicHostedEditor {
         const show = selected && selectedShape?.type === "triangle";
         cell.attr(`triangleResize${vertex}/opacity`, show ? 1 : 0);
         cell.attr(`triangleResize${vertex}/pointerEvents`, show ? "all" : "none");
-        cell.attr(`triangleVertex${vertex}/opacity`, show ? 1 : 0);
+        cell.attr(`triangleVertex${vertex}/opacity`, 0);
       });
     });
   }
@@ -3499,10 +4978,10 @@ export class SchematicEditor implements SchematicHostedEditor {
       hasActiveAnalysisPick: this.analysisController.hasActivePick(),
       selectionState: this.selectionSession.snapshot()
     });
-    this.applyFinishedSelectionBoxIntent(intent);
+    this.applyFinishedSelectionBoxIntent(intent, point);
   }
 
-  private applyFinishedSelectionBoxIntent(intent: FinishedSelectionBoxIntent) {
+  private applyFinishedSelectionBoxIntent(intent: FinishedSelectionBoxIntent, point: Point) {
     if (intent.kind === "noop") {
       return;
     }
@@ -3515,6 +4994,13 @@ export class SchematicEditor implements SchematicHostedEditor {
 
     if (intent.kind === "delete-targets") {
       this.applyDeleteToolToIds(intent.ids, intent.noteIds);
+      return;
+    }
+
+    if (intent.kind === "pick-tool-targets") {
+      if (intent.mode === "copy") this.beginCopyFromTargets(intent.ids, intent.noteIds, point);
+      else this.pickMoveTarget(intent.ids, intent.noteIds, point);
+      this.viewportController.suppressBlankClickOnce();
       return;
     }
 
@@ -3557,13 +5043,17 @@ export class SchematicEditor implements SchematicHostedEditor {
   }
 
   private syncToolUi(resolution?: NetResolution) {
-    const templateSelect = this.options.paletteEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
+    this.syncToolCursor();
+    this.scheduleWireCrossings();
+    const templateSelect = this.options.shellEl.querySelector<HTMLSelectElement>("[data-symbol-template]");
     if (templateSelect) templateSelect.value = resolveSymbolTemplate(this.document.symbolTemplate).id;
+    const wireCrossings = this.options.shellEl.querySelector<HTMLSelectElement>("[data-schematic-wire-crossings]");
+    if (wireCrossings) wireCrossings.value = this.document.display?.wireCrossings ?? "plain";
+    const textFont = this.options.shellEl.querySelector<HTMLSelectElement>("[data-schematic-text-font]");
+    if (textFont) textFont.value = this.document.display?.textFont ?? "sans";
+    const process = this.options.shellEl.querySelector<HTMLSelectElement>("[data-netlist-process]");
+    if (process) process.value = this.document.netlistProcess ?? DEFAULT_NETLIST_PROCESS;
     syncSchematicPaperModeClasses(this.options.paperEl, this.transientToolSession.mode);
-    this.options.paperEl.classList.toggle(
-      "is-coupling-pick-mode",
-      this.inductorInteractions.pendingSourceId !== null
-    );
     this.instanceSelector.update();
     const toolbarState = {
       mode: this.transientToolSession.mode,
@@ -3573,11 +5063,86 @@ export class SchematicEditor implements SchematicHostedEditor {
     };
     this.toolbarController?.sync(toolbarState);
     this.renderSelectionSummary(resolution);
+    this.scheduleNetlistRefresh();
+  }
+
+  private syncToolCursor() {
+    const mode = this.transientToolSession.mode;
+    syncSchematicToolCursor(this.options.paperEl, {
+      mode,
+      moveBehavior: this.transientToolSession.moveBehavior,
+      browsingInstances: this.instanceBrowser.isOpen(),
+      placingNote: !!this.noteDraft,
+      hierarchyPlacement: this.hierarchyPlacement?.type,
+      precisionPick: !!this.libraryShapeDraw || (mode === "select" && this.analysisController.hasActivePick()) ||
+        this.inductorInteractions.pendingSourceId !== null || this.shapeResizeSession.isActive,
+      selectingBox: this.selectionBoxController.isActive(),
+      feedback: this.toolCursorFeedback?.cursor
+    });
+  }
+
+  private showToolCursorFeedback(cursor: ToolCursorFeedback) {
+    if (this.toolCursorFeedback) this.host.clearTimeout(this.toolCursorFeedback.timer);
+    const timer = this.host.setTimeout(() => {
+      this.toolCursorFeedback = undefined;
+      this.syncToolCursor();
+    }, 800);
+    this.toolCursorFeedback = { cursor, timer };
+    this.syncToolCursor();
+  }
+
+  private clearToolCursorFeedback() {
+    if (!this.toolCursorFeedback) return;
+    this.host.clearTimeout(this.toolCursorFeedback.timer);
+    this.toolCursorFeedback = undefined;
+    this.syncToolCursor();
+  }
+
+  private scheduleNetlistRefresh() {
+    if (!this.netlistPanel) return;
+    if (this.netlistRefreshTimer !== null) this.host.clearTimeout(this.netlistRefreshTimer);
+    this.netlistRefreshTimer = this.host.setTimeout(() => {
+      this.netlistRefreshTimer = null;
+      this.netlistPanel?.refresh(this.document);
+    }, 250);
+  }
+
+  private selectNetlistDiagnostic(componentId: string) {
+    const component = this.document.components.find(candidate => candidate.id === componentId);
+    if (!component || !this.graphAdapter.getCell(componentId)) return;
+    this.selectionSession.setMixed([componentId], []);
+    this.finishSelectionChange();
+    const bounds = componentVisualBounds(component);
+    const zoom = this.zoom;
+    this.viewAdapter.resetScroll();
+    this.setView({
+      zoom,
+      translate: {
+        x: this.options.paperEl.clientWidth / 2 - (bounds.x + bounds.width / 2) * zoom,
+        y: this.options.paperEl.clientHeight / 2 - (bounds.y + bounds.height / 2) * zoom
+      }
+    });
+    this.focusCanvas();
   }
 
   private renderSelectionSummary(resolution?: NetResolution) {
     const projection = this.currentSelectionUiProjection(resolution);
     this.propertyPanelController.sync(projection.propertyPanel);
+    const textObject = this.selectedTextObject();
+    for (const select of this.options.propertyEl.querySelectorAll<HTMLSelectElement>("[data-property-text-font]")) {
+      const row = select.closest<HTMLElement>("[data-property-text-font-row]");
+      if (!row) continue;
+      row.hidden = textObject === null || textObject.kind !== select.dataset.propertyTextFont;
+      select.value = !row.hidden ? textObject?.object.fontFamily ?? "" : "";
+    }
+    this.syncMosParams();
+    this.syncDeviceModel();
+    this.hostBridge.onHierarchySelectionChange?.(this.selectedSingleComponent()?.id);
+    this.syncLayerAssignment();
+    this.syncLayerObjectSelection();
+    const hasSelection = this.transientToolSession.mode === "select" && this.selectionSession.hasAny();
+    if (hasSelection && !this.lastHadSelection) this.sidebarLibrary.showProperties();
+    this.lastHadSelection = hasSelection;
     const target = this.options.selectionSummaryEl;
     if (!target) return;
     renderSchematicSelectionSummary(target, projection.summary);
@@ -3596,7 +5161,6 @@ export class SchematicEditor implements SchematicHostedEditor {
     const propertyResolution = needsResolution
       ? resolution ?? this.netResolutionCache ?? resolveSchematicNets(this.document)
       : undefined;
-    const labelToolState = this.netLabelToolController.snapshot();
     return buildSchematicSelectionUiProjection({
       mode: this.transientToolSession.mode,
       selection: this.currentSelectionContents(),
@@ -3604,15 +5168,13 @@ export class SchematicEditor implements SchematicHostedEditor {
         document: this.document,
         targets,
         resolution: propertyResolution,
-        labelTool: this.transientToolSession.mode === "label"
-          ? { value: labelToolState.draft, error: labelToolState.error || undefined }
-          : undefined,
         hasSelection: this.selectionSession.hasAny(),
         couplingPickSourceId: this.inductorInteractions.pendingSourceId
       },
       activePlacementItem: this.placementToolController.activeItem,
       wire: { variant: this.wireToolController.variant, routePointCount: this.wireToolController.routePointCount() },
-      copy: { hasSource: this.copyController.hasSource, awaitingReference: this.copyController.awaitingReference },
+      copy: { hasSource: this.copyController.hasSource },
+      moveHasSource: this.pointerMove !== null,
       moveBehavior: this.transientToolSession.moveBehavior
     });
   }
@@ -3632,7 +5194,7 @@ export class SchematicEditor implements SchematicHostedEditor {
   private focusCanvas() {
     this.options.paperEl.focus({ preventScroll: true });
     this.requestOwnedFrame(() => {
-      if (!this.noteInteractionController.hasActiveEdit()) {
+      {
         this.options.paperEl.focus({ preventScroll: true });
       }
     });
@@ -3659,16 +5221,36 @@ export class SchematicEditor implements SchematicHostedEditor {
     [...this.scheduledFrames].forEach((handle) => this.cancelOwnedFrame(handle));
   }
 
-  private setStatus(message: string, resolution?: NetResolution) {
+  private setStatus(message: string, resolution?: NetResolution, log?: Pick<LogEntry, "level" | "source">) {
     if (this.destroyed) return;
-    this.writeStatus(message);
+    this.writeStatus(message, log);
     this.syncToolUi(resolution);
     this.emitStateChange();
   }
 
-  private writeStatus(message: string) {
+  private layerDisplayName(layer: SchematicLayer) {
+    if (layer.id === DEFAULT_LAYER_ID && layer.name === "Layer 1") {
+      return uiFormat("layer.numbered", "Layer {number}", { number: "1" });
+    }
+    return layer.name;
+  }
+
+  private layerObjectLabel(node: SchematicLayerObjectNode) {
+    if (node.componentCaption) {
+      const { type, label, ref } = node.componentCaption;
+      return `${componentName(type, label)} ${ref}`;
+    }
+    const prefix = node.kind === "coupling" ? "Inductor coupling" : node.label.split(" ", 1)[0];
+    return uiFormat(`layer.object.${node.kind}`, `${prefix} {name}`, { name: node.label.slice(prefix.length + 1) });
+  }
+
+  private writeStatus(message: string, log?: Pick<LogEntry, "level" | "source">) {
     this.statusMessage = message;
-    if (this.options.statusEl) this.options.statusEl.textContent = message;
+    if (message && (log || message !== this.lastLoggedStatus)) {
+      this.lastLoggedStatus = message;
+      this.eventLog?.log(log?.level ?? "info", log?.source ?? "status", message);
+    }
+    if (this.options.statusEl) this.options.statusEl.textContent = localizeSchematicStatus(message);
     this.hostBridge.onStatusChange?.(message);
   }
 }
@@ -3715,17 +5297,6 @@ function isEditableTarget(target: EventTarget | null, shellEl: HTMLElement) {
   return !!editable && shellEl.contains(editable);
 }
 
-function isUnmodifiedPrintableKey(event: KeyboardEvent) {
-  if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return false;
-  if (
-    event.key === " "
-    && isElementLike(event.target)
-    && event.target.closest("button, [role='button']")
-  ) {
-    return false;
-  }
-  return true;
-}
 
 function isElementLike(target: EventTarget | null): target is Element {
   return !!target && typeof (target as Element).closest === "function";

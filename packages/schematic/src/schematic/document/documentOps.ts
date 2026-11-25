@@ -1,18 +1,18 @@
 import { applyCopyPlacementToDocument, type CopySource } from "../copyModel";
 import {
   assignRestoredSchematicDocument,
+  cloneSchematicDocument,
   createEmptySchematicDocument,
   isEmptySchematicDocument,
   restoreSchematicDocument
 } from "./documentModel";
-import { samePoint } from "../geometry";
-import { createPlainSchematicNote } from "../notes/noteModel";
+import { samePoint, snapPoint } from "../geometry";
+import { projectTranslatedWireAnchors } from "../wire/wireMoveTopology";
+import { remapNetLabelsAfterWirePathChange } from "../netLabelModel";
+import { createSchematicNote } from "../notes/noteModel";
 import {
-  applyNoteFormat,
   noteFontSizeSnapshotChanged,
-  noteWidthSnapshotChanged,
   type NoteFontSizePropertySnapshot,
-  type NoteWidthPropertySnapshot
 } from "../notes/noteProperties";
 import { applyPlacementCommitToDocument, type PlacementCommit } from "../placementModel";
 import {
@@ -32,8 +32,8 @@ import {
   type SelectionMoveTransaction,
   type SelectionMoveTransactionResult
 } from "../selection/selectionMoveTransaction";
-import { transformSelectionDocumentGeometry, transformSingleComponentOrientation, type GroupTransformKind } from "../selection/selectionTransformModel";
-import type { ComponentInstance, NetLabel, Point, SchematicDocument, SchematicNote, SchematicNoteFormat, WireAppearance, WireRouteMode } from "../types";
+import { transformComponentOrientation, transformSelectionDocumentGeometry, type GroupTransformKind } from "../selection/selectionTransformModel";
+import type { ComponentInstance, NetLabel, Point, SchematicDocument, SchematicNote, WireAppearance, WireRouteMode } from "../types";
 import { applyWireCommitToDocument } from "../wire/wireCreationModel";
 
 export type SchematicDocumentHistoryIntent = "push" | "none";
@@ -111,18 +111,9 @@ export interface RestoreSchematicDocumentResult extends SchematicDocumentOpResul
 }
 
 export type NoteFontSizeCommitDocumentOpResult = SchematicDocumentOpResult;
-export type NoteWidthCommitDocumentOpResult = SchematicDocumentOpResult;
-
-export interface NoteEditCommitSnapshot {
-  noteId: string;
-  text: string;
-  width: number;
-  height?: number;
-  fontSizePx?: number;
-}
 
 export const RESET_SCHEMATIC_DOCUMENT_STATUS = "Schematic reset to defaults.";
-export const CREATE_PLAIN_SCHEMATIC_NOTE_STATUS = "Note created. Type to edit; Esc or focus outside finishes editing.";
+export const CREATE_NOTE_STATUS = "Note created.";
 export const SELECTION_MOVE_APPLY_STATUS = "Selection move updated.";
 export const SELECTION_MOVE_COMMIT_STATUS = "Object moved. Netlist and junctions refreshed.";
 
@@ -158,14 +149,17 @@ export function applyCopyPlacementDocumentOp(document: SchematicDocument, copied
   };
 }
 
-export function createPlainSchematicNoteDocumentOp(
+export function createSchematicNoteDocumentOp(
   document: SchematicDocument,
   id: string,
-  anchor: Point
+  anchor: Point,
+  draft: Parameters<typeof createSchematicNote>[2],
+  layerId?: string
 ): SchematicDocumentOpResult {
-  const note = createPlainSchematicNote(id, anchor);
+  const note = createSchematicNote(id, anchor, draft);
+  if (layerId !== undefined) note.layerId = layerId;
   document.notes.push(note);
-  return documentOpResult(true, CREATE_PLAIN_SCHEMATIC_NOTE_STATUS, [], [id]);
+  return documentOpResult(true, CREATE_NOTE_STATUS, [], [id]);
 }
 
 export function applyNetLabelPlacementDocumentOp(
@@ -193,9 +187,10 @@ export function applyWireCommitDocumentOp(
   points: Point[],
   appearance: WireAppearance,
   createId: () => string,
-  routeMode?: WireRouteMode
+  routeMode?: WireRouteMode,
+  layerId?: string
 ): WireCommitDocumentOpResult {
-  const commit = applyWireCommitToDocument(document, points, appearance, createId, routeMode);
+  const commit = applyWireCommitToDocument(document, points, appearance, createId, routeMode, layerId);
   if (commit.kind !== "committed") {
     return {
       ...documentOpResult(false, "No wire committed."),
@@ -215,7 +210,7 @@ export function transformSingleComponentOrientationDocumentOp(
   kind: GroupTransformKind
 ): SingleComponentTransformDocumentOpResult {
   instances.forEach((instance) => {
-    transformSingleComponentOrientation(instance, kind);
+    transformComponentOrientation(instance, kind);
   });
   const transformedCount = instances.length;
   const changed = transformedCount > 0;
@@ -274,6 +269,39 @@ export function applySelectionMoveDocumentOp(
   };
 }
 
+export function projectPointerSelectionMove(
+  document: SchematicDocument,
+  transaction: SelectionMoveTransaction,
+  point: Point,
+  behavior: SelectionMoveBehavior,
+  orientation?: "rotate"
+) {
+  const draft = cloneSchematicDocument(document);
+  const rotatedIds = orientation
+    ? transformSingleComponentOrientationDocumentOp(
+      draft.components.filter(component => transaction.componentIds.includes(component.id)), orientation
+    ).selectedIds
+    : [];
+  const result = applySelectionMoveDocumentOp(draft, {
+    ...transaction,
+    currentPointer: point,
+    // Each preview starts at the pickup geometry, regardless of the pointer's path.
+    currentPinPoints: new Map(transaction.currentPinPoints)
+  }, behavior);
+  const start = transaction.startPointer;
+  const wireAnchors = behavior === "stretch" && start
+    ? projectTranslatedWireAnchors(transaction.translatedWireAnchors, snapPoint({ x: point.x - start.x, y: point.y - start.y }))
+    : [];
+  remapNetLabelsAfterWirePathChange(draft, document.wires);
+  const affectedIds = new Set([...result.affectedIds, ...rotatedIds]);
+  const originalLabels = new Map(document.netLabels.map(label => [label.id, label.attachment.point]));
+  for (const label of draft.netLabels) {
+    const original = originalLabels.get(label.id);
+    if (original && !samePoint(original, label.attachment.point)) affectedIds.add(label.id);
+  }
+  return { draft, result, affectedIds, wireAnchors, changed: result.changed || rotatedIds.length > 0 };
+}
+
 export function commitSelectionMoveDocumentOp(input: SelectionMoveCommitDocumentOpInput): SelectionMoveCommitDocumentOpResult {
   const changed = input.geometryChanged || input.selectionMoveChanged || input.liveGeometryDirty;
   const affectedGraphIds = changed
@@ -294,33 +322,6 @@ export function commitNoteFontSizeDocumentOp(
 ): NoteFontSizeCommitDocumentOpResult {
   const changed = noteFontSizeSnapshotChanged(snapshot, note);
   return documentOpResult(changed, changed ? "Note font size updated." : "");
-}
-
-export function commitNoteWidthDocumentOp(
-  snapshot: NoteWidthPropertySnapshot,
-  note: SchematicNote
-): NoteWidthCommitDocumentOpResult {
-  const changed = noteWidthSnapshotChanged(snapshot, note);
-  return documentOpResult(changed, changed ? "Note width updated." : "");
-}
-
-export function setNoteFormatDocumentOp(note: SchematicNote, format: SchematicNoteFormat): SchematicDocumentOpResult {
-  const changed = applyNoteFormat(note, format);
-  return documentOpResult(changed, changed ? `Note format changed to ${format}.` : "", [], changed ? [note.id] : []);
-}
-
-export function commitNoteEditDocumentOp(
-  snapshot: NoteEditCommitSnapshot | null,
-  note: SchematicNote
-): SchematicDocumentOpResult {
-  const changed =
-    !snapshot ||
-    snapshot.noteId !== note.id ||
-    snapshot.text !== note.text ||
-    snapshot.width !== note.width ||
-    snapshot.height !== note.height ||
-    ("fontSizePx" in snapshot && snapshot.fontSizePx !== note.fontSizePx);
-  return documentOpResult(changed, changed ? "Note updated." : "");
 }
 
 export function restoreSchematicDocumentOp(document: SchematicDocument, source: SchematicDocument): RestoreSchematicDocumentResult {

@@ -65,7 +65,7 @@ describe("schematic selection copy/export model", () => {
     expect(exported?.svg).toContain('data-junction="0,40"');
   });
 
-  it("exports schematic prefixes and centered rectangle literal names", () => {
+  it("exports schematic prefixes and keeps free shape labels hidden", () => {
     const ordinary = buildSchematicSelectionSvg(fixtureDocument({
       netLabels: [],
       components: [fixtureComponent("capacitor", "64C2", 100, 100)],
@@ -87,11 +87,8 @@ describe("schematic selection copy/export model", () => {
         notes: []
       }));
 
-      expect(literal?.svg, ref).toMatch(
-        new RegExp(`<text data-selector="refLabelPrefix"[^>]*font-weight="700"[^>]*font-style="normal"[^>]*font-size="16"[^>]*>${ref.replace("/", "\\/")}<\\/text>`)
-      );
-      expect(literal?.svg, ref).not.toContain('data-selector="refLabelHead"');
-      expect(literal?.svg, ref).not.toContain('data-selector="refLabelTail"');
+      expect(literal?.svg, ref).not.toContain('data-selector="refLabelPrefix"');
+      expect(literal?.svg, ref).not.toContain('data-selector="centeredRefLabelPrefix"');
     });
   });
 
@@ -100,7 +97,7 @@ describe("schematic selection copy/export model", () => {
     const filter = paletteSymbolPreview("filter");
 
     expect(delay).toContain('data-symbol-content-run="0"');
-    expect(delay).toContain('font-family="Arial, Helvetica, sans-serif"');
+    expect(delay).toContain("font-family=\"&quot;Inter&quot;");
     expect(delay).not.toContain("DLY");
 
     expect(filter).toContain('data-symbol-content-path="0"');

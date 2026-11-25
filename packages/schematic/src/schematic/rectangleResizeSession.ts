@@ -1,26 +1,30 @@
 import { componentScale } from "./componentScaleModel";
+import { snapLibraryShapeCenterToVertices } from "./libraryShapeGeometry";
 import { buildVisibleJunctions } from "./connectivity";
 import {
   cloneSchematicDocument
 } from "./document/documentModel";
 import { applyNormalizedDocumentWires } from "./document/documentWires";
 import { componentPinPoints } from "./document/documentGeometryModel";
-import { rotatePoint, snapPoint } from "./geometry";
+import { rotatePoint } from "./geometry";
 import { remapNetLabelsAfterWirePathChange } from "./netLabelModel";
 import { pruneJunctionAppearances } from "./networkColorModel";
 import {
   normalizeRectangleSettings,
+  RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID,
   rectangleSettings,
   rectangleSettingsValues,
   type RectangleSettings
 } from "./rectangleComponentModel";
-import { SYMBOL_GRID_SIZE, type Point, type SchematicDocument, type Wire } from "./types";
+import { GRID_SIZE, SYMBOL_GRID_SIZE, type Point, type SchematicDocument, type Wire } from "./types";
 import {
   applyWireMoveTopology,
   captureWireMoveTopology
 } from "./wire/wireMoveTopology";
 
 export type RectangleResizeCorner = "nw" | "ne" | "se" | "sw";
+export type RectangleResizeEdge = "n" | "e" | "s" | "w";
+export type RectangleResizeHandle = RectangleResizeCorner | RectangleResizeEdge;
 
 export interface RectangleResizePreviewResult {
   active: boolean;
@@ -38,7 +42,7 @@ interface ActiveRectangleResize {
   baseline: SchematicDocument;
   baselineSignature: string;
   componentId: string;
-  corner: RectangleResizeCorner;
+  handle: RectangleResizeHandle;
   opposite: Point;
   rotation: number;
   settings: RectangleSettings;
@@ -53,7 +57,7 @@ export class RectangleResizeSession {
     return this.active !== null;
   }
 
-  begin(componentId: string, corner: RectangleResizeCorner) {
+  begin(componentId: string, handle: RectangleResizeHandle) {
     const component = this.document.components.find((candidate) =>
       candidate.id === componentId
       && candidate.type === "rectangle"
@@ -61,7 +65,7 @@ export class RectangleResizeSession {
     );
     if (!component) return false;
     const settings = rectangleSettings(component);
-    const signs = cornerSigns(corner);
+    const signs = resizeSigns(handle);
     const oppositeOffset = rotatePoint({
       x: -signs.x * settings.widthGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2,
       y: -signs.y * settings.heightGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2
@@ -71,7 +75,7 @@ export class RectangleResizeSession {
       baseline,
       baselineSignature: documentSignature(baseline),
       componentId,
-      corner,
+      handle,
       opposite: {
         x: component.x + oppositeOffset.x,
         y: component.y + oppositeOffset.y
@@ -105,22 +109,30 @@ export class RectangleResizeSession {
       x: pointer.x - active.opposite.x,
       y: pointer.y - active.opposite.y
     }, -active.rotation);
+    const signs = resizeSigns(active.handle);
+    const scale = componentScale(component);
     const nextSettings = normalizeRectangleSettings({
       ...active.settings,
-      widthGrid: Math.round(Math.abs(localDelta.x) / (SYMBOL_GRID_SIZE * componentScale(component))),
-      heightGrid: Math.round(Math.abs(localDelta.y) / (SYMBOL_GRID_SIZE * componentScale(component)))
+      widthGrid: signs.x === 0
+        ? active.settings.widthGrid
+        : Math.round(Math.abs(localDelta.x) / (GRID_SIZE * scale)) * RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID,
+      heightGrid: signs.y === 0
+        ? active.settings.heightGrid
+        : Math.round(Math.abs(localDelta.y) / (GRID_SIZE * scale)) * RECTANGLE_FREE_SHAPE_MIN_SIZE_GRID
     });
     Object.assign(component.values, rectangleSettingsValues(nextSettings));
-
-    const signs = cornerSigns(active.corner);
     const centerOffset = rotatePoint({
-      x: signs.x * nextSettings.widthGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2,
-      y: signs.y * nextSettings.heightGrid * SYMBOL_GRID_SIZE * componentScale(component) / 2
+      x: signs.x * nextSettings.widthGrid * SYMBOL_GRID_SIZE * scale / 2,
+      y: signs.y * nextSettings.heightGrid * SYMBOL_GRID_SIZE * scale / 2
     }, active.rotation);
-    const center = snapPoint({
+    const proposedCenter = {
       x: active.opposite.x + centerOffset.x,
       y: active.opposite.y + centerOffset.y
-    });
+    };
+    // Edge drags must not snap the unchanged perpendicular axis and shift adjacent edges.
+    const center = signs.x === 0 || signs.y === 0
+      ? proposedCenter
+      : snapLibraryShapeCenterToVertices(component, proposedCenter);
     component.x = center.x;
     component.y = center.y;
 
@@ -170,10 +182,14 @@ export class RectangleResizeSession {
   }
 }
 
-function cornerSigns(corner: RectangleResizeCorner) {
+function resizeSigns(handle: RectangleResizeHandle) {
   return {
-    x: corner === "nw" || corner === "sw" ? -1 : 1,
-    y: corner === "nw" || corner === "ne" ? -1 : 1
+    x: handle === "n" || handle === "s"
+      ? 0
+      : handle === "nw" || handle === "sw" || handle === "w" ? -1 : 1,
+    y: handle === "e" || handle === "w"
+      ? 0
+      : handle === "nw" || handle === "ne" || handle === "n" ? -1 : 1
   };
 }
 

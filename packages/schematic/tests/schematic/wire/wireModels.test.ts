@@ -7,7 +7,7 @@ import { isHorizontal, isVertical } from "../../../src/schematic/geometry";
 import {
   applyWireCommitToDocument,
   createEmptyWireRouteSession,
-  finishWireRouteFromKeyboard,
+  finishWireRoute,
   handleWireBlankRouteClick,
   handleWirePinRouteClick,
   wireRouteAppearance,
@@ -299,7 +299,7 @@ describe("schematic wire creation model", () => {
     expect(start).toMatchObject({
       kind: "pending",
       previewPoint: { x: 10, y: 10 },
-      status: "Wire start 10, 10. Empty clicks add bends; click a pin or press Enter to finish."
+      status: "Wire start 10, 10. Click to add bends. Double-click or press Enter to finish."
     });
     if (start.kind !== "pending") throw new Error("expected pending start");
     expect(start.session.points).toEqual([{ x: 10, y: 10 }]);
@@ -308,7 +308,7 @@ describe("schematic wire creation model", () => {
     expect(bend).toMatchObject({
       kind: "pending",
       previewPoint: { x: 60, y: 40 },
-      status: "Bend added at 60, 40. Continue routing, click a pin to finish, or press Enter."
+      status: "Bend added at 60, 40. Double-click or press Enter to finish."
     });
     if (bend.kind !== "pending") throw new Error("expected pending bend");
     expect(bend.session.points).toEqual([
@@ -318,12 +318,14 @@ describe("schematic wire creation model", () => {
     ]);
   });
 
-  it("starts from a pin click and finishes on a second pin click", () => {
+  it("routes through a second pin without committing until finish", () => {
     const start = handleWirePinRouteClick(createEmptyWireRouteSession(), { x: 40, y: 0 });
     expect(start.kind).toBe("pending");
     if (start.kind !== "pending") throw new Error("expected pending start");
 
-    const finish = handleWirePinRouteClick(start.session, { x: 80, y: 40 });
+    const pending = handleWirePinRouteClick(start.session, { x: 80, y: 40 });
+    if (pending.kind !== "pending") throw new Error("expected pending pin waypoint");
+    const finish = finishWireRoute(pending.session, null);
     expect(finish).toEqual({
       kind: "commit",
       points: [
@@ -335,9 +337,9 @@ describe("schematic wire creation model", () => {
     });
   });
 
-  it("validates Enter finish states without mutating the session", () => {
+  it("validates finish states without mutating the session", () => {
     const empty = createEmptyWireRouteSession("wide");
-    expect(finishWireRouteFromKeyboard(empty, null)).toEqual({
+    expect(finishWireRoute(empty, null)).toEqual({
       kind: "invalid",
       session: { variant: "wide", routeMode: "orthogonal", points: [] },
       status: "Click a start point before finishing a wire."
@@ -345,14 +347,14 @@ describe("schematic wire creation model", () => {
 
     const start = handleWireBlankRouteClick(empty, { x: 0, y: 0 });
     if (start.kind !== "pending") throw new Error("expected pending start");
-    expect(finishWireRouteFromKeyboard(start.session, { x: 0, y: 0 })).toEqual({
+    expect(finishWireRoute(start.session, { x: 0, y: 0 })).toEqual({
       kind: "invalid",
       session: { variant: "wide", routeMode: "orthogonal", points: [{ x: 0, y: 0 }] },
-      status: "Move to a second point or click a bend before pressing Enter."
+      status: "Wire needs at least two distinct points."
     });
     expect(start.session.points).toEqual([{ x: 0, y: 0 }]);
 
-    expect(finishWireRouteFromKeyboard(start.session, { x: 40, y: 40 })).toEqual({
+    expect(finishWireRoute(start.session, { x: 40, y: 40 })).toEqual({
       kind: "commit",
       points: [
         { x: 0, y: 0 },
@@ -385,7 +387,7 @@ describe("schematic wire creation model", () => {
       { x: 0, y: 0 },
       { x: 60, y: 40 }
     ]);
-    const finish = handleWirePinRouteClick(start.session, { x: 57, y: 43 });
+    const finish = finishWireRoute(start.session, { x: 57, y: 43 });
     expect(finish).toEqual({
       kind: "commit",
       points: [

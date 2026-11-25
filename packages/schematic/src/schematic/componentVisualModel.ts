@@ -1,8 +1,10 @@
+import { isLibraryShapeType, libraryShapeStyle } from "./libraryShapeStyleModel";
 import { resolveComponentDef } from "./catalog";
 import { componentScale } from "./componentScaleModel";
 import { scaleComponentAppearance } from "./componentScaleVisualModel";
 import { separateTerminalLeads } from "./symbols/terminalLeadPath";
 import { getSymbolTemplateRenderer } from "./symbolTemplateRenderers";
+import { hierarchyArtwork } from "./hierarchyArtwork";
 import { componentLocalFrameBox } from "./view-geometry";
 import type { ComponentInstance } from "./types";
 import type { ComponentVisualOptions } from "./razaviComponentVisualModel";
@@ -23,6 +25,21 @@ export function resolveComponentVisualModel(instance: ComponentInstance, options
   const baseDef = resolveComponentDef(baseInstance);
   const base = { ...getSymbolTemplateRenderer(options.symbolTemplate)(baseInstance, options), def: baseDef,
     frameBox: componentLocalFrameBox(baseInstance), visiblePinIds: new Set(baseDef.pins.map(pin => pin.id)) };
+  const hierarchy = hierarchyArtwork(baseInstance);
+  if (hierarchy) {
+    base.path = hierarchy.path;
+    base.symbolFill = hierarchy.fill === "currentColor" ? base.color : "none";
+    if (instance.type === "sheetBlock") {
+      const fill = libraryShapeStyle(instance);
+      if (fill.fillEnabled) {
+        base.symbolFill = fill.fillColor;
+        base.symbolFillOpacity = fill.fillOpacity;
+      }
+    }
+    base.symbolContentLayout = hierarchy.content;
+    base.showSymbolLabel = false;
+    if (instance.type === "sheetPort") base.showRefLabel = false;
+  }
   const def = resolveComponentDef(instance);
   const frameBox = componentLocalFrameBox(instance);
   const appearance = scaleComponentAppearance(base, instance, def, frameBox, scale, options.flipReferenceLabelSide);
@@ -37,9 +54,13 @@ export function resolveComponentVisualModel(instance: ComponentInstance, options
   return {
     ...appearance,
     artworkScale: scale,
-    terminalLeadPath: terminalLeadPath.trim(),
+    terminalLeadPath: isLibraryShapeType(instance.type)
+      ? ""
+      : terminalLeadPath.trim(),
     def,
     frameBox,
-    visiblePinIds: new Set(def.pins.map(pin => pin.id))
+    visiblePinIds: isLibraryShapeType(instance.type)
+      ? new Set<string>()
+      : new Set(def.pins.map(pin => pin.id))
   };
 }

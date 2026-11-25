@@ -1,4 +1,7 @@
+import { typesetNotesForExport } from "./notes/noteTypeset";
 import { downloadBlob } from "../shared/download";
+import { renderSchematicDocumentSvg, type SchematicDocumentSvgOptions } from "./documentSvgRenderer";
+import { rasterizeSchematicSvg } from "./imageExport";
 import {
   assertSchematicDocumentFileSize,
   parseSchematicDocumentFile,
@@ -30,9 +33,26 @@ export async function readSchematicDocumentFile(
   };
 }
 
-export function downloadSchematicDocumentFile(document: SchematicDocument, title: string) {
+export function downloadSchematicDocumentFile(document: SchematicDocument, title: string, ownerDocument?: Document) {
   downloadBlob(
     new Blob([serializeSchematicDocumentFile(document)], { type: SCHEMATIC_FILE_MIME }),
-    schematicDocumentFilename(title)
+    schematicDocumentFilename(title),
+    ownerDocument
   );
+}
+
+export async function downloadSchematicDocumentImage(
+  document: SchematicDocument,
+  title: string,
+  format: "svg" | "png",
+  options: Pick<SchematicDocumentSvgOptions, "includeHidden" | "presentationMode">,
+  ownerDocument: Document
+) {
+  const noteGraphics = await typesetNotesForExport(document.notes, ownerDocument, document.display?.textFont);
+  const image = renderSchematicDocumentSvg(document, { ...options, noteGraphics, namespace: "schematic-export" });
+  const blob = format === "svg"
+    ? new Blob([image.svg], { type: "image/svg+xml" })
+    : await rasterizeSchematicSvg(image, ownerDocument);
+  const stem = schematicDocumentFilename(title).replace(/\.sch\.json$/i, "");
+  downloadBlob(blob, `${stem}.${format}`, ownerDocument);
 }

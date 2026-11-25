@@ -7,7 +7,9 @@ export const NET_LABEL_OFFSET_Y = -18;
 export const NET_LABEL_HEIGHT = 18;
 
 export function netLabelWidth(name: string) {
-  return Math.max(24, Math.ceil(name.length * 7.2 + 4));
+  const textWidth = Array.from(name, character => /[^\x00-\x7f]/u.test(character) ? NET_LABEL_FONT_SIZE : 7.2)
+    .reduce((width, characterWidth) => width + characterWidth, 0);
+  return Math.max(24, Math.ceil(textWidth + 4));
 }
 
 export function netLabelPosition(label: NetLabel) {
@@ -35,6 +37,30 @@ export function wireAttachmentAtPoint(document: SchematicDocument, point: Point,
   return wire ? { wireId: wire.id, point: snapped } : null;
 }
 
+export function nearestWireAttachment(
+  wires: readonly Wire[],
+  point: Point,
+  radius: number,
+  selectable: (id: string) => boolean,
+  preferredWireId?: string | null
+) {
+  let best: { wireId: string; point: Point } | null = null;
+  let bestDistance = radius;
+  for (const wire of wires) {
+    if (wire.temporarilyDeleted || !selectable(wire.id)) continue;
+    for (const segment of wireSegments(wire)) {
+      const fraction = segmentFraction(point, segment);
+      const x = segment.start.x + (segment.end.x - segment.start.x) * fraction;
+      const y = segment.start.y + (segment.end.y - segment.start.y) * fraction;
+      const distance = Math.hypot(point.x - x, point.y - y);
+      if (distance > bestDistance || (distance === bestDistance && best && wire.id !== preferredWireId)) continue;
+      bestDistance = distance;
+      best = { wireId: wire.id, point: gridPointAtSegmentFraction(segment.start, segment.end, fraction) };
+    }
+  }
+  return best;
+}
+
 export function bindStandaloneNetLabelsAtPoint(
   document: SchematicDocument,
   labels: readonly NetLabel[],
@@ -53,17 +79,22 @@ export function bindStandaloneNetLabelsAtPoint(
 export function remapNetLabelsAfterWireNormalization(
   document: SchematicDocument,
   previousWires: readonly Wire[],
-  normalizedWires: readonly Wire[]
+  normalizedWires: readonly Wire[],
+  sourceIds: ReadonlyMap<string, string>,
+  piecesBySource: ReadonlyMap<string, Wire[]>
 ) {
   const previousById = new Map(previousWires.map((wire) => [wire.id, wire]));
   document.netLabels.forEach((label) => {
     if (!label.attachment.wireId) return;
     const previous = previousById.get(label.attachment.wireId);
     const point = snapPoint(label.attachment.point);
-    const candidates = normalizedWires.filter((wire) => sameWireKind(previous, wire) && pointOnWire(point, wire));
-    const next = candidates.find((wire) => wire.id === label.attachment.wireId)
-      ?? candidates.find((wire) => baseWireId(wire.id) === baseWireId(label.attachment.wireId))
-      ?? normalizedWires.find((wire) => pointOnWire(point, wire));
+    const sourceId = label.attachment.wireId;
+    const candidates = (piecesBySource.get(sourceId) ?? []).filter(wire => pointOnWire(point, wire));
+    const next = candidates.find(wire => wire.id === sourceId && sourceIds.get(wire.id) === sourceId)
+      ?? candidates.find(wire => sourceIds.get(wire.id) === sourceId)
+      ?? candidates[0]
+      ?? normalizedWires.find(wire => sameWireKind(previous, wire) && pointOnWire(point, wire))
+      ?? normalizedWires.find(wire => pointOnWire(point, wire));
     if (next) label.attachment = { wireId: next.id, point };
   });
 }
@@ -236,12 +267,6 @@ function sameWireKind(first: Wire | undefined, second: Wire) {
     && Boolean(first.temporarilyDeleted) === Boolean(second.temporarilyDeleted)
     && (first.appearance?.variant ?? "signal") === (second.appearance?.variant ?? "signal")
     && (first.appearance?.color ?? "") === (second.appearance?.color ?? "");
-}
-
-function baseWireId(id: string) {
-  let base = id;
-  while (/-segment-\d+$/.test(base)) base = base.replace(/-segment-\d+$/, "");
-  return base;
 }
 
 function clamp(value: number, min: number, max: number) {

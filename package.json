@@ -8,6 +8,7 @@
     "apps/obsidian"
   ],
   "scripts": {
+    "agent:connector": "node tools/schematic-agent/connector.mjs",
     "build": "npm run build --workspace @edahelper/schematic && npm run build --workspace @edahelper/schematic-web && npm run build --workspace @edahelper/obsidian-schematic-editor",
     "build:lib": "npm run build --workspace @edahelper/schematic",
     "build:web": "npm run build --workspace @edahelper/schematic-web",
@@ -18,7 +19,22 @@
     "lint": "eslint .",
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:persistence": "node scripts/persistence-smoke.mjs",
-    "test:interactions": "node scripts/interaction-smoke.mjs"
+    "test:preferences": "npm run build:lib && npm run build:web && node scripts/web-preferences-smoke.mjs",
+    "test:interactions": "node scripts/interaction-smoke.mjs",
+    "test:r1": "npm run build:lib && npm run build:web && node scripts/r1-smoke.mjs",
+    "test:r2": "npm run build:lib && npm run build:web && node scripts/r2-smoke.mjs",
+    "test:r2:performance": "npm run build:lib && node scripts/r2-netlist-performance.mjs",
+    "test:r3": "npm run build:lib && npm run build:web && node scripts/r3-library-shapes.mjs",
+    "test:r3:arc": "npm run build:lib && npm run build:web && node scripts/r3-arc.mjs",
+    "test:r3:closed-shapes": "npm run build:lib && npm run build:web && node scripts/r3-closed-shapes.mjs",
+    "test:r3:polyline": "npm run build:lib && npm run build:web && node scripts/r3-polyline.mjs",
+    "test:r3:layers": "npm run build:lib && node scripts/r3-layers.mjs",
+    "test:r3:display": "npm run build:lib && npm run build:web && node scripts/r3-display.mjs",
+    "test:r4": "npm run build:lib && npm run build:web && node scripts/r4-hierarchy.mjs",
+    "test:r5": "npm run build:lib && npm run build:web && node scripts/r5-agent.mjs",
+    "test:note": "npm run build:lib && npm run build:web && node scripts/note-tex-smoke.mjs",
+    "test:web-performance": "npm run build:lib && npm run build:web && node scripts/web-chunk-smoke.mjs && node scripts/web-mathjax-smoke.mjs",
+    "test:placement": "npm run build:web && node scripts/placement-jitter.mjs"
   },
   "devDependencies": {
     "@codemirror/state": "6.7.1",

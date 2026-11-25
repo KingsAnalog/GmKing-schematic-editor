@@ -43,7 +43,7 @@ function note(id: string): SchematicNote {
     x: 120,
     y: 160,
     width: 160,
-    format: "plain",
+    anchor: "upperLeft",
     text: id
   };
 }

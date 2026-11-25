@@ -1,6 +1,7 @@
+import { DEFAULT_NOTE_ANCHOR } from "./notes/noteGeometry";
 import { COMPONENT_SCALES, componentScale, supportsComponentScale } from "./componentScaleModel";
 import { componentSupportsProperty } from "./componentValueSchema";
-import { noteBackgroundColor, noteTextColor } from "./notes/noteAppearance";
+import { noteBackgroundColor, noteFillStyle, noteTextColor } from "./notes/noteAppearance";
 import { VOLTAGE_SOURCE_TYPES, voltageSourceType, voltageSourceFields, voltageSourceFieldValue, voltageSourcePairCount } from "./voltageSourceModel";
 import {
   getComponentDef,
@@ -16,8 +17,7 @@ import {
   parseMosViewVariantId
 } from "./mosViewModel";
 import {
-  noteFontSizePx,
-  noteWidthPx
+  noteFontSizePx
 } from "./notes/noteSizing";
 import {
   aggregateValues,
@@ -58,7 +58,12 @@ import {
 } from "./netResolution";
 import { resolvedWireAppearance } from "./wire/wireDecoration";
 import { rectangleSettings } from "./rectangleComponentModel";
-import { TRIANGLE_EDGES, triangleSettings } from "./triangleComponentModel";
+import {
+  isLibraryShapeType,
+  isOpenLibraryShapeType,
+  libraryShapeStyle,
+  supportsLibraryShapeStyle
+} from "./libraryShapeStyleModel";
 import {
   FILTER_KIND_OPTIONS,
   filterKindForInstance,
@@ -100,7 +105,6 @@ export interface BuildSchematicPropertyPanelInputArgs {
   targets: SchematicPropertySelectionTargets;
   hasSelection: boolean;
   resolution?: NetResolution;
-  labelTool?: SchematicPropertyPanelInput["labelTool"];
   couplingPickSourceId?: string | null;
 }
 
@@ -109,11 +113,8 @@ export function buildSchematicPropertyPanelInput({
   targets,
   hasSelection,
   resolution,
-  labelTool,
   couplingPickSourceId
 }: BuildSchematicPropertyPanelInputArgs): SchematicPropertyPanelInput {
-  if (labelTool) return { hasSelection, labelTool };
-
   const count = targetCount(targets);
   if (count === 0) return { hasSelection };
 
@@ -204,6 +205,7 @@ function buildComponentInput(
   const input: SchematicPropertyPanelComponentInput = {
     ref: aggregateValues(components.map((component) => component.ref)),
     labelVisible: aggregateValues(components.map(componentLabelVisible)),
+    libraryShape: components.every(component => isLibraryShapeType(component.type)),
     color: aggregateValues(components.map(componentCustomColor)),
     scale: {
       label: "Size",
@@ -211,6 +213,31 @@ function buildComponentInput(
       value: aggregateValues(components.map(component => String(componentScale(component))))
     }
   };
+
+  const hasFill = components.every(component => supportsLibraryShapeStyle(component.type, "fillEnabled"));
+  if (input.libraryShape || hasFill) {
+    const styles = components.map(libraryShapeStyle);
+    input.libraryShapeStyle = {
+      ...(input.libraryShape ? {
+        strokeWidth: aggregateValues(styles.map(style => style.strokeWidth)),
+        lineStyle: aggregateValues(styles.map(style => style.lineStyle))
+      } : {}),
+      ...(components.every(component => component.type === "rectangle")
+        ? { cornerRadius: aggregateValues(styles.map(style => style.cornerRadius)) }
+        : {}),
+      ...(components.every(component => isOpenLibraryShapeType(component.type)) ? {
+        startArrow: aggregateValues(styles.map(style => style.startArrow)),
+        endArrow: aggregateValues(styles.map(style => style.endArrow)),
+        startArrowSize: aggregateValues(styles.map(style => style.startArrowSize)),
+        endArrowSize: aggregateValues(styles.map(style => style.endArrowSize))
+      } : {}),
+      ...(hasFill ? {
+        fillEnabled: aggregateValues(styles.map(style => style.fillEnabled)),
+        fillColor: aggregateValues(styles.map(style => style.fillColor)),
+        fillOpacity: aggregateValues(styles.map(style => style.fillOpacity))
+      } : {})
+    };
+  }
 
   if (components.every((component) => component.type === first.type)) {
     const cellTypes = PALETTE_ORDER.includes(first.type)
@@ -236,17 +263,8 @@ function buildComponentInput(
     const settings = components.map(rectangleSettings);
     input.rectangle = {
       widthGrid: aggregateValues(settings.map((value) => value.widthGrid)),
-      heightGrid: aggregateValues(settings.map((value) => value.heightGrid)),
-      leftPins: aggregateValues(settings.map((value) => value.leftPins)),
-      rightPins: aggregateValues(settings.map((value) => value.rightPins)),
-      topPins: aggregateValues(settings.map((value) => value.topPins)),
-      bottomPins: aggregateValues(settings.map((value) => value.bottomPins))
+      heightGrid: aggregateValues(settings.map((value) => value.heightGrid))
     };
-  }
-
-  if (components.every(component => component.type === "triangle")) {
-    const settings = components.map(triangleSettings);
-    input.triangle = Object.fromEntries(TRIANGLE_EDGES.map(edge => [edge, aggregateValues(settings.map(value => value.pins[edge]))])) as typeof input.triangle;
   }
 
   if (components.every((component) => componentSupportsProperty(component, "filterKind"))) {
@@ -419,17 +437,16 @@ function buildInductorCouplingInput(
 }
 
 function buildNoteInput(notes: readonly SchematicNote[]): SchematicPropertyPanelNoteInput {
-  const formats = notes.map((note) => note.format ?? "plain");
-  const input: SchematicPropertyPanelNoteInput = {
+  const fills = notes.map(noteFillStyle);
+  return {
     backgroundColor: aggregateValues(notes.map(noteBackgroundColor)),
+    backgroundEnabled: aggregateValues(fills.map(fill => fill.fillEnabled)),
+    backgroundOpacity: aggregateValues(fills.map(fill => fill.fillOpacity)),
+    textColor: aggregateValues(notes.map(noteTextColor)),
     fontSizePx: aggregateValues(notes.map(noteFontSizePx)),
-    format: aggregateValues(formats)
+    anchor: aggregateValues(notes.map(note => note.anchor ?? DEFAULT_NOTE_ANCHOR)),
+    ...(notes.length === 1 ? { text: notes[0].text } : {})
   };
-  if (formats.every(format => format === "plain")) input.textColor = aggregateValues(notes.map(noteTextColor));
-  if (formats.every((format) => format === "markdown")) {
-    input.widthPx = aggregateValues(notes.map(noteWidthPx));
-  }
-  return input;
 }
 
 function buildWireInput(

@@ -77,11 +77,17 @@ export const COMPONENT_ANALYSIS_REGISTRY = {
   transmissionGate: { model: "blackBox" },
   rectangle: { model: "blackBox" },
   triangle: { model: "blackBox" },
+  polyline: { model: "blackBox" },
+  arc: { model: "blackBox" },
+  circle: { model: "blackBox" },
+  polygon: { model: "blackBox" },
   integrator: { model: "blackBox" },
   differentiator: { model: "blackBox" },
   delay: { model: "blackBox" },
   filter: { model: "blackBox" },
-  annotation: { model: "annotation" }
+  annotation: { model: "annotation" },
+  sheetPort: { model: "annotation" },
+  sheetBlock: { model: "blackBox" }
 } as const satisfies Record<ComponentType, ComponentAnalysisRegistration>;
 
 export function resolveComponentAnalysisModel(

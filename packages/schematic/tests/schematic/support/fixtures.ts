@@ -53,11 +53,17 @@ const TEMPLATE_REF_PREFIXES: Record<ComponentType, string> = {
   transmissionGate: "TG",
   rectangle: "X",
   triangle: "X",
+  polyline: "X",
+  arc: "X",
+  circle: "X",
+  polygon: "X",
   integrator: "INT",
   differentiator: "DIF",
   delay: "DLY",
   filter: "FLT",
-  annotation: "TXT"
+  annotation: "TXT",
+  sheetPort: "PIN",
+  sheetBlock: "X"
 };
 
 export function fixtureComponent(type: ComponentType, ref: string, x: number, y: number, rotation = 0): ComponentInstance {
@@ -93,7 +99,7 @@ export function fixtureNote(id = "note-1", x = 220, y = 260): SchematicNote {
     y,
     width: 120,
     height: 60,
-    format: "plain",
+    anchor: "upperLeft",
     text: "rewrite note",
     backgroundColor: "#fff6bf",
     fontSizePx: 14

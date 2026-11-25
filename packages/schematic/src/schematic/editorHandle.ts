@@ -5,6 +5,24 @@ import type { SymbolTemplateId } from "./symbolTemplateModel";
 
 export type SchematicEditorHistoryMode = "push" | "reset" | "none";
 
+export interface SchematicPanelLayoutAccess {
+  openPanel(side: "left" | "right"): void;
+  closePanel(side: "left" | "right"): void;
+  togglePanel(side: "left" | "right"): void;
+  isPanelVisible(side: "left" | "right"): boolean;
+  getRightDockState?(): {
+    activeView: "hierarchy" | "analysis" | "netlist";
+  };
+  setRightDockState?(state: {
+    activeView: "hierarchy" | "analysis" | "netlist";
+  }): void;
+  getSidebarTab?(): "library" | "properties" | "layers";
+  setSidebarTab?(tab: "library" | "properties" | "layers"): void;
+  getLogHeight?(): number;
+  setLogHeight?(height: number): void;
+  isNarrow?(): boolean;
+}
+
 export interface SchematicEditorMountElements {
   shellEl: HTMLElement;
   documentTabsEl: HTMLElement;
@@ -14,6 +32,7 @@ export interface SchematicEditorMountElements {
   statusEl?: HTMLElement;
   analysisEl?: HTMLElement;
   selectionSummaryEl?: HTMLElement;
+  layout?: SchematicPanelLayoutAccess;
 }
 
 export interface SchematicEditorMutationOptions {

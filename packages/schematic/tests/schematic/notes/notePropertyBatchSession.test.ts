@@ -39,7 +39,7 @@ function note(id: string, overrides: Partial<SchematicNote> = {}): SchematicNote
     y: 40,
     width: 120,
     height: 60,
-    format: "plain",
+    anchor: "upperLeft",
     text: id,
     fontSizePx: 14,
     ...overrides
@@ -94,10 +94,10 @@ describe("NotePropertyBatchSession preflight", () => {
     expect(session.activeNoteIds).toEqual(["first", "second"]);
   });
 
-  it("rejects missing, ambiguous, empty, and non-Markdown width targets atomically", () => {
-    const markdown = note("markdown", { format: "markdown", width: 320 });
+  it("rejects missing, ambiguous, empty, targets atomically", () => {
+    const markdown = note("markdown", { anchor: "upperLeft", width: 320 });
     const plain = note("plain");
-    const duplicated = note("markdown", { format: "markdown", width: 340 });
+    const duplicated = note("markdown", { anchor: "upperLeft", width: 340 });
     const { session } = setup(markdown, plain, duplicated);
 
     expect(session.begin("font-size", [])).toEqual({
@@ -114,11 +114,6 @@ describe("NotePropertyBatchSession preflight", () => {
       ok: false,
       reason: "ambiguous",
       noteIds: ["markdown"]
-    });
-    expect(session.begin("width", ["plain"])).toEqual({
-      ok: false,
-      reason: "requires-markdown",
-      noteIds: ["plain"]
     });
     expect(session.activeKind).toBeNull();
     expect([markdown.width, plain.width, duplicated.width]).toEqual([320, 120, 340]);
@@ -199,25 +194,6 @@ describe("NotePropertyBatchSession preview and commit", () => {
     });
   });
 
-  it("snaps Markdown width, mutates only changed targets, and returns one group intent", () => {
-    const first = note("first", { format: "markdown", width: 320, height: 100 });
-    const second = note("second", { format: "markdown", width: 380, height: 120 });
-    const { scheduler, projected, session } = setup(first, second);
-    session.begin("width", ["first", "second"]);
-
-    expect(session.input("371")).toEqual({ accepted: true, value: 380, scheduled: true });
-    scheduler.runNext();
-
-    expect(first).toMatchObject({ width: 380, height: 95 });
-    expect(second).toMatchObject({ width: 380, height: 120 });
-    expect(projected.map(({ id }) => id)).toEqual(["first"]);
-    expect(session.commit()).toMatchObject({
-      changed: true,
-      historyIntent: "push",
-      noteIds: ["first"]
-    });
-  });
-
   it("drops a superseded queued value when the current input is invalid", () => {
     const target = note("target", { fontSizePx: 12 });
     const { scheduler, session } = setup(target);
@@ -256,23 +232,6 @@ describe("NotePropertyBatchSession rollback and invalidation", () => {
       { id: "second", context: { kind: "font-size", phase: "restore" } }
     ]);
     expect(session.activeKind).toBeNull();
-  });
-
-  it("rolls back a live preview when the selection changes", () => {
-    const first = note("first", { format: "markdown", width: 320, height: 80 });
-    const second = note("second", { format: "markdown", width: 340, height: 100 });
-    const { scheduler, session } = setup(first, second);
-    session.begin("width", ["first", "second"]);
-    session.input("400");
-    scheduler.runNext();
-
-    expect(session.invalidateAgainstDocument(["first"])).toEqual({
-      invalidated: true,
-      reason: "selection",
-      restored: true,
-      noteIds: ["first", "second"]
-    });
-    expect([first.width, first.height, second.width, second.height]).toEqual([320, 80, 340, 100]);
   });
 
   it("discards stale queued work without touching replacement document objects", () => {

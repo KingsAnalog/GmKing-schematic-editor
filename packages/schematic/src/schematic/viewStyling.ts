@@ -118,7 +118,11 @@ export function applySchematicCellSelectionStyles({
     if (typeof netLabelId === "string" && netLabelId.length > 0) {
       netResolution = netResolution ?? resolveSchematicNets(document);
       const selected = selectedIds.has(netLabelId) || hoverIds.has(netLabelId);
-      cell.attr({ label: netLabelTextAttrs({ selected, status: netResolution.labelStates.get(netLabelId)?.status }) });
+      const label = document.netLabels.find(candidate => candidate.id === netLabelId);
+      cell.attr({ label: netLabelTextAttrs({
+        selected, status: netResolution.labelStates.get(netLabelId)?.status,
+        fontFamily: label?.fontFamily, documentFont: document.display?.textFont
+      }) });
       continue;
     }
     if (typeof componentId === "string" && componentId.length > 0) {
@@ -136,9 +140,10 @@ export function applySchematicCellSelectionStyles({
       const wire = document.wires.find((candidate) => candidate.id === wireId);
       if (!wire) continue;
       const selected = selectedIds.has(wireId) || hoverIds.has(wireId);
+      const bus = netResolution?.busWireIds.has(wireId);
       cell.attr({
-        line: wireLineAttrs(wire),
-        selectionHalo: wireSelectionHaloAttrs(wire, { selected })
+        line: wireLineAttrs(wire, { bus }),
+        selectionHalo: wireSelectionHaloAttrs(wire, { selected, bus })
       });
     }
   }

@@ -1,16 +1,17 @@
 import type { SymbolContentLayout } from "./symbolContentModel";
 import { escapeAttribute, escapeHtml } from "./uiUtils";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 
 export const SYMBOL_CONTENT_RUN_SLOT_COUNT = 12;
 export const SYMBOL_CONTENT_PATH_SLOT_COUNT = 12;
 
-export function symbolContentMarkup() {
+export function symbolContentMarkup(runCount = SYMBOL_CONTENT_RUN_SLOT_COUNT) {
   return [
     ...Array.from({ length: SYMBOL_CONTENT_PATH_SLOT_COUNT }, (_, index) => ({
       tagName: "path",
       selector: symbolContentPathSelector(index)
     })),
-    ...Array.from({ length: SYMBOL_CONTENT_RUN_SLOT_COUNT }, (_, index) => ({
+    ...Array.from({ length: runCount }, (_, index) => ({
       tagName: "text",
       selector: symbolContentRunSelector(index)
     }))
@@ -27,7 +28,7 @@ export function symbolContentDefaultAttrs() {
       symbolContentRunSelector(index),
       {
         fill: "none",
-        fontFamily: "Arial, Helvetica, sans-serif",
+        fontFamily: SCHEMATIC_FONT_STACK,
         textAnchor: "middle",
         pointerEvents: "none"
       }
@@ -56,14 +57,14 @@ export function symbolContentCellAttrs(
         pointerEvents: "none"
       } : hiddenPathAttrs()];
     }),
-    ...Array.from({ length: SYMBOL_CONTENT_RUN_SLOT_COUNT }, (_, index) => {
+    ...Array.from({ length: Math.max(SYMBOL_CONTENT_RUN_SLOT_COUNT, layout?.runs.length ?? 0) }, (_, index) => {
       const run = layout?.runs[index];
       return [symbolContentRunSelector(index), run ? {
         text: run.text,
         x: offsetX + run.x,
         y: offsetY + run.y,
         fill: options.color,
-        fontFamily: "Arial, Helvetica, sans-serif",
+        fontFamily: SCHEMATIC_FONT_STACK,
         fontSize: run.fontSize,
         fontStyle: run.fontStyle,
         fontWeight: run.fontWeight,
@@ -101,7 +102,7 @@ export function renderSymbolContentSvg(
       offsetX + run.x,
       offsetY + run.y
     );
-    return `<text data-selector="${symbolContentRunSelector(index)}" data-symbol-content-run="${index}" x="${offsetX + run.x}" y="${offsetY + run.y}"${transform ? ` transform="${escapeAttribute(transform)}"` : ""} fill="${escapeAttribute(color)}" font-family="Arial, Helvetica, sans-serif" font-size="${run.fontSize}" font-style="${run.fontStyle}" font-weight="${run.fontWeight}" text-anchor="${run.textAnchor}"${opacity === 1 ? "" : ` opacity="${opacity}"`}>${escapeHtml(run.text)}</text>`;
+    return `<text data-selector="${symbolContentRunSelector(index)}" data-symbol-content-run="${index}" x="${offsetX + run.x}" y="${offsetY + run.y}"${transform ? ` transform="${escapeAttribute(transform)}"` : ""} fill="${escapeAttribute(color)}" font-family="${escapeAttribute(SCHEMATIC_FONT_STACK)}" font-size="${run.fontSize}" font-style="${run.fontStyle}" font-weight="${run.fontWeight}" text-anchor="${run.textAnchor}"${opacity === 1 ? "" : ` opacity="${opacity}"`}>${escapeHtml(run.text)}</text>`;
   }).join("");
   return `${paths}${runs}`;
 }

@@ -12,6 +12,7 @@ import type { SchematicDocument } from "./types";
 
 export type SchematicPropertyEditKind =
   | `source-field:${string}`
+  | `library-shape-style:${string}`
   | `triangle-pins:${"ab" | "bc" | "ca"}`
   | "component-ref"
   | "component-value"
@@ -20,6 +21,7 @@ export type SchematicPropertyEditKind =
   | "wire-digital-label"
   | "net-label"
   | "note-background"
+  | "note-fill-opacity"
   | "note-text-color"
   | "rectangle-width"
   | "rectangle-height"

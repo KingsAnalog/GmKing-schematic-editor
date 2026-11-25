@@ -124,13 +124,13 @@ describe("schematic selection summary", () => {
       kind: "labeled",
       title: "Tool:",
       separator: "space",
-      parts: [{ text: "Copy" }, { text: "click an object", muted: true }]
+      parts: [{ text: "Copy" }, { text: "click an object or drag a box", muted: true }]
     });
-    expect(buildSchematicSelectionSummary({ mode: "copy", selection: emptySelection, copy: { hasSource: false, awaitingReference: true } })).toEqual({
+    expect(buildSchematicSelectionSummary({ mode: "move", selection: emptySelection, move: { behavior: "moveOnly", hasSource: false } })).toEqual({
       kind: "labeled",
       title: "Tool:",
       separator: "space",
-      parts: [{ text: "Copy" }, { text: "click reference", muted: true }]
+      parts: [{ text: "Move only" }, { text: "click an object or drag a box", muted: true }]
     });
     expect(buildSchematicSelectionSummary({ mode: "copy", selection: emptySelection, copy: { hasSource: true } })).toEqual({
       kind: "labeled",

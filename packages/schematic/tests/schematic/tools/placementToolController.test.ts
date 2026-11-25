@@ -92,19 +92,22 @@ describe("schematic placement tool controller", () => {
     expect(commit!.status).toBe("R7 placed. Continue moving and clicking to place more resistor instances.");
   });
 
-  it("mirrors component previews through the placement model using the current pose", () => {
+  it.each([
+    { axis: "x", rotation: 0 },
+    { axis: "y", rotation: 180 }
+  ] as const)("reflects $axis in component previews through the placement model", ({ axis, rotation }) => {
     const controller = new SchematicPlacementToolController();
 
-    const mirror = controller.mirrorPreview("x");
+    const mirror = controller.mirrorPreview(axis);
 
-    expect(mirror).toEqual({ kind: "updated", pose: { rotation: 0, mirrored: true } });
+    expect(mirror).toEqual({ kind: "updated", pose: { rotation, mirrored: true } });
     const preview = controller.buildPreview({ x: 40, y: 60 });
     expect(preview).not.toBeNull();
     expect(preview!.components[0]).toMatchObject({
       id: PREVIEW_COMPONENT_ID,
       x: 40,
       y: 60,
-      rotation: 0,
+      rotation,
       mirrored: true
     });
   });

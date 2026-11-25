@@ -103,4 +103,15 @@ describe("schematic component ref allocator", () => {
     expect(allocator.next("resistor")).toBe("R1");
     expect(allocator.next("capacitor")).toBe("C8");
   });
+
+  it("avoids names already used in a sheet when allocating copied instances", () => {
+    const allocator = new ComponentRefAllocator();
+    allocator.rebuild(document([
+      component("sheetBlock", "X2"),
+      component("sheetBlock", "x3"),
+      component("resistor", "X4")
+    ]));
+    expect(allocator.next("sheetBlock")).toBe("X5");
+    expect(allocator.next("inverter")).toBe("X6");
+  });
 });

@@ -3,6 +3,8 @@ import { moveJunctionAppearancesWithPath, stretchAttachedWireEndpoints } from ".
 import type { SelectionMoveBehavior } from "./selection/selectionMoveTransaction";
 import type { Point, SchematicDocument } from "./types";
 import { normalizeWirePath, samePath } from "./wire/wireGeometry";
+import { isLibraryShapeType } from "./libraryShapeStyleModel";
+import { snapLibraryShapeCenterToVertices } from "./libraryShapeGeometry";
 
 export interface ComponentCellGeometryInput {
   document: SchematicDocument;
@@ -33,7 +35,9 @@ export function applyComponentCellGeometry(input: ComponentCellGeometryInput): C
   const instance = input.document.components.find((component) => component.id === input.componentId);
   if (!instance) return { changed: false, updatedWireIds };
 
-  const next = snapPoint(input.nextCenter);
+  const next = isLibraryShapeType(instance.type)
+    ? snapLibraryShapeCenterToVertices(instance, input.nextCenter)
+    : snapPoint(input.nextCenter);
   if (samePoint({ x: instance.x, y: instance.y }, next)) return { changed: false, updatedWireIds };
 
   instance.x = next.x;

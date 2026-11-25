@@ -130,6 +130,7 @@ export function normalizeInductorCouplings(document: SchematicDocument) {
       showArc: source.showArc !== false,
       showCore: source.showCore === true,
       arcFlipped: source.arcFlipped === true,
+      ...(source.layerId === undefined ? {} : { layerId: source.layerId }),
       ...(customColor ? { appearance: { color: customColor } } : {})
     });
   });

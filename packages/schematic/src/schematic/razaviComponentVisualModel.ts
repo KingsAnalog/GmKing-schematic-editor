@@ -52,9 +52,11 @@ import { operatorSymbol, plusPinRoleSymbols } from "./symbols/operatorSymbols";
 import { spntSwitchBladeSymbol, switchBladeSymbol, switchSymbol } from "./symbols/switchSymbols";
 import { spntPosition, spntThrowCount } from "./spntSwitchModel";
 import { voltageSourceShellSymbol, voltageSourceWaveformContent, voltageSourceWaveformFromSymbol } from "./symbols/sourceSymbols";
-import { rectangleLeadSymbol } from "./symbols/rectangleSymbols";
-import { triangleFrameSymbol, triangleLeadSymbol } from "./symbols/triangleSymbols";
-import { triangleSettings, trianglePinGeometry, triangleVertexPinGeometry } from "./triangleComponentModel";
+import { arcArtwork } from "./symbols/arcSymbols";
+import { polylineArtwork } from "./symbols/polylineSymbols";
+import { closedPolygonPath } from "./symbols/closedShapeSymbols";
+import { rectangleFrameSymbol } from "./symbols/rectangleSymbols";
+import { isLibraryShapeType, LIBRARY_SHAPE_LINE_DASHARRAYS, libraryShapeStyle } from "./libraryShapeStyleModel";
 import { functionBlockGain, supportsFunctionBlockGain, resolveFunctionBlockModel } from "./functionBlockModel";
 import { componentLocalFrameBox, componentSymbolBounds } from "./view-geometry";
 import type { ComponentDef, ComponentInstance, GainPolarity, Point } from "./types";
@@ -504,8 +506,17 @@ export function resolveRazaviComponentVisualModel(
   const visibleConverterBits = isConverter && componentValueVisible(instance)
     ? converterBits
     : "";
-  const path = def.bodyPolygon
-    ? triangleFrameSymbol(def.size.width, def.size.height, def.bodyPolygon)
+  const freeLibraryShape = isLibraryShapeType(def.type);
+  const shapeStyle = libraryShapeStyle(instance);
+  const openShape = def.bodyPolyline
+    ? polylineArtwork(def.size.width, def.size.height, def.bodyPolyline, shapeStyle)
+    : def.bodyArc ? arcArtwork(def.size.width, def.size.height, def.bodyArc, shapeStyle) : null;
+  const path = openShape
+    ? openShape.path
+    : def.bodyPolygon
+    ? closedPolygonPath(def.size.width, def.size.height, def.bodyPolygon)
+    : def.type === "rectangle"
+      ? rectangleFrameSymbol(def.size.width, def.size.height, 0, shapeStyle.cornerRadius)
     : isPlanarInductor(instance)
     ? [planarInductorLeads(def.size.width, def.size.height), planarInductorTap(def.size.width, def.size.height, inductorTap(instance), inductorLayout(instance))].filter(Boolean).join(" ")
     : functionBlockModel
@@ -551,7 +562,7 @@ export function resolveRazaviComponentVisualModel(
           visiblePinIds.has("ctrl")
         )
       : symbolPath(def.symbol, def.size.width, def.size.height);
-  const pinMarksPath = def.type === "inverter"
+  const pinMarksPath = freeLibraryShape ? "" : def.type === "inverter"
     ? inverterSupplyLeadSymbol(def.size.width, def.size.height, visiblePinIds)
     : def.symbol === "plus"
     ? plusPinRoleSymbols(
@@ -563,14 +574,8 @@ export function resolveRazaviComponentVisualModel(
           visible: visiblePinIds.has(pin.id)
         }]))
       )
-    : def.symbol === "triangle"
-      ? triangleLeadSymbol(def.size.width, def.size.height,
-        [...trianglePinGeometry(triangleSettings(instance)), ...triangleVertexPinGeometry(triangleSettings(instance))]
-          .filter(({ pin }) => def.pins.some(active => active.id === pin.id)))
-    : def.symbol === "rectangle"
-      ? rectangleLeadSymbol(def.size.width, def.size.height, def.pins)
-      : functionBlockModel
-        ? functionBlockModel.leadPath
+    : functionBlockModel
+      ? functionBlockModel.leadPath
       : "";
   const levels = normalizeComparatorLevels(instance.values.levels ?? def.defaultValues?.levels);
   const gainPolarity = componentGainPolarity(instance);
@@ -589,7 +594,9 @@ export function resolveRazaviComponentVisualModel(
         clock
       ) ?? symbolAccentPath(def.symbol, def.size.width, def.size.height);
   const dotTerminal = def.type === "inductor" ? inductorDotTerminal(instance) : "none";
-  const markerPath = isPlanarInductor(instance)
+  const markerPath = openShape
+    ? openShape.markers
+    : isPlanarInductor(instance)
     ? planarInductorDot(def.size.width, def.size.height, dotTerminal)
     : dotTerminal !== "none"
     ? inductorDotMarkerSymbol(def.size.width, def.size.height, dotTerminal)
@@ -604,7 +611,7 @@ export function resolveRazaviComponentVisualModel(
   const preview = !!options.preview;
   const frameBox = componentLocalFrameBox(instance);
   const symbolBox = componentSymbolBounds(def);
-  const showPins = !options.presentationMode && !preview;
+  const showPins = !freeLibraryShape && !options.presentationMode && !preview;
   const isAnnotation = def.symbol === "annotation";
   const showName = componentLabelVisible(instance);
   const displayValue = componentValueVisible(instance) ? componentDisplayValue(instance, def) : "";
@@ -630,7 +637,8 @@ export function resolveRazaviComponentVisualModel(
     valueLabelText,
     options.flipReferenceLabelSide
   );
-  const showRefLabel = def.type !== "vdd"
+  const showRefLabel = !freeLibraryShape
+    && def.type !== "vdd"
     && (showName || (!converterValueEmbedded && !!displayValue))
     && !isAnnotation
     && !preview;
@@ -705,12 +713,12 @@ export function resolveRazaviComponentVisualModel(
     selected,
     deleted,
     preview,
-    resizeHandles: !!options.resizeHandles && (def.type === "rectangle" || def.type === "triangle") && !preview && !options.presentationMode,
+    resizeHandles: !!options.resizeHandles && freeLibraryShape && !preview && !options.presentationMode,
     frameBox,
     showPins,
     visiblePinIds,
     isAnnotation,
-    showSymbolLabel: !!symbolLabelText || !!vddLabelText || componentLabelVisible(instance),
+    showSymbolLabel: !freeLibraryShape && (!!symbolLabelText || !!vddLabelText || componentLabelVisible(instance)),
     labelText,
     refLabelAttrs,
     showRefLabel,
@@ -731,7 +739,14 @@ export function resolveRazaviComponentVisualModel(
     color,
     symbolOpacity,
     labelOpacity,
-    symbolStrokeWidth: symbolStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH),
+    ...(freeLibraryShape ? {
+      symbolFill: shapeStyle.fillEnabled ? shapeStyle.fillColor : "none",
+      symbolFillOpacity: shapeStyle.fillEnabled ? shapeStyle.fillOpacity : 1,
+      symbolStrokeDasharray: LIBRARY_SHAPE_LINE_DASHARRAYS[shapeStyle.lineStyle]
+    } : {}),
+    symbolStrokeWidth: freeLibraryShape
+      ? shapeStyle.strokeWidth
+      : symbolStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH),
     accentStrokeWidth: symbolAccentStrokeWidth(def.symbol, SYMBOL_STROKE_WIDTH)
   };
 }

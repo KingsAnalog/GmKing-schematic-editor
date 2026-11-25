@@ -1,9 +1,13 @@
 import { MAX_SCHEMATIC_TAB_TITLE_LENGTH } from "./schematicTabTitle";
+import { applySchematicMessage, message } from "./schematicI18n";
+import { localizeSchematicStatus } from "./schematicUiText";
 
 export interface SchematicDocumentTabItem {
   id: string;
   title: string;
 }
+
+export type SchematicDocumentExportFormat = "json" | "svg" | "png" | "project";
 
 /** Async callbacks own error reporting; DOM events dispatch them without waiting. */
 type SchematicTabAction<Args extends unknown[] = []> =
@@ -16,9 +20,9 @@ export interface SchematicDocumentTabsOptions {
   onCreate: SchematicTabAction;
   onReorder?: SchematicTabAction<[id: string, insertionIndex: number]>;
   onRename?: SchematicTabAction<[id: string, title: string]>;
-  onImport?(file: File): void;
-  onPasteFromClipboard?(): void;
-  onExport?(): void;
+  onImport?: SchematicTabAction<[file: File]>;
+  onImportFromClipboard?: SchematicTabAction;
+  onExport?: SchematicTabAction<[format: SchematicDocumentExportFormat, includeHidden: boolean]>;
   onRetrySave?: SchematicTabAction;
 }
 
@@ -78,6 +82,7 @@ export class SchematicDocumentTabs {
     this.bindingController = null;
     this.bound = false;
     this.hideCloseSnackbar();
+    this.root.querySelector<HTMLDialogElement>("[data-schematic-document-export-dialog][open]")?.close();
     this.finishDrag();
     this.suppressNextTabClick = null;
     this.renameInput = null;
@@ -112,7 +117,7 @@ export class SchematicDocumentTabs {
 
     this.clearCloseSnackbarTimer();
     this.closeUndo = options.onUndo;
-    message.textContent = options.message;
+    message.textContent = localizeSchematicStatus(options.message);
     snackbar.hidden = false;
 
     const timeoutMs = options.timeoutMs ?? 6000;
@@ -134,7 +139,7 @@ export class SchematicDocumentTabs {
     const notice = this.root.querySelector<HTMLElement>("[data-schematic-storage-error]");
     const message = notice?.querySelector<HTMLElement>("[data-schematic-storage-error-message]");
     if (!notice || !message) return;
-    message.textContent = messageText;
+    message.textContent = localizeSchematicStatus(messageText);
     notice.hidden = false;
   }
 
@@ -157,8 +162,7 @@ export class SchematicDocumentTabs {
     close.type = "button";
     close.className = "schematic-document-tab-close";
     close.dataset.schematicDocumentClose = item.id;
-    close.setAttribute("aria-label", `Close ${item.title}`);
-    close.title = `Close ${item.title}`;
+    setCloseTabLabel(close, item.title);
 
     wrapper.append(tab, close);
     return wrapper;
@@ -180,8 +184,7 @@ export class SchematicDocumentTabs {
     const close = wrapper.querySelector<HTMLButtonElement>("[data-schematic-document-close]");
     if (close) {
       close.dataset.schematicDocumentClose = item.id;
-      close.setAttribute("aria-label", `Close ${item.title}`);
-      close.title = `Close ${item.title}`;
+      setCloseTabLabel(close, item.title);
     }
   }
 
@@ -218,11 +221,30 @@ export class SchematicDocumentTabs {
       return;
     }
     if (target?.closest("[data-schematic-document-paste]")) {
-      this.options.onPasteFromClipboard?.();
+      this.options.onImportFromClipboard?.();
       return;
     }
     if (target?.closest("[data-schematic-document-export]")) {
-      this.options.onExport?.();
+      const dialog = this.root.querySelector<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+      if (!dialog || dialog.open) return;
+      const hidden = dialog.querySelector<HTMLInputElement>("[data-schematic-export-hidden]");
+      if (hidden) hidden.checked = false;
+      dialog.showModal();
+      return;
+    }
+    const exportDialog = target?.closest<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+    if (exportDialog?.open) {
+      if (target?.closest("[data-schematic-export-cancel]")) {
+        exportDialog.close();
+        return;
+      }
+      const format = target?.closest<HTMLElement>("[data-schematic-export-format]")?.dataset.schematicExportFormat;
+      if (format === "json" || format === "svg" || format === "png" || format === "project") {
+        const includeHidden = (format === "svg" || format === "png")
+          && exportDialog.querySelector<HTMLInputElement>("[data-schematic-export-hidden]")?.checked === true;
+        exportDialog.close();
+        void this.options.onExport?.(format, includeHidden);
+      }
       return;
     }
     if (target?.closest("[data-schematic-close-undo]")) {
@@ -387,6 +409,15 @@ export class SchematicDocumentTabs {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
+    const exportDialog = (event.target as HTMLElement | null)?.closest<HTMLDialogElement>("[data-schematic-document-export-dialog]");
+    if (exportDialog?.open) {
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        exportDialog.close();
+      }
+      return;
+    }
     const rename = (event.target as HTMLElement | null)?.closest<HTMLInputElement>(
       "[data-schematic-document-rename]"
     );
@@ -440,7 +471,7 @@ export class SchematicDocumentTabs {
     input.dataset.schematicDocumentRename = id;
     input.dataset.schematicDocumentOriginalTitle = title;
     input.value = title;
-    input.setAttribute("aria-label", `Rename ${title}`);
+    applySchematicMessage(input, message("document.renameTab", "Rename {name}", { name: title }), "aria-label");
     input.setAttribute("autocomplete", "off");
     input.setAttribute("spellcheck", "false");
     input.setAttribute("maxlength", String(MAX_SCHEMATIC_TAB_TITLE_LENGTH));
@@ -465,10 +496,7 @@ export class SchematicDocumentTabs {
 
     this.renameInput = null;
     if (label) input.replaceWith(label);
-    if (close) {
-      close.setAttribute("aria-label", `Close ${title}`);
-      close.title = `Close ${title}`;
-    }
+    if (close) setCloseTabLabel(close, title);
     if (commit && id && nextTitle && nextTitle !== originalTitle) {
       void this.options.onRename?.(id, nextTitle);
     }
@@ -505,4 +533,10 @@ export class SchematicDocumentTabs {
     this.runtime.clearTimeout(this.closeSnackbarTimer);
     this.closeSnackbarTimer = null;
   }
+}
+
+function setCloseTabLabel(button: HTMLButtonElement, title: string) {
+  const label = message("document.closeTab", "Close {name}", { name: title });
+  applySchematicMessage(button, label, "aria-label");
+  applySchematicMessage(button, label, "title");
 }

@@ -1,5 +1,5 @@
 import { samePoint, snapPoint } from "../geometry";
-import type { Point, SchematicDocument, Wire } from "../types";
+import type { Point, SchematicContent, SchematicDocument, Wire } from "../types";
 import { normalizeWirePath } from "../wire/wireGeometry";
 import {
   appearanceForNormalizedWire,
@@ -8,8 +8,10 @@ import {
   wireBodyKindValues
 } from "../wire/wireDecoration";
 import { remapNetLabelsAfterWireNormalization } from "../netLabelModel";
-import { syncConnectionVertices } from "../connectionGraph";
-import { normalizeConnectedWires } from "./connectedDocumentWires";
+import { reconcileConnectionEdit, syncConnectionVertices } from "../connectionGraph";
+import { buildConnectivity } from "../connectivity";
+import { junctionId, junctionPointFromId } from "../junctionIdentity";
+import { normalizeConnectedWires, type NormalizedWirePiece } from "./connectedDocumentWires";
 
 interface SourceSegment {
   start: Point;
@@ -33,7 +35,7 @@ export function normalizeDocumentWires(document: SchematicDocument): Wire[] {
   return normalizeConnectedWires(document, normalizeWireGroup).wires;
 }
 
-function normalizeWireGroup(wires: Wire[], splitPoints: Point[]): Wire[] {
+function normalizeWireGroup(wires: Wire[], splitPoints: Point[]): NormalizedWirePiece[] {
   const groups = groupCollinearSegments(expandSourceSegments(wires));
   return makeWireIdsUnique([...groups.values()].flatMap(group => atomicWiresForGroup(group, splitPoints)));
 }
@@ -43,10 +45,50 @@ export function applyNormalizedDocumentWires(document: SchematicDocument): Wire[
   syncConnectionVertices(document);
   const result = normalizeConnectedWires(document, normalizeWireGroup);
   const normalized = result.wires;
-  remapNetLabelsAfterWireNormalization(document, previous, normalized);
+  remapNetLabelsAfterWireNormalization(document, previous, normalized, result.sourceIds, result.piecesBySource);
+  const previousStates = document.layerObjectStates;
+  if (previousStates) {
+    const states = { ...previousStates };
+    previous.forEach(wire => { delete states[wire.id]; });
+    for (const [id, sourceId] of result.sourceIds) {
+      if (Object.hasOwn(previousStates, sourceId)) states[id] = { ...previousStates[sourceId] };
+    }
+    document.layerObjectStates = Object.keys(states).length ? states : undefined;
+  }
   document.wires = normalized;
   document.connections = result.connections;
   return normalized;
+}
+
+export function reconcileDocumentConnectionEdit(document: SchematicContent, before: SchematicContent) {
+  const states = document.layerObjectStates;
+  const tracked = states && Object.keys(states).some(junctionPointFromId)
+    ? buildConnectivity(before).junctionNodes
+    : null;
+  reconcileConnectionEdit(document, before);
+  if (!tracked || !states) return;
+
+  const { junctionNodes, junctionMembers } = buildConnectivity(document);
+  const stationary = new Set<string>();
+  for (const [nodeId, point] of tracked) {
+    const next = junctionNodes.get(nodeId);
+    if (next && samePoint(point, next)) stationary.add(junctionId(point));
+  }
+  const nextStates = { ...states };
+  const transfers: Array<[string, string]> = [];
+  for (const [nodeId, from] of tracked) {
+    const oldId = junctionId(from);
+    if (!Object.hasOwn(states, oldId)) continue;
+    const to = junctionNodes.get(nodeId);
+    if (stationary.has(oldId) || (!to && junctionMembers.has(oldId))) continue;
+    delete nextStates[oldId];
+    if (to) transfers.push([oldId, junctionId(to)]);
+  }
+  for (const [oldId, newId] of transfers) {
+    // A pre-existing junction at the destination keeps its own display state.
+    if (!stationary.has(newId) && !Object.hasOwn(nextStates, newId)) nextStates[newId] = { ...states[oldId] };
+  }
+  document.layerObjectStates = Object.keys(nextStates).length ? nextStates : undefined;
 }
 
 function expandSourceSegments(wires: readonly Wire[]) {
@@ -100,22 +142,19 @@ function atomicWiresForGroup(group: LineGroup, topologyNodes: readonly Point[]) 
         intervalsOverlapInterior(segmentInterval(segment, group), interval)
       );
       return {
-        ...owner.wire,
-        id: atomicWireBaseId(owner.wire.id),
-        points,
-        appearance: mergedAppearanceForAtomicWire(
-          appearanceSources,
-          owner,
-          points[0],
-          points[1],
-          group
-        )
+        sourceId: owner.wire.id,
+        wire: {
+          ...owner.wire,
+          id: atomicWireBaseId(owner.wire.id),
+          points,
+          appearance: mergedAppearanceForAtomicWire(appearanceSources, owner, points[0], points[1], group)
+        }
       };
     });
     // Anchor ordering to the spatially first interval. The last source's direction
     // can change on each pass when adjacent wires were drawn in opposite directions.
     const first = wires[0];
-    if (first && coordinate(first.points[1], group) < coordinate(first.points[0], group)) wires.reverse();
+    if (first && coordinate(first.wire.points[1], group) < coordinate(first.wire.points[0], group)) wires.reverse();
     return wires;
   });
 }
@@ -284,13 +323,13 @@ function atomicWireBaseId(id: string) {
   return baseId;
 }
 
-function makeWireIdsUnique(wires: Wire[]) {
+function makeWireIdsUnique(pieces: NormalizedWirePiece[]) {
   const usedIds = new Set<string>();
-  return wires.map((wire) => {
+  return pieces.map(({ wire, sourceId }) => {
     let id = wire.id;
     let suffix = 1;
     while (usedIds.has(id)) id = `${wire.id}-segment-${suffix++}`;
     usedIds.add(id);
-    return id === wire.id ? wire : { ...wire, id };
+    return { sourceId, wire: id === wire.id ? wire : { ...wire, id } };
   });
 }

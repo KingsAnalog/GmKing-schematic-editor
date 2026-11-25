@@ -1,10 +1,20 @@
+import type { RightDockView } from "./rightDock";
+
 export type SchematicPanelSide = "left" | "right";
+export type SchematicSidebarTab = "library" | "properties" | "layers";
+
+export interface RightDockLayoutState {
+  activeView: RightDockView;
+}
 
 export interface SchematicLayoutState {
   leftWidth: number;
   rightWidth: number;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  rightActiveView: RightDockView;
+  sidebarTab: SchematicSidebarTab;
+  logHeight: number;
 }
 
 export interface SchematicLayoutProjection {
@@ -18,17 +28,37 @@ const DEFAULT_STATE: SchematicLayoutState = {
   leftWidth: 280,
   rightWidth: 330,
   leftCollapsed: false,
-  rightCollapsed: true
+  rightCollapsed: true,
+  rightActiveView: "analysis",
+  sidebarTab: "library",
+  logHeight: 230
 };
 const LEFT_WIDTH_RANGE = { min: 210, max: 520 };
-const RIGHT_WIDTH_RANGE = { min: 260, max: 680 };
+const RIGHT_WIDTH_RANGE = { min: 320, max: 900 };
+const LOG_HEIGHT_RANGE = { min: 180, max: 400 };
 const NARROW_CONTAINER_WIDTH = 1080;
-const STORAGE_KEY = "adc-helper/schematic-layout";
+const STORAGE_KEY = "at-schematic-layout";
+const LEGACY_STORAGE_KEY = "adc-helper/schematic-layout";
 const KEYBOARD_RESIZE_STEP = 20;
+const RIGHT_DOCK_VIEWS: readonly RightDockView[] = ["hierarchy", "analysis", "netlist"];
 
 export interface SchematicPanelResizeResult {
   width: number;
   collapsed: boolean;
+}
+
+/** Minimal surface the editor uses to open panels and persist view state. */
+export interface SchematicPanelLayoutAccess {
+  openPanel(side: SchematicPanelSide): void;
+  closePanel(side: SchematicPanelSide): void;
+  togglePanel(side: SchematicPanelSide): void;
+  isPanelVisible(side: SchematicPanelSide): boolean;
+  getRightDockState?(): RightDockLayoutState;
+  setRightDockState?(state: RightDockLayoutState): void;
+  getSidebarTab?(): SchematicSidebarTab;
+  setSidebarTab?(tab: SchematicSidebarTab): void;
+  getLogHeight?(): number;
+  setLogHeight?(height: number): void;
 }
 
 export function resolveSchematicPanelResize(
@@ -62,7 +92,7 @@ export function projectSchematicLayout(
   };
 }
 
-export class SchematicLayoutController {
+export class SchematicLayoutController implements SchematicPanelLayoutAccess {
   private readonly lifecycle: AbortController;
   private readonly elementConstructor: typeof Element | null;
   private readonly storage: Pick<Storage, "getItem" | "setItem"> | null;
@@ -87,7 +117,7 @@ export class SchematicLayoutController {
     const AbortControllerCtor = realm?.AbortController ?? AbortController;
     this.lifecycle = new AbortControllerCtor();
     this.elementConstructor = realm?.Element ?? null;
-    this.storage = options.storage === undefined ? sessionStorageFor(root) : options.storage;
+    this.storage = options.storage === undefined ? localStorageFor(root) : options.storage;
     this.state = readState(this.storage);
     const ResizeObserverCtor = options.resizeObserver === undefined
       ? root.ownerDocument.defaultView?.ResizeObserver ?? globalThis.ResizeObserver
@@ -117,6 +147,71 @@ export class SchematicLayoutController {
 
   getState(): SchematicLayoutState {
     return { ...this.state };
+  }
+
+  openPanel(side: SchematicPanelSide) {
+    if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
+      this.drawer = side;
+    } else if (side === "left") {
+      this.state.leftCollapsed = false;
+    } else {
+      this.state.rightCollapsed = false;
+    }
+    this.persist();
+    this.render();
+  }
+
+  closePanel(side: SchematicPanelSide) {
+    if (this.containerWidth < NARROW_CONTAINER_WIDTH) {
+      if (this.drawer === side) this.drawer = null;
+    } else if (side === "left") {
+      this.state.leftCollapsed = true;
+    } else {
+      this.state.rightCollapsed = true;
+    }
+    this.persist();
+    this.render();
+  }
+
+  togglePanel(side: SchematicPanelSide) {
+    if (this.isPanelVisible(side)) this.closePanel(side);
+    else this.openPanel(side);
+  }
+
+  isPanelVisible(side: SchematicPanelSide) {
+    const projection = projectSchematicLayout(this.containerWidth, this.state, this.drawer);
+    return side === "left" ? projection.leftVisible : projection.rightVisible;
+  }
+
+  isNarrow() {
+    return this.containerWidth < NARROW_CONTAINER_WIDTH;
+  }
+
+  getRightDockState(): RightDockLayoutState {
+    return { activeView: this.state.rightActiveView };
+  }
+
+  setRightDockState(state: RightDockLayoutState) {
+    this.state.rightActiveView = state.activeView;
+    this.persist();
+  }
+
+  getSidebarTab(): SchematicSidebarTab {
+    return this.state.sidebarTab;
+  }
+
+  setSidebarTab(tab: SchematicSidebarTab) {
+    this.state.sidebarTab = tab;
+    this.persist();
+  }
+
+  getLogHeight() {
+    return this.state.logHeight;
+  }
+
+  setLogHeight(height: number) {
+    this.state.logHeight = clamp(height, LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight);
+    this.persist();
   }
 
   destroy() {
@@ -291,22 +386,36 @@ function panelWidthRange(side: SchematicPanelSide) {
 
 function readState(storage: Pick<Storage, "getItem"> | null): SchematicLayoutState {
   try {
-    const parsed = JSON.parse(storage?.getItem(STORAGE_KEY) ?? "null") as Partial<SchematicLayoutState> | null;
+    const raw = storage?.getItem(STORAGE_KEY)
+      ?? storage?.getItem(LEGACY_STORAGE_KEY)
+      ?? "null";
+    const parsed = JSON.parse(raw) as Partial<SchematicLayoutState> | null;
     if (!parsed || typeof parsed !== "object") return { ...DEFAULT_STATE };
     return {
       leftWidth: clamp(Number(parsed.leftWidth), LEFT_WIDTH_RANGE, DEFAULT_STATE.leftWidth),
       rightWidth: clamp(Number(parsed.rightWidth), RIGHT_WIDTH_RANGE, DEFAULT_STATE.rightWidth),
       leftCollapsed: parsed.leftCollapsed === true,
-      rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed
+      rightCollapsed: typeof parsed.rightCollapsed === "boolean" ? parsed.rightCollapsed : DEFAULT_STATE.rightCollapsed,
+      rightActiveView: String(parsed.rightActiveView) === "diagnostics"
+        ? "netlist"
+        : isRightDockView(parsed.rightActiveView) ? parsed.rightActiveView : "analysis",
+      sidebarTab: parsed.sidebarTab === "properties" || parsed.sidebarTab === "layers"
+        ? parsed.sidebarTab
+        : "library",
+      logHeight: clamp(Number(parsed.logHeight), LOG_HEIGHT_RANGE, DEFAULT_STATE.logHeight)
     };
   } catch {
     return { ...DEFAULT_STATE };
   }
 }
 
-function sessionStorageFor(root: HTMLElement) {
+function isRightDockView(value: unknown): value is RightDockView {
+  return typeof value === "string" && (RIGHT_DOCK_VIEWS as readonly string[]).includes(value);
+}
+
+function localStorageFor(root: HTMLElement) {
   try {
-    return root.ownerDocument.defaultView?.sessionStorage ?? null;
+    return root.ownerDocument.defaultView?.localStorage ?? null;
   } catch {
     return null;
   }

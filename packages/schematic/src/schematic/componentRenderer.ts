@@ -10,11 +10,18 @@ import { SYMBOL_STROKE_WIDTH } from "./symbols/symbolPrimitives";
 import { PREVIEW_COMPONENT_ID } from "./previewIds";
 import { SYMBOL_GRID_SIZE, type ComponentInstance } from "./types";
 import { CLOCK_BUBBLE_STROKE_WIDTH } from "./symbols/clockSymbols";
+import { quadraticArcSymbol } from "./symbols/arcSymbols";
+import { polylineFrameSymbol } from "./symbols/polylineSymbols";
+import { circleAxisPoints } from "./circleComponentModel";
+import { isLibraryShapeType, isOpenLibraryShapeType, isVertexLibraryShapeType } from "./libraryShapeStyleModel";
+import { t } from "./schematicI18n";
 import { TRIANGLE_VERTICES } from "./triangleComponentModel";
+import { SCHEMATIC_FONT_STACK } from "./schematicFont";
 import {
   symbolContentCellAttrs,
   symbolContentDefaultAttrs,
-  symbolContentMarkup
+  symbolContentMarkup,
+  SYMBOL_CONTENT_RUN_SLOT_COUNT
 } from "./symbolContentView";
 
 export { PREVIEW_COMPONENT_ID };
@@ -22,6 +29,10 @@ export const PORT_MARKER_STROKE_WIDTH = SYMBOL_STROKE_WIDTH;
 export const PORT_MARKER_INNER_SIZE = 2 * SYMBOL_STROKE_WIDTH;
 export const PORT_MARKER_SIZE = PORT_MARKER_INNER_SIZE + PORT_MARKER_STROKE_WIDTH;
 export const RECTANGLE_RESIZE_HANDLE_SIZE = 8;
+export const RECTANGLE_RESIZE_HANDLES = ["nw", "ne", "se", "sw", "n", "e", "s", "w"] as const;
+export const RECTANGLE_RESIZE_HANDLE_SELECTORS = RECTANGLE_RESIZE_HANDLES.map(handle =>
+  `rectangleResize${handle[0].toUpperCase()}${handle.slice(1)}`
+);
 export { ANALOG_BUFFER_LABEL_FONT_SIZE };
 
 export class SymbolElementView<E extends dia.Element = dia.Element> extends dia.ElementView<E> {
@@ -50,23 +61,23 @@ export const SymbolElement = (dia.Element as any).define(
       ...symbolContentDefaultAttrs(),
       switchBladeHit: { fill: "none", stroke: "transparent", strokeWidth: 8, strokeLinecap: "butt", vectorEffect: "non-scaling-stroke", "data-switch-blade": "true" },
       deleteCross: { fill: "none", stroke: "none", strokeWidth: 3, pointerEvents: "none" },
-      label: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, textAnchor: "middle", dominantBaseline: "alphabetic" },
-      refLabel: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif", fontSize: REF_LABEL_FONT_SIZE, textAnchor: "middle" },
+      label: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK, fontSize: 13, textAnchor: "middle", dominantBaseline: "alphabetic" },
+      refLabel: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK, fontSize: REF_LABEL_FONT_SIZE, textAnchor: "middle" },
       refLabelSign: { fontWeight: 700, fontStyle: "normal" },
       refLabelPrefix: { fontWeight: 700, fontStyle: "normal" },
       refLabelHead: { fontWeight: 700, fontStyle: "italic" },
       refLabelTail: { fontWeight: 700, fontStyle: "normal", fontSize: REF_LABEL_TAIL_FONT_SIZE },
       refLabelValue: { fontWeight: 700, fontStyle: "normal", fontSize: REF_LABEL_FONT_SIZE },
-      centeredRefLabel: { fill: "#111111", fontFamily: "Arial, Helvetica, sans-serif" },
+      centeredRefLabel: { fill: "#111111", fontFamily: SCHEMATIC_FONT_STACK },
       centeredRefLabelSign: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelPrefix: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelHead: { fontWeight: 700, fontStyle: "italic" },
       centeredRefLabelTail: { fontWeight: 700, fontStyle: "normal" },
       centeredRefLabelValue: { fontWeight: 700, fontStyle: "normal" },
-      rectangleResizeNw: { "data-rectangle-resize-handle": "nw" },
-      rectangleResizeNe: { "data-rectangle-resize-handle": "ne" },
-      rectangleResizeSe: { "data-rectangle-resize-handle": "se" },
-      rectangleResizeSw: { "data-rectangle-resize-handle": "sw" }
+      ...Object.fromEntries(RECTANGLE_RESIZE_HANDLES.map((handle, index) => [
+        RECTANGLE_RESIZE_HANDLE_SELECTORS[index],
+        { "data-rectangle-resize-handle": handle }
+      ]))
     }
   },
   {
@@ -106,14 +117,34 @@ export const SymbolElement = (dia.Element as any).define(
           { tagName: "text", selector: "centeredRefLabelValue" }
         ]
       },
-      { tagName: "rect", selector: "rectangleResizeNw" },
-      { tagName: "rect", selector: "rectangleResizeNe" },
-      { tagName: "rect", selector: "rectangleResizeSe" },
-      { tagName: "rect", selector: "rectangleResizeSw" },
-      ...TRIANGLE_VERTICES.flatMap(vertex => [
-        { tagName: "rect", selector: `triangleResize${vertex.toUpperCase()}` },
-        { tagName: "text", selector: `triangleVertex${vertex.toUpperCase()}` }
-      ])
+      ...RECTANGLE_RESIZE_HANDLE_SELECTORS.map(selector => ({ tagName: "rect", selector })),
+      ...TRIANGLE_VERTICES.map(vertex => (
+        { tagName: "rect", selector: `triangleResize${vertex.toUpperCase()}` }
+      ))
+    ]
+  }
+);
+
+/** Pure artwork cells contain no text or port nodes, including invisible ones. */
+export const LibraryShapeElement = (dia.Element as any).define(
+  "eda.LibraryShape",
+  {
+    attrs: {
+      frame: { fill: "transparent", stroke: "none", pointerEvents: "none" },
+      symbolBody: { fill: "none", stroke: "#111111", strokeWidth: 2 * SYMBOL_STROKE_WIDTH },
+      deleteCross: { fill: "none", stroke: "none", strokeWidth: 3, pointerEvents: "none" }
+    }
+  },
+  {
+    markup: [
+      { tagName: "rect", selector: "frame" },
+      { tagName: "path", selector: "symbolBody" },
+      { tagName: "path", selector: "deleteCross" },
+      ...RECTANGLE_RESIZE_HANDLE_SELECTORS.map(selector => ({ tagName: "rect", selector })),
+      ...TRIANGLE_VERTICES.map(vertex => ({
+        tagName: "rect",
+        selector: `triangleResize${vertex.toUpperCase()}`
+      }))
     ]
   }
 );
@@ -136,12 +167,13 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     ? `matrix(${-model.artworkScale} 0 0 ${model.artworkScale} ${model.def.size.width - model.frameBox.x} ${offset.y})`
     : `translate(${offset.x} ${offset.y})${model.artworkScale === 1 ? "" : ` scale(${model.artworkScale})`}`;
   const handleHalf = RECTANGLE_RESIZE_HANDLE_SIZE / 2;
-  const bodyLeft = SYMBOL_GRID_SIZE * model.artworkScale + offset.x;
-  const bodyRight = model.def.size.width - SYMBOL_GRID_SIZE * model.artworkScale + offset.x;
-  const bodyTop = SYMBOL_GRID_SIZE * model.artworkScale + offset.y;
-  const bodyBottom = model.def.size.height - SYMBOL_GRID_SIZE * model.artworkScale + offset.y;
+  const bodyInset = model.def.type === "rectangle" ? 0 : SYMBOL_GRID_SIZE * model.artworkScale;
+  const bodyLeft = bodyInset + offset.x;
+  const bodyRight = model.def.size.width - bodyInset + offset.x;
+  const bodyTop = bodyInset + offset.y;
+  const bodyBottom = model.def.size.height - bodyInset + offset.y;
   const resizeHandleAttrs = (
-    corner: "nw" | "ne" | "se" | "sw",
+    handle: typeof RECTANGLE_RESIZE_HANDLES[number],
     x: number,
     y: number
   ) => ({
@@ -154,36 +186,41 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     strokeWidth: 1.5,
     opacity: model.resizeHandles && model.def.type === "rectangle" ? 1 : 0,
     pointerEvents: model.resizeHandles && model.def.type === "rectangle" ? "all" : "none",
-    cursor: corner === "nw" || corner === "se" ? "nwse-resize" : "nesw-resize",
-    "data-rectangle-resize-handle": corner,
+    cursor: handle === "n" || handle === "s"
+      ? "ns-resize"
+      : handle === "e" || handle === "w"
+        ? "ew-resize"
+        : handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize",
+    "data-rectangle-resize-handle": handle,
     "data-component-id": model.componentId
   });
-  const triangleHandleAttrs = Object.fromEntries(TRIANGLE_VERTICES.flatMap((vertex, index) => {
+  const triangleHandleAttrs = Object.fromEntries(TRIANGLE_VERTICES.map((vertex, index) => {
     const point = model.def.bodyPolygon?.[index];
     const x = model.def.size.width / 2 + (model.mirrored ? -(point?.x ?? 0) : point?.x ?? 0) + offset.x;
     const y = model.def.size.height / 2 + (point?.y ?? 0) + offset.y;
     const visible = !!point && model.resizeHandles && model.def.type === "triangle";
-    return [
-      [`triangleResize${vertex.toUpperCase()}`, { x: x - handleHalf, y: y - handleHalf,
-        width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
-        fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, opacity: visible ? 1 : 0,
-        pointerEvents: visible ? "all" : "none", cursor: "move",
-        "data-triangle-resize-handle": vertex, "data-component-id": model.componentId,
-        "aria-label": `Drag vertex ${vertex.toUpperCase()}` }],
-      [`triangleVertex${vertex.toUpperCase()}`, { x: x + 7, y: y - 7, text: vertex.toUpperCase(),
-        fill: "#005f9e", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 9,
-        opacity: visible ? 1 : 0, pointerEvents: "none" }]
-    ];
+    return [`triangleResize${vertex.toUpperCase()}`, {
+      x: x - handleHalf, y: y - handleHalf,
+      width: RECTANGLE_RESIZE_HANDLE_SIZE, height: RECTANGLE_RESIZE_HANDLE_SIZE,
+      fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, opacity: visible ? 1 : 0,
+      pointerEvents: visible ? "all" : "none", cursor: "move",
+      "data-triangle-resize-handle": vertex, "data-component-id": model.componentId,
+      "aria-label": `Drag vertex ${vertex.toUpperCase()}`
+    }];
   }));
   return {
     ...triangleHandleAttrs,
+    root: {
+      "data-layer": isLibraryShapeType(model.def.type) ? "shape" : "component",
+      ...(model.def.type === "sheetBlock" ? { "data-sheet-block": "true" } : {})
+    },
     frame: {
       x: 0,
       y: 0,
       width: model.frameBox.width,
       height: model.frameBox.height,
       fill: "rgba(255, 255, 255, 0)",
-      pointerEvents: model.preview ? "none" : "all",
+      pointerEvents: model.preview || isOpenLibraryShapeType(model.def.type) ? "none" : "all",
       cursor: model.preview ? "default" : "move",
       stroke: !model.preview && model.selected ? "#005f9e" : "none",
       strokeWidth: !model.preview && model.selected ? 1.5 : 0,
@@ -192,9 +229,12 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     symbolBody: {
       d: model.path,
       transform: symbolTransform,
+      fill: model.symbolFill ?? "none",
+      fillOpacity: model.symbolFillOpacity ?? 1,
       stroke: model.isAnnotation ? "none" : model.color,
       strokeWidth: model.symbolStrokeWidth,
-      strokeDasharray: "none",
+      strokeDasharray: model.symbolStrokeDasharray ?? "none",
+      ...(model.def.type === "polyline" || model.def.type === "polygon" ? { strokeLinejoin: "round" } : {}),
       opacity: model.symbolOpacity,
       cursor: model.preview ? "default" : "move",
       pointerEvents: model.preview ? "none" : "auto"
@@ -422,6 +462,10 @@ function componentCellAttrsFromModel(model: ReturnType<typeof resolveComponentVi
     rectangleResizeNe: resizeHandleAttrs("ne", bodyRight, bodyTop),
     rectangleResizeSe: resizeHandleAttrs("se", bodyRight, bodyBottom),
     rectangleResizeSw: resizeHandleAttrs("sw", bodyLeft, bodyBottom),
+    rectangleResizeN: resizeHandleAttrs("n", (bodyLeft + bodyRight) / 2, bodyTop),
+    rectangleResizeE: resizeHandleAttrs("e", bodyRight, (bodyTop + bodyBottom) / 2),
+    rectangleResizeS: resizeHandleAttrs("s", (bodyLeft + bodyRight) / 2, bodyBottom),
+    rectangleResizeW: resizeHandleAttrs("w", bodyLeft, (bodyTop + bodyBottom) / 2),
     portBody: {
       magnet: !model.preview && !model.deleted,
       x: -PORT_MARKER_SIZE / 2,
@@ -449,11 +493,84 @@ export function makeComponentCell(
     y: instance.y - model.def.size.height / 2 + frame.y
   };
   const attrs = componentCellAttrsFromModel(model);
-  const element = new SymbolElement({
+  const libraryShape = isLibraryShapeType(instance.type);
+  const { bodyPolyline: polyline, bodyArc: arc } = model.def;
+  const openShape = isOpenLibraryShapeType(instance.type);
+  const vertexShape = isVertexLibraryShapeType(instance.type) ? instance.type : null;
+  const points = polyline ?? arc ?? (instance.type === "polygon" ? model.def.bodyPolygon
+    : instance.type === "circle" ? circleAxisPoints(model.def.size) : undefined);
+  const hitSelector = `${vertexShape}Hit`;
+  const handlesSelector = `${vertexShape}Handles`;
+  const shapeSelectors = [
+    "root", "frame", "symbolBody", "deleteCross",
+    ...RECTANGLE_RESIZE_HANDLE_SELECTORS,
+    ...TRIANGLE_VERTICES.map(vertex => `triangleResize${vertex.toUpperCase()}`)
+  ];
+  const cellAttrs = libraryShape
+    ? Object.fromEntries(shapeSelectors.map(selector => [selector, attrs[selector]]))
+    : attrs;
+  const vertexLabels = vertexShape === "arc"
+    ? [t("arc.dragStart", "Drag start point"), t("arc.dragEnd", "Drag end point"), t("arc.dragThrough", "Drag point on arc")]
+    : vertexShape === "circle"
+      ? [
+        t("circle.dragTop", "Resize from top"),
+        instance.mirrored ? t("circle.dragLeft", "Resize from left") : t("circle.dragRight", "Resize from right"),
+        t("circle.dragBottom", "Resize from bottom"),
+        instance.mirrored ? t("circle.dragRight", "Resize from right") : t("circle.dragLeft", "Resize from left")
+      ]
+      : [];
+  const vertexMarkup = points?.map((point, index) => {
+    const selector = `${vertexShape}Vertex${index}`;
+    const isArc = vertexShape === "arc";
+    const isThroughPoint = isArc && index === 2;
+    const size = isArc ? (isThroughPoint ? 7 : 10) : RECTANGLE_RESIZE_HANDLE_SIZE;
+    const half = size / 2;
+    const x = model.def.size.width / 2 - frame.x + (instance.mirrored ? -point.x : point.x);
+    const y = model.def.size.height / 2 - frame.y + point.y;
+    cellAttrs[selector] = {
+      x: x - half, y: y - half, width: size, height: size,
+      ...(isThroughPoint ? { transform: `rotate(45 ${x} ${y})` } : isArc ? { rx: half, ry: half } : {}),
+      fill: "#ffffff", stroke: "#005f9e", strokeWidth: 1.5, cursor: "move",
+      [`data-${vertexShape}-vertex`]: index, "data-shape-vertex": index, "data-component-id": instance.id,
+      "aria-label": vertexLabels[index] ?? `${t("polyline.vertex", "Drag vertex")} ${index + 1}`
+    };
+    return { tagName: "rect", selector };
+  });
+  if (vertexMarkup) {
+    if (openShape) cellAttrs.symbolMarker = attrs.symbolMarker;
+    // Keep the full centerline interactive when an arrow shortens the rendered shaft.
+    const untrimmedPath = polyline ? polylineFrameSymbol : arc ? quadraticArcSymbol : null;
+    const path = untrimmedPath && points
+      ? untrimmedPath(model.def.size.width / model.artworkScale, model.def.size.height / model.artworkScale,
+        points.map(point => ({ x: point.x / model.artworkScale, y: point.y / model.artworkScale })))
+      : model.path;
+    cellAttrs[hitSelector] = {
+      d: path,
+      transform: attrs.symbolBody.transform, fill: "none",
+      stroke: "transparent", strokeWidth: Math.max(12 / model.artworkScale, model.symbolStrokeWidth),
+      pointerEvents: model.preview ? "none" : "stroke", cursor: "move"
+    };
+    cellAttrs[handlesSelector] = { display: model.resizeHandles ? "inline" : "none" };
+  }
+  const ElementClass = libraryShape ? LibraryShapeElement : SymbolElement;
+  const element = new ElementClass({
     id: model.preview ? PREVIEW_COMPONENT_ID : instance.id,
     position,
     size: { width: frame.width, height: frame.height },
-    attrs,
+    attrs: cellAttrs,
+    ...(instance.type === "sheetBlock" ? {
+      markup: [...SymbolElement.prototype.markup,
+        ...symbolContentMarkup(model.symbolContentLayout?.runs.length ?? 0).slice(
+          symbolContentMarkup(SYMBOL_CONTENT_RUN_SLOT_COUNT).length)]
+    } : {}),
+    ...(vertexMarkup ? { markup: [
+      { tagName: "rect", selector: "frame" },
+      { tagName: "path", selector: "symbolBody" },
+      ...(openShape ? [{ tagName: "path", selector: "symbolMarker" }] : []),
+      { tagName: "path", selector: hitSelector },
+      { tagName: "path", selector: "deleteCross" },
+      { tagName: "g", selector: handlesSelector, children: vertexMarkup }
+    ] } : {}),
     ports: {
       groups: {
         pin: {
@@ -476,6 +593,7 @@ export function makeComponentCell(
     }
   });
   element.set("componentId", instance.id);
+  if (vertexShape) element.set("vertexShape", vertexShape);
   element.set("preview", model.preview);
   element.rotate(instance.rotation, true, { x: instance.x, y: instance.y });
   return element;

@@ -1,0 +1,982 @@
+{
+  "format": "analog-tools/schematic-project",
+  "version": 2,
+  "id": "r4-dual-rc-test",
+  "name": "R4 Dual RC Test",
+  "topSheetId": "top",
+  "globalNets": [
+    "0"
+  ],
+  "sheets": [
+    {
+      "id": "top",
+      "name": "rc_top",
+      "ports": [],
+      "content": {
+        "symbolTemplate": "razavi",
+        "components": [
+          {
+            "id": "top-vin",
+            "type": "voltageSource",
+            "variantId": "dc",
+            "ref": "V1",
+            "x": 180,
+            "y": 350,
+            "rotation": 90,
+            "mirrored": false,
+            "values": {
+              "main": "1"
+            }
+          },
+          {
+            "id": "top-stage-a",
+            "type": "sheetBlock",
+            "ref": "X1",
+            "x": 600,
+            "y": 210,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "sheet:target": "filter-stage",
+              "sheet:name": "filter_stage",
+              "sheet:ports": "[{\"id\":\"stage-in\",\"name\":\"IN\",\"type\":\"input\",\"direction\":\"left\",\"order\":0,\"slot\":0},{\"id\":\"stage-out\",\"name\":\"OUT\",\"type\":\"output\",\"direction\":\"right\",\"order\":1,\"slot\":0},{\"id\":\"stage-ref\",\"name\":\"REF\",\"type\":\"ground\",\"direction\":\"bottom\",\"order\":2,\"slot\":0}]"
+            }
+          },
+          {
+            "id": "top-stage-b",
+            "type": "sheetBlock",
+            "ref": "X2",
+            "x": 600,
+            "y": 500,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "sheet:target": "filter-stage",
+              "sheet:name": "filter_stage",
+              "sheet:ports": "[{\"id\":\"stage-in\",\"name\":\"IN\",\"type\":\"input\",\"direction\":\"left\",\"order\":0,\"slot\":0},{\"id\":\"stage-out\",\"name\":\"OUT\",\"type\":\"output\",\"direction\":\"right\",\"order\":1,\"slot\":0},{\"id\":\"stage-ref\",\"name\":\"REF\",\"type\":\"ground\",\"direction\":\"bottom\",\"order\":2,\"slot\":0}]"
+            }
+          },
+          {
+            "id": "top-ground",
+            "type": "gnd",
+            "ref": "GND",
+            "x": 400,
+            "y": 690,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {}
+          }
+        ],
+        "wires": [
+          {
+            "id": "source-rise",
+            "points": [
+              {
+                "x": 180,
+                "y": 310
+              },
+              {
+                "x": 180,
+                "y": 260
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "source-input",
+            "points": [
+              {
+                "x": 180,
+                "y": 260
+              },
+              {
+                "x": 320,
+                "y": 260
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-b-input",
+            "points": [
+              {
+                "x": 320,
+                "y": 260
+              },
+              {
+                "x": 320,
+                "y": 500
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-a-input",
+            "points": [
+              {
+                "x": 320,
+                "y": 260
+              },
+              {
+                "x": 320,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-a-input-segment-1",
+            "points": [
+              {
+                "x": 320,
+                "y": 210
+              },
+              {
+                "x": 460,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-b-input-segment-1",
+            "points": [
+              {
+                "x": 320,
+                "y": 500
+              },
+              {
+                "x": 460,
+                "y": 500
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-a-output",
+            "points": [
+              {
+                "x": 740,
+                "y": 210
+              },
+              {
+                "x": 940,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "branch-b-output",
+            "points": [
+              {
+                "x": 740,
+                "y": 500
+              },
+              {
+                "x": 940,
+                "y": 500
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-a-return",
+            "points": [
+              {
+                "x": 600,
+                "y": 290
+              },
+              {
+                "x": 600,
+                "y": 360
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-a-return-segment-1",
+            "points": [
+              {
+                "x": 600,
+                "y": 360
+              },
+              {
+                "x": 400,
+                "y": 360
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-a-return-segment-2",
+            "points": [
+              {
+                "x": 400,
+                "y": 360
+              },
+              {
+                "x": 400,
+                "y": 650
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "ground-stub",
+            "points": [
+              {
+                "x": 400,
+                "y": 650
+              },
+              {
+                "x": 400,
+                "y": 670
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-b-return",
+            "points": [
+              {
+                "x": 600,
+                "y": 580
+              },
+              {
+                "x": 600,
+                "y": 650
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "source-return",
+            "points": [
+              {
+                "x": 180,
+                "y": 650
+              },
+              {
+                "x": 400,
+                "y": 650
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-b-return-segment-1",
+            "points": [
+              {
+                "x": 600,
+                "y": 650
+              },
+              {
+                "x": 400,
+                "y": 650
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "source-return-segment-1",
+            "points": [
+              {
+                "x": 180,
+                "y": 390
+              },
+              {
+                "x": 180,
+                "y": 650
+              }
+            ],
+            "routeMode": "orthogonal"
+          }
+        ],
+        "connections": {
+          "wires": {
+            "source-rise": [
+              "node-26",
+              "node-1"
+            ],
+            "source-input": [
+              "node-1",
+              "node-3"
+            ],
+            "branch-b-input": [
+              "node-3",
+              "node-8"
+            ],
+            "branch-a-input": [
+              "node-3",
+              "node-5"
+            ],
+            "branch-a-input-segment-1": [
+              "node-5",
+              "node-28"
+            ],
+            "branch-b-input-segment-1": [
+              "node-8",
+              "node-31"
+            ],
+            "branch-a-output": [
+              "node-29",
+              "node-11"
+            ],
+            "branch-b-output": [
+              "node-32",
+              "node-13"
+            ],
+            "stage-a-return": [
+              "node-30",
+              "node-15"
+            ],
+            "stage-a-return-segment-1": [
+              "node-15",
+              "node-16"
+            ],
+            "stage-a-return-segment-2": [
+              "node-16",
+              "node-17"
+            ],
+            "ground-stub": [
+              "node-17",
+              "node-34"
+            ],
+            "stage-b-return": [
+              "node-33",
+              "node-19"
+            ],
+            "source-return": [
+              "node-22",
+              "node-17"
+            ],
+            "stage-b-return-segment-1": [
+              "node-19",
+              "node-17"
+            ],
+            "source-return-segment-1": [
+              "node-27",
+              "node-22"
+            ]
+          },
+          "pins": {
+            "top-vin": {
+              "p": "node-26",
+              "n": "node-27"
+            },
+            "top-stage-a": {
+              "stage-in": "node-28",
+              "stage-out": "node-29",
+              "stage-ref": "node-30"
+            },
+            "top-stage-b": {
+              "stage-in": "node-31",
+              "stage-out": "node-32",
+              "stage-ref": "node-33"
+            },
+            "top-ground": {
+              "g": "node-34"
+            }
+          }
+        },
+        "junctionAppearances": [],
+        "netLabels": [
+          {
+            "id": "label-VIN",
+            "name": "VIN",
+            "attachment": {
+              "wireId": "source-input",
+              "point": {
+                "x": 250,
+                "y": 260
+              }
+            }
+          },
+          {
+            "id": "label-OUT_A",
+            "name": "OUT_A",
+            "attachment": {
+              "wireId": "branch-a-output",
+              "point": {
+                "x": 840,
+                "y": 210
+              }
+            }
+          },
+          {
+            "id": "label-OUT_B",
+            "name": "OUT_B",
+            "attachment": {
+              "wireId": "branch-b-output",
+              "point": {
+                "x": 840,
+                "y": 500
+              }
+            }
+          }
+        ],
+        "notes": [
+          {
+            "id": "heading",
+            "x": 160,
+            "y": 45,
+            "width": 550,
+            "anchor": "upperLeft",
+            "text": "Dual RC low-pass / Level 1\nX1 and X2 both reference filter_stage",
+            "fontSizePx": 16
+          }
+        ],
+        "layers": [
+          {
+            "id": "layer-1",
+            "name": "Layer 1",
+            "visible": true,
+            "locked": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "filter-stage",
+      "name": "filter_stage",
+      "ports": [
+        {
+          "id": "stage-in",
+          "name": "IN",
+          "type": "input",
+          "direction": "left",
+          "order": 0,
+          "slot": 0
+        },
+        {
+          "id": "stage-out",
+          "name": "OUT",
+          "type": "output",
+          "direction": "right",
+          "order": 1,
+          "slot": 0
+        },
+        {
+          "id": "stage-ref",
+          "name": "REF",
+          "type": "ground",
+          "direction": "bottom",
+          "order": 2,
+          "slot": 0
+        }
+      ],
+      "content": {
+        "symbolTemplate": "razavi",
+        "components": [
+          {
+            "id": "stage-in",
+            "type": "sheetPort",
+            "ref": "IN",
+            "x": 160,
+            "y": 240,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "input",
+              "port:side": "left",
+              "port:order": "0",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "stage-out",
+            "type": "sheetPort",
+            "ref": "OUT",
+            "x": 900,
+            "y": 240,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "output",
+              "port:side": "right",
+              "port:order": "1",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "stage-ref",
+            "type": "sheetPort",
+            "ref": "REF",
+            "x": 520,
+            "y": 470,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "ground",
+              "port:side": "bottom",
+              "port:order": "2",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "stage-cell",
+            "type": "sheetBlock",
+            "ref": "X1",
+            "x": 520,
+            "y": 240,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "sheet:target": "rc-cell",
+              "sheet:name": "rc_cell",
+              "sheet:ports": "[{\"id\":\"cell-in\",\"name\":\"IN\",\"type\":\"input\",\"direction\":\"left\",\"order\":0,\"slot\":0},{\"id\":\"cell-out\",\"name\":\"OUT\",\"type\":\"output\",\"direction\":\"right\",\"order\":1,\"slot\":0},{\"id\":\"cell-ref\",\"name\":\"REF\",\"type\":\"ground\",\"direction\":\"bottom\",\"order\":2,\"slot\":0}]"
+            }
+          },
+          {
+            "id": "stage-load",
+            "type": "resistor",
+            "variantId": "fixed",
+            "ref": "R1",
+            "x": 760,
+            "y": 330,
+            "rotation": 90,
+            "mirrored": false,
+            "values": {
+              "main": "100k"
+            }
+          }
+        ],
+        "wires": [
+          {
+            "id": "stage-input",
+            "points": [
+              {
+                "x": 160,
+                "y": 240
+              },
+              {
+                "x": 380,
+                "y": 240
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-output",
+            "points": [
+              {
+                "x": 660,
+                "y": 240
+              },
+              {
+                "x": 760,
+                "y": 240
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-output-segment-1",
+            "points": [
+              {
+                "x": 760,
+                "y": 240
+              },
+              {
+                "x": 900,
+                "y": 240
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-load-top",
+            "points": [
+              {
+                "x": 760,
+                "y": 240
+              },
+              {
+                "x": 760,
+                "y": 290
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-return",
+            "points": [
+              {
+                "x": 520,
+                "y": 320
+              },
+              {
+                "x": 520,
+                "y": 410
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-return-segment-1",
+            "points": [
+              {
+                "x": 520,
+                "y": 410
+              },
+              {
+                "x": 520,
+                "y": 470
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-load-return",
+            "points": [
+              {
+                "x": 760,
+                "y": 370
+              },
+              {
+                "x": 760,
+                "y": 410
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "stage-load-return-segment-1",
+            "points": [
+              {
+                "x": 760,
+                "y": 410
+              },
+              {
+                "x": 520,
+                "y": 410
+              }
+            ],
+            "routeMode": "orthogonal"
+          }
+        ],
+        "connections": {
+          "wires": {
+            "stage-input": [
+              "node-13",
+              "node-16"
+            ],
+            "stage-output": [
+              "node-17",
+              "node-3"
+            ],
+            "stage-output-segment-1": [
+              "node-3",
+              "node-14"
+            ],
+            "stage-load-top": [
+              "node-3",
+              "node-19"
+            ],
+            "stage-return": [
+              "node-18",
+              "node-8"
+            ],
+            "stage-return-segment-1": [
+              "node-8",
+              "node-15"
+            ],
+            "stage-load-return": [
+              "node-20",
+              "node-11"
+            ],
+            "stage-load-return-segment-1": [
+              "node-11",
+              "node-8"
+            ]
+          },
+          "pins": {
+            "stage-in": {
+              "terminal": "node-13"
+            },
+            "stage-out": {
+              "terminal": "node-14"
+            },
+            "stage-ref": {
+              "terminal": "node-15"
+            },
+            "stage-cell": {
+              "cell-in": "node-16",
+              "cell-out": "node-17",
+              "cell-ref": "node-18"
+            },
+            "stage-load": {
+              "p": "node-19",
+              "n": "node-20"
+            }
+          }
+        },
+        "junctionAppearances": [],
+        "netLabels": [],
+        "notes": [
+          {
+            "id": "heading",
+            "x": 180,
+            "y": 85,
+            "width": 550,
+            "anchor": "upperLeft",
+            "text": "Filter stage / Level 2\nX1 = RC cell · R1 = 100 kΩ load",
+            "fontSizePx": 16
+          }
+        ],
+        "layers": [
+          {
+            "id": "layer-1",
+            "name": "Layer 1",
+            "visible": true,
+            "locked": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "rc-cell",
+      "name": "rc_cell",
+      "ports": [
+        {
+          "id": "cell-in",
+          "name": "IN",
+          "type": "input",
+          "direction": "left",
+          "order": 0,
+          "slot": 0
+        },
+        {
+          "id": "cell-out",
+          "name": "OUT",
+          "type": "output",
+          "direction": "right",
+          "order": 1,
+          "slot": 0
+        },
+        {
+          "id": "cell-ref",
+          "name": "REF",
+          "type": "ground",
+          "direction": "bottom",
+          "order": 2,
+          "slot": 0
+        }
+      ],
+      "content": {
+        "symbolTemplate": "razavi",
+        "components": [
+          {
+            "id": "cell-in",
+            "type": "sheetPort",
+            "ref": "IN",
+            "x": 210,
+            "y": 210,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "input",
+              "port:side": "left",
+              "port:order": "0",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "cell-out",
+            "type": "sheetPort",
+            "ref": "OUT",
+            "x": 810,
+            "y": 210,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "output",
+              "port:side": "right",
+              "port:order": "1",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "cell-ref",
+            "type": "sheetPort",
+            "ref": "REF",
+            "x": 600,
+            "y": 470,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "port:type": "ground",
+              "port:side": "bottom",
+              "port:order": "2",
+              "port:slot": "0"
+            }
+          },
+          {
+            "id": "cell-r",
+            "type": "resistor",
+            "variantId": "fixed",
+            "ref": "R1",
+            "x": 460,
+            "y": 210,
+            "rotation": 0,
+            "mirrored": false,
+            "values": {
+              "main": "10k"
+            }
+          },
+          {
+            "id": "cell-c",
+            "type": "capacitor",
+            "variantId": "fixed",
+            "ref": "C1",
+            "x": 600,
+            "y": 320,
+            "rotation": 90,
+            "mirrored": false,
+            "values": {
+              "main": "100n"
+            }
+          }
+        ],
+        "wires": [
+          {
+            "id": "cell-input",
+            "points": [
+              {
+                "x": 210,
+                "y": 210
+              },
+              {
+                "x": 420,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "cell-output",
+            "points": [
+              {
+                "x": 500,
+                "y": 210
+              },
+              {
+                "x": 600,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "cell-output-segment-1",
+            "points": [
+              {
+                "x": 600,
+                "y": 210
+              },
+              {
+                "x": 810,
+                "y": 210
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "cell-shunt",
+            "points": [
+              {
+                "x": 600,
+                "y": 210
+              },
+              {
+                "x": 600,
+                "y": 280
+              }
+            ],
+            "routeMode": "orthogonal"
+          },
+          {
+            "id": "cell-return",
+            "points": [
+              {
+                "x": 600,
+                "y": 360
+              },
+              {
+                "x": 600,
+                "y": 470
+              }
+            ],
+            "routeMode": "orthogonal"
+          }
+        ],
+        "connections": {
+          "wires": {
+            "cell-input": [
+              "node-9",
+              "node-12"
+            ],
+            "cell-output": [
+              "node-13",
+              "node-3"
+            ],
+            "cell-output-segment-1": [
+              "node-3",
+              "node-10"
+            ],
+            "cell-shunt": [
+              "node-3",
+              "node-14"
+            ],
+            "cell-return": [
+              "node-15",
+              "node-11"
+            ]
+          },
+          "pins": {
+            "cell-in": {
+              "terminal": "node-9"
+            },
+            "cell-out": {
+              "terminal": "node-10"
+            },
+            "cell-ref": {
+              "terminal": "node-11"
+            },
+            "cell-r": {
+              "p": "node-12",
+              "n": "node-13"
+            },
+            "cell-c": {
+              "p": "node-14",
+              "n": "node-15"
+            }
+          }
+        },
+        "junctionAppearances": [],
+        "netLabels": [],
+        "notes": [
+          {
+            "id": "heading",
+            "x": 200,
+            "y": 85,
+            "width": 550,
+            "anchor": "upperLeft",
+            "text": "RC cell / Level 3\nR1 = 10 kΩ · C1 = 100 nF",
+            "fontSizePx": 16
+          }
+        ],
+        "layers": [
+          {
+            "id": "layer-1",
+            "name": "Layer 1",
+            "visible": true,
+            "locked": false
+          }
+        ]
+      }
+    }
+  ],
+  "testbenches": []
+}

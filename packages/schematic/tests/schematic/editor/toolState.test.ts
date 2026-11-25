@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildCancelToolIntent,
   buildCopyToolNoSourceEntryIntent,
-  buildCopyToolReferenceEntryIntent,
   buildCopyToolSourceEntryIntent,
   buildDeleteToolEntryIntent,
   buildMoveBehaviorToolEntryIntent,
@@ -42,8 +41,6 @@ const baseEscapeKeyInput: SchematicEscapeKeyProjectionInput = {
   dropdownOpen: false,
   optionsOpen: false,
   editable: false,
-  noteEditorTarget: false,
-  noteEditingActive: false
 };
 
 const escapeKeyCases: Array<{
@@ -59,8 +56,6 @@ const escapeKeyCases: Array<{
       dropdownOpen: true,
       optionsOpen: true,
       editable: true,
-      noteEditorTarget: true,
-      noteEditingActive: true
     },
     expected: { kind: "close-context-menu", preventDefault: true, stopPropagation: true, focusCanvas: true }
   },
@@ -70,13 +65,11 @@ const escapeKeyCases: Array<{
     expected: { kind: "close-instance-dropdown", preventDefault: true, stopPropagation: true, focusCanvas: false }
   },
   {
-    label: "projects instance dropdown close before note completion",
+    label: "projects instance dropdown close before an editable query can handle Escape",
     input: {
       queryTarget: true,
       dropdownOpen: true,
       editable: true,
-      noteEditorTarget: true,
-      noteEditingActive: true
     },
     expected: { kind: "close-instance-dropdown", preventDefault: true, stopPropagation: true, focusCanvas: false }
   },
@@ -91,13 +84,8 @@ const escapeKeyCases: Array<{
     expected: { kind: "cancel-tool", preventDefault: true, stopPropagation: true, focusCanvas: false }
   },
   {
-    label: "projects editable note completion",
-    input: { editable: true, noteEditorTarget: true, noteEditingActive: true },
-    expected: { kind: "finish-note-edit", preventDefault: true, stopPropagation: true, focusCanvas: true }
-  },
-  {
-    label: "leaves editable non-Note controls to their local Escape handler",
-    input: { editable: true, noteEditorTarget: false, noteEditingActive: true },
+    label: "leaves editable controls to their local Escape handler",
+    input: { editable: true },
     expected: noEscapeKeyIntent
   },
   {
@@ -114,8 +102,6 @@ const escapeKeyCases: Array<{
       dropdownOpen: true,
       optionsOpen: true,
       editable: true,
-      noteEditorTarget: true,
-      noteEditingActive: true
     },
     expected: noEscapeKeyIntent
   }
@@ -230,9 +216,24 @@ const keyboardShortcutCases: Array<{
     expected: { kind: "rotate", preventDefault: true, stopPropagation: false }
   },
   {
+    label: "projects Ctrl+R to mirror up-down and stop browser refresh",
+    snapshot: { key: "r", ctrlKey: true },
+    expected: { kind: "mirror", axis: "y", preventDefault: true, stopPropagation: true }
+  },
+  {
     label: "projects Shift+r to mirror selection or preview left-right",
     snapshot: { key: "R", shiftKey: true },
     expected: { kind: "mirror", axis: "x", preventDefault: true, stopPropagation: false }
+  },
+  {
+    label: "leaves Ctrl+Shift+R available for the browser",
+    snapshot: { key: "R", ctrlKey: true, shiftKey: true },
+    expected: noKeyboardShortcutIntent
+  },
+  {
+    label: "leaves Meta+R available for the host",
+    snapshot: { key: "r", metaKey: true },
+    expected: noKeyboardShortcutIntent
   },
   {
     label: "projects f to fit the canvas",
@@ -264,8 +265,8 @@ const toolbarCommandIntentCases: Array<{
   { command: "wire", expected: { kind: "toggle-wire-tool", variant: "signal" } },
   { command: "note", expected: { kind: "create-note" } },
   { command: "rotate", expected: { kind: "rotate" } },
-  { command: "mirror-x", expected: { kind: "mirror", axis: "x" } },
-  { command: "mirror-y", expected: { kind: "mirror", axis: "y" } },
+  { command: "mirror-x", expected: { kind: "mirror", axis: "y" } },
+  { command: "mirror-y", expected: { kind: "mirror", axis: "x" } },
   { command: "delete", expected: { kind: "delete-selected-or-begin-tool" } },
   { command: "temp-delete", expected: { kind: "temporary-delete-selected-or-begin-tool" } },
   { command: "presentation", expected: { kind: "toggle-presentation-mode" } },
@@ -313,7 +314,7 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       wireVariant: "signal",
       focusTarget: "canvas",
-      status: "Wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+      status: "Wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
     });
   });
 
@@ -323,7 +324,7 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       wireVariant: "wide",
       focusTarget: "canvas",
-      status: "Wide wire mode: click a pin or grid point to start; empty clicks add bends; pin click or Enter terminates."
+      status: "Wide wire mode: click a pin, wire, or grid point to start. Double-click or press Enter to finish."
     });
   });
 
@@ -364,11 +365,11 @@ describe("schematic tool state", () => {
 
     expect(intent).toEqual({
       moveBehavior: "stretch",
-      nextMode: "select",
+      nextMode: "move",
       closeInstancePanel: true,
       syncToolUi: true,
       focusTarget: "canvas",
-      status: "Stretch move active: moved components pull attached wire endpoints. Shift+M switches to move-only."
+      status: "Stretch move: click an object or drag a box to move with connections. Esc cancels."
     });
   });
 
@@ -377,11 +378,11 @@ describe("schematic tool state", () => {
 
     expect(intent).toEqual({
       moveBehavior: "moveOnly",
-      nextMode: "select",
+      nextMode: "move",
       closeInstancePanel: true,
       syncToolUi: true,
       focusTarget: "canvas",
-      status: "Move-only active: moved components do not pull attached wires. M switches back to stretch move."
+      status: "Move only: click an object or drag a box to move without pulling attached wires. Esc cancels."
     });
   });
 
@@ -391,24 +392,9 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       suppressNextBlankClick: false,
       hasSource: false,
-      awaitingReference: false,
       syncToolUi: true,
       focusTarget: "canvas",
-      status: "Copy mode: click an object to copy, or Esc cancels."
-    });
-  });
-
-  it("builds the copy tool reference-entry intent", () => {
-    expect(buildCopyToolReferenceEntryIntent(2)).toEqual({
-      nextMode: "copy",
-      closeInstancePanel: true,
-      suppressNextBlankClick: false,
-      hasSource: false,
-      awaitingReference: true,
-      sourceCount: 2,
-      syncToolUi: true,
-      focusTarget: "canvas",
-      status: "Copy mode: 2 objects selected. Click a reference point; Esc cancels."
+      status: "Copy mode: click an object or drag a box to copy. Esc cancels."
     });
   });
 
@@ -418,7 +404,6 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       suppressNextBlankClick: false,
       hasSource: true,
-      awaitingReference: false,
       sourceCount: 1,
       updateCopyPreview: true,
       syncToolUi: true,
@@ -433,7 +418,6 @@ describe("schematic tool state", () => {
       closeInstancePanel: true,
       suppressNextBlankClick: false,
       hasSource: true,
-      awaitingReference: false,
       sourceCount: 3,
       updateCopyPreview: true,
       syncToolUi: true,

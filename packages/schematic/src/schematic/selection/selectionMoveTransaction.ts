@@ -2,12 +2,15 @@ import { componentPinPoints, moveJunctionAppearancesWithPath } from "../document
 import { pointKey, samePoint, snapPoint } from "../geometry";
 import { junctionId, junctionPointFromId } from "../junctionIdentity";
 import type { Point, SchematicDocument } from "../types";
-import { clonePoints, normalizeWirePath, samePath } from "../wire/wireGeometry";
+import { clonePoints, samePath } from "../wire/wireGeometry";
 import { moveJunctionAppearances } from "../networkColorModel";
+import { isLibraryShapeType } from "../libraryShapeStyleModel";
+import { snapLibraryShapeCenterToVertices } from "../libraryShapeGeometry";
 import {
   applySelectedJunctionMoveTopology,
   applyWireMoveTopology,
   captureSelectedJunctionMoveTopology,
+  captureTranslatedWireAnchors,
   captureWireMoveTopology,
   type FrozenSelectedJunctionMoveTopology,
   type FrozenWireMoveTopology
@@ -35,6 +38,7 @@ export interface SelectionMoveTransaction {
   startNetLabelAttachments: Map<string, { wireId: string; point: Point }>;
   selectedJunctionMoveTopology: FrozenSelectedJunctionMoveTopology;
   wireMoveTopology: FrozenWireMoveTopology;
+  translatedWireAnchors: ReturnType<typeof captureTranslatedWireAnchors>;
 }
 
 export interface SelectionMoveTransactionResult {
@@ -56,6 +60,7 @@ type BeginSelectionMoveTransactionInput = BeginSelectionMoveTransactionInputBase
   | { activeComponentId: string; activeNoteId?: never; activeWireId?: never; pointer?: never }
   | { activeComponentId?: never; activeNoteId: string; activeWireId?: never; pointer?: never }
   | { activeComponentId?: never; activeNoteId?: never; activeWireId: string; pointer: Point }
+  | { activeComponentId?: never; activeNoteId?: never; activeWireId?: never; pointer: Point }
 );
 
 interface ApplySelectionMoveTransactionInput {
@@ -84,7 +89,8 @@ export function beginSelectionMoveTransaction(input: BeginSelectionMoveTransacti
   const activeIsInSelection = activeComponentId
     ? selectedComponentIds.includes(activeComponentId)
     : activeNoteId ? selectedNoteIds.includes(activeNoteId)
-    : Boolean(activeWireId && input.selectedIds.has(activeWireId));
+    : activeWireId ? input.selectedIds.has(activeWireId)
+    : true;
   const componentIds = activeIsInSelection
     ? selectedComponentIds
     : activeComponentId
@@ -148,8 +154,12 @@ export function beginSelectionMoveTransaction(input: BeginSelectionMoveTransacti
   });
 
   const movingWireIds = new Set(wireIds);
-  const wireMoveTopology = captureWireMoveTopology(input.document, new Set(componentIds), movingWireIds);
+  const movingComponentIds = new Set(componentIds);
+  const wireMoveTopology = captureWireMoveTopology(input.document, movingComponentIds, movingWireIds);
   const selectedJunctionMoveTopology = captureSelectedJunctionMoveTopology(input.document, startJunctionPoints, movingWireIds);
+  const translatedWireAnchors = input.pointer && !activeWireId
+    ? captureTranslatedWireAnchors(input.document, movingWireIds, movingComponentIds, startJunctionPoints, selectedJunctionMoveTopology)
+    : [];
 
   return {
     activeComponentId,
@@ -170,7 +180,8 @@ export function beginSelectionMoveTransaction(input: BeginSelectionMoveTransacti
     startNotePositions,
     startNetLabelAttachments,
     selectedJunctionMoveTopology,
-    wireMoveTopology
+    wireMoveTopology,
+    translatedWireAnchors
   };
 }
 
@@ -215,7 +226,10 @@ export function applySelectionMoveTransaction(input: ApplySelectionMoveTransacti
     if (!instance || !start) return;
 
     if (componentId !== input.transaction.activeComponentId) {
-      const next = snapPoint({ x: start.x + delta.x, y: start.y + delta.y });
+      const center = { x: start.x + delta.x, y: start.y + delta.y };
+      const next = isLibraryShapeType(instance.type)
+        ? snapLibraryShapeCenterToVertices(instance, center)
+        : snapPoint(center);
       if (!samePoint({ x: instance.x, y: instance.y }, next)) {
         instance.x = next.x;
         instance.y = next.y;
@@ -266,7 +280,8 @@ export function applySelectionMoveTransaction(input: ApplySelectionMoveTransacti
     moveJunctionAppearancesWithPath(input.document, wire.points, nextPath, {
       excludeAppearanceKeys: movedJunctionAppearanceKeys
     });
-    wire.points = normalizeWirePath(nextPath);
+    // Translation carries every physical connection vertex with its wire.
+    wire.points = nextPath;
     result.updatedWireIds.add(wireId);
     result.changed = true;
   });

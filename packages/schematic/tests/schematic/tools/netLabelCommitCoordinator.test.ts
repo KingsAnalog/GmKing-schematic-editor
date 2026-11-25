@@ -31,8 +31,7 @@ describe("SchematicNetLabelCommitCoordinator", () => {
 
     expect(coordinator.commitPlacement({ x: 40, y: 0 })).toEqual({
       kind: "status",
-      status: "Enter a valid label name in the Property Editor and press Enter first.",
-      focusInput: true
+      status: "Open Net Label and enter a valid net name first."
     });
     expect(createIdCalls()).toBe(0);
     expect(document.netLabels).toEqual([]);
@@ -44,8 +43,7 @@ describe("SchematicNetLabelCommitCoordinator", () => {
 
     expect(coordinator.commitPlacement({ x: 40, y: 0 })).toEqual({
       kind: "status",
-      status: "Net labels can only be placed on an active wire or junction.",
-      focusInput: false
+      status: "Net labels can only be placed on an active wire or junction."
     });
     expect(createIdCalls()).toBe(0);
     expect(document.netLabels).toEqual([]);

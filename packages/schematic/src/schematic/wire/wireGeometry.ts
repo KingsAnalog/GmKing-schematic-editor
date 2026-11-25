@@ -1,5 +1,6 @@
 import { isHorizontal, orthogonalRoute, pointOnSegment, samePoint, snapPoint } from "../geometry";
 import type { Point, Wire, WireRouteMode } from "../types";
+import type { WireAngle } from "./wireAngle";
 
 export function samePath(a: Point[], b: Point[]) {
   return a.length === b.length && a.every((point, index) => samePoint(point, b[index]));
@@ -144,11 +145,21 @@ export function extendOrthogonalPath(points: Point[], point: Point) {
   return result;
 }
 
-export function extendWirePath(points: Point[], point: Point, routeMode: WireRouteMode) {
+export function extendWirePath(points: Point[], point: Point, routeMode: WireAngle) {
   if (routeMode === "orthogonal") return extendOrthogonalPath(points, point);
   const result = points.map((candidate) => snapPoint(candidate));
   const snapped = snapPoint(point);
-  if (!samePoint(snapped, result[result.length - 1])) result.push(snapped);
+  const start = result.at(-1);
+  if (start && samePoint(snapped, start)) return result;
+  if (start && routeMode === "diagonal45") {
+    const dx = snapped.x - start.x;
+    const dy = snapped.y - start.y;
+    const diagonal = Math.min(Math.abs(dx), Math.abs(dy));
+    if (diagonal > 0 && Math.abs(dx) !== Math.abs(dy)) {
+      result.push({ x: snapped.x - Math.sign(dx) * diagonal, y: snapped.y - Math.sign(dy) * diagonal });
+    }
+  }
+  result.push(snapped);
   return result;
 }
 

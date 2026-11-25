@@ -67,7 +67,7 @@ function block(text = "") {
       x: 0,
       y: 0,
       text,
-      format: "plain",
+      anchor: "upperLeft",
       fontSizePx: 16,
       width: 120,
       height: 40

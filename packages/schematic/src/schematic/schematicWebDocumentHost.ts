@@ -8,7 +8,6 @@ import { uniqueSchematicTabTitle } from "./schematicTabTitle";
 import type {
   ImportedSchematicDocumentFile,
   SchematicClipboardPort,
-  SchematicDocumentFileLike,
   SchematicDocumentFilePort,
   SchematicDocumentHostBridge,
   SchematicDocumentHostPort,
@@ -16,9 +15,10 @@ import type {
   SchematicHostedDocumentSession,
   SchematicWorkspacePort
 } from "./schematicEditorHostPorts";
-import type { SchematicDocumentTabsOptions } from "./schematicDocumentTabs";
+import type { SchematicDocumentExportFormat, SchematicDocumentTabsOptions } from "./schematicDocumentTabs";
 import type { SchematicDocument } from "./types";
 import { defaultSchematicView } from "./viewAdapter";
+import { singleSheetProject } from "./schematicProject";
 
 const CLOSED_TAB_UNDO_WINDOW_MS = 10_000;
 
@@ -61,9 +61,12 @@ implements SchematicDocumentHostPort<EditorState> {
       onCreate: () => this.runAction(() => this.create()),
       onReorder: (id, insertionIndex) => this.runAction(() => this.reorder(id, insertionIndex)),
       onRename: (id, title) => this.runAction(() => this.rename(id, title)),
-      onImport: (file) => { void this.importFile(file); },
-      onPasteFromClipboard: () => { void this.pasteFromClipboard(); },
-      onExport: () => this.exportActive(),
+      onImport: (file) => this.importDocument(() => this.options.documentFiles.read(file), "Import failed"),
+      onImportFromClipboard: () => this.importDocument(async () => this.options.clipboard.readImport?.() ?? ({
+        title: "Imported schematic",
+        document: await this.options.clipboard.readDocument()
+      }), "Clipboard import failed"),
+      onExport: (format, includeHidden) => this.exportActive(format, includeHidden),
       onRetrySave: () => this.runAction(() => this.retrySave())
     });
   }
@@ -188,7 +191,7 @@ implements SchematicDocumentHostPort<EditorState> {
     }
     const closedDocumentIsEmpty = isEmptySchematicDocument(
       closed.state?.document ?? createEmptySchematicDocument()
-    );
+    ) && !closed.state?.project;
 
     const previousSessions = this.sessions;
     const previousActiveId = this.activeDocumentId;
@@ -387,14 +390,28 @@ implements SchematicDocumentHostPort<EditorState> {
     this.renderTabs();
   }
 
-  private exportActive() {
+  private async exportActive(format: SchematicDocumentExportFormat, includeHidden: boolean) {
     const session = this.activeSession();
     if (!session) return;
-    this.options.bridge.finishActiveEdits();
-    this.persistActive();
     try {
-      this.options.documentFiles.download(this.options.bridge.currentDocument(), session.title);
+      this.options.bridge.finishActiveEdits();
+      const document = this.options.bridge.currentDocument();
+      if (format === "project" || (format === "json" && document.components.some(component => component.type === "sheetBlock"))) {
+        void this.persistActive();
+        this.options.documentFiles.downloadProject?.(
+          session.state?.project ?? singleSheetProject(session.id, session.title, document), session.title
+        );
+      } else if (format === "json") {
+        void this.persistActive();
+        this.options.documentFiles.download(document, session.title);
+      } else {
+        await this.options.documentFiles.downloadImage(document, session.title, format, {
+          includeHidden,
+          presentationMode: this.options.bridge.currentPresentationMode()
+        });
+      }
     } catch (error) {
+      if (this.destroyed || this.activeDocumentId !== session.id) return;
       this.options.bridge.setStatus(
         error instanceof Error ? `Export failed: ${error.message}` : "Export failed."
       );
@@ -424,23 +441,32 @@ implements SchematicDocumentHostPort<EditorState> {
     this.options.bridge.applyClipboardDocument(imported);
   }
 
-  private async importFile(file: SchematicDocumentFileLike) {
+  private async importDocument(read: () => Promise<ImportedSchematicDocumentFile>, errorPrefix: string) {
     const requestId = ++this.importRequestId;
+    const isCurrent = () => !this.destroyed && !this.options.bridge.isDestroyed() && requestId === this.importRequestId;
     let imported: ImportedSchematicDocumentFile;
     try {
-      imported = await this.options.documentFiles.read(file);
+      imported = await read();
     } catch (error) {
-      if (this.destroyed || requestId !== this.importRequestId || this.options.bridge.isDestroyed()) return;
-      this.options.bridge.setStatus(error instanceof Error ? `Import failed: ${error.message}` : "Import failed.");
+      if (isCurrent()) {
+        this.options.bridge.setStatus(
+          error instanceof Error ? `${errorPrefix}: ${error.message}` : `${errorPrefix}.`,
+          { level: "error", source: "import" }
+        );
+      }
       return;
     }
-    if (this.destroyed || requestId !== this.importRequestId || this.options.bridge.isDestroyed()) return;
+    if (!isCurrent()) return;
 
-    this.options.bridge.finishActiveEdits();
-    if (!await this.persistActive(
-      "The active schematic could not be saved, so the imported schematic was not opened."
-    )) return;
+    await this.runAction(async () => {
+      if (!isCurrent()) return;
+      this.options.bridge.finishActiveEdits();
+      const saved = await this.persistActive("The active schematic could not be saved, so the imported schematic was not opened.");
+      if (saved && isCurrent()) await this.openImportedDocument(imported);
+    });
+  }
 
+  private async openImportedDocument(imported: ImportedSchematicDocumentFile) {
     const title = uniqueSchematicTabTitle(
       imported.title,
       this.sessions.map((session) => session.title)
@@ -459,7 +485,16 @@ implements SchematicDocumentHostPort<EditorState> {
       storageStatus: "new",
       editorState: this.options.bridge.createEditorState(imported.document)
     };
-    if (!await this.persistSession(session, "The imported schematic could not be written to storage.")) return;
+    if (imported.project) state.project = imported.project;
+    if (!await this.persistSession(session, "The imported schematic could not be written to storage.")) {
+      this.options.bridge.destroySession(session);
+      return;
+    }
+    if (this.destroyed) {
+      this.options.bridge.destroySession(session);
+      void this.removeSnapshotBestEffort(session.id);
+      return;
+    }
 
     const nextSessions = [...this.sessions, session];
     if (!await this.persistManifestSnapshot(
@@ -467,13 +502,18 @@ implements SchematicDocumentHostPort<EditorState> {
       session.id,
       "The imported schematic could not be added to the tab list."
     )) {
+      this.options.bridge.destroySession(session);
       void this.removeSnapshotBestEffort(session.id);
+      return;
+    }
+    if (this.destroyed) {
+      this.options.bridge.destroySession(session);
       return;
     }
     this.sessions = nextSessions;
     this.renderTabs();
     await this.activate(session.id, { skipCurrentSave: true, persistManifest: false });
-    this.options.bridge.fit();
+    if (!this.destroyed) this.options.bridge.fit();
   }
 
   private async activate(

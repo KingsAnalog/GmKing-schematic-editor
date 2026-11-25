@@ -267,4 +267,21 @@ describe("SchematicJunctionRenderCoordinator", () => {
     expect(cachedGraph.getCell("junction-20-20")).toBe(cachedCell);
     expect(cachedCell.removeCalls).toBe(0);
   });
+
+  it("removes and restores independently hidden junction views", () => {
+    const fixture = createFixture(tJunctionDocument());
+    fixture.coordinator.refreshFull();
+    const visibleCell = fixture.graph.getCell("junction-40-0");
+    expect(visibleCell).not.toBeNull();
+
+    fixture.document.layerObjectStates = { "junction-40-0": { visible: false } };
+    fixture.coordinator.refreshViews();
+    expect(visibleCell?.removeCalls).toBe(1);
+    expect(fixture.graph.getCell("junction-40-0")).toBeNull();
+
+    fixture.document.layerObjectStates = {};
+    fixture.coordinator.refreshViews();
+    expect(fixture.graph.getCell("junction-40-0")).not.toBeNull();
+    expect(fixture.document.junctions).toEqual([{ x: 40, y: 0 }]);
+  });
 });

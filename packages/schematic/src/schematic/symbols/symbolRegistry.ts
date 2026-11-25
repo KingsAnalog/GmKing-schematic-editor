@@ -92,6 +92,10 @@ import {
   dacPentagonSymbol,
   dacSymbol
 } from "./converterSymbols";
+import { DEFAULT_POLYGON_POINTS } from "../polygonComponentModel";
+import { closedPolygonPath, ellipseSymbol } from "./closedShapeSymbols";
+import { quadraticArcSymbol } from "./arcSymbols";
+import { polylineFrameSymbol } from "./polylineSymbols";
 import { rectangleFrameSymbol } from "./rectangleSymbols";
 import { triangleFrameSymbol } from "./triangleSymbols";
 import { parseLogicGateSymbol } from "../logicGateModel";
@@ -295,9 +299,13 @@ const SYMBOL_DEFINITIONS: Record<string, SymbolDefinition> = {
   amp: ANALOG_BUFFER_SYMBOL_DEFINITION,
   singleInputGm: SINGLE_INPUT_AMPLIFIER_SYMBOL_DEFINITION,
   rectangle: {
-    body: rectangleFrameSymbol,
+    body: (width, height) => rectangleFrameSymbol(width, height, 0),
     strokeWidth: (lineWidth) => 2 * lineWidth
   },
+  polyline: { body: polylineFrameSymbol },
+  arc: { body: quadraticArcSymbol },
+  circle: { body: ellipseSymbol },
+  polygon: { body: (width, height) => closedPolygonPath(width, height, DEFAULT_POLYGON_POINTS) },
   triangle: {
     body: (width, height) => triangleFrameSymbol(width, height),
     strokeWidth: (lineWidth) => 2 * lineWidth

@@ -2,15 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyNoteBackgroundColor,
   applyNoteFontSize,
-  applyNoteFormat,
-  applyNoteWidth,
   createNoteFontSizeSnapshot,
-  createNoteWidthSnapshot,
   normalizeNoteBackgroundColor,
   normalizeNoteFontSizeInput,
-  normalizeNoteWidthInput,
   noteFontSizeSnapshotChanged,
-  noteWidthSnapshotChanged
 } from "../../../src/schematic/notes/noteProperties";
 import type { SchematicNote } from "../../../src/schematic/types";
 
@@ -21,7 +16,7 @@ function note(overrides: Partial<SchematicNote> = {}): SchematicNote {
     y: 0,
     width: 80,
     height: 40,
-    format: "plain",
+    anchor: "upperLeft",
     text: "hello",
     ...overrides
   };
@@ -63,12 +58,6 @@ describe("schematic note property normalization", () => {
     expect(normalizeNoteFontSizeInput("Infinity")).toBeNull();
   });
 
-  it("snaps and clamps Markdown note width to the 20 px grid", () => {
-    expect(normalizeNoteWidthInput("151")).toBe(160);
-    expect(normalizeNoteWidthInput("333")).toBe(340);
-    expect(normalizeNoteWidthInput("999")).toBe(800);
-    expect(normalizeNoteWidthInput("bad")).toBeNull();
-  });
 });
 
 describe("schematic note property mutations", () => {
@@ -166,20 +155,4 @@ describe("schematic note property mutations", () => {
     expect(noteFontSizeSnapshotChanged(snapshot, target)).toBe(true);
   });
 
-  it("keeps Markdown source intact across reversible format switches", () => {
-    const target = note({ format: "plain", text: "# Gain\n\n$A_v$", width: 80 });
-    expect(applyNoteFormat(target, "markdown")).toBe(true);
-    expect(target).toMatchObject({ format: "markdown", text: "# Gain\n\n$A_v$", width: 320 });
-    expect(applyNoteFormat(target, "plain")).toBe(true);
-    expect(target).toMatchObject({ format: "plain", text: "# Gain\n\n$A_v$", width: 320 });
-  });
-
-  it("applies width and detects a single width transaction snapshot", () => {
-    const target = note({ format: "markdown", width: 320 });
-    const snapshot = createNoteWidthSnapshot(target);
-    expect(noteWidthSnapshotChanged(snapshot, target)).toBe(false);
-    expect(applyNoteWidth(target, 371)).toEqual({ status: "changed", nextSize: 380 });
-    expect(target.width).toBe(380);
-    expect(noteWidthSnapshotChanged(snapshot, target)).toBe(true);
-  });
 });

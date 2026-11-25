@@ -30,7 +30,8 @@ export class SchematicWireCommitCoordinator {
   constructor(
     private readonly document: SchematicDocument,
     private readonly wireTool: SchematicWireToolController,
-    private readonly createId: () => string
+    private readonly createId: () => string,
+    private readonly activeLayerId?: () => string
   ) {}
 
   applyBlankClick(point: Point): SchematicWireCommitOutcome {
@@ -41,8 +42,8 @@ export class SchematicWireCommitCoordinator {
     return this.applyRouteResult(this.wireTool.applyPinClick(point));
   }
 
-  finishFromKeyboard(point: Point | null): SchematicWireCommitOutcome {
-    return this.applyRouteResult(this.wireTool.finishFromKeyboard(point));
+  finish(point: Point | null): SchematicWireCommitOutcome {
+    return this.applyRouteResult(this.wireTool.finish(point));
   }
 
   private applyRouteResult(result: SchematicWireRouteResult): SchematicWireCommitOutcome {
@@ -59,7 +60,8 @@ export class SchematicWireCommitCoordinator {
       result.points,
       this.wireTool.appearance(),
       this.createId,
-      result.routeMode
+      result.routeMode,
+      this.activeLayerId?.()
     );
     if (!commit.changed) return { kind: "none" };
     this.wireTool.reset();

@@ -1,5 +1,6 @@
 import type { SchematicGraphAdapter, SchematicGraphCell } from "./graphAdapter";
 import { junctionId } from "./junctionIdentity";
+import { resolveLayerObjects } from "./layerObjectStateModel";
 import { wireDecorationLabels, wireLineAttrs, wireSelectionHaloAttrs } from "./renderer";
 import type { ComponentInstance, Point, SchematicDocument, Wire } from "./types";
 import { wireEndpointConnections } from "./wire/wireEndpointConnection";
@@ -23,6 +24,7 @@ export interface SchematicIncrementalRenderCoordinatorOptions<
   makeWireCell: (wire: Wire) => Cell;
   makeJunctionCell: (point: Point) => Cell;
   isWireSelected: (wireId: string) => boolean;
+  isBusWire?: (wireId: string) => boolean;
 }
 
 export class SchematicIncrementalRenderCoordinator<
@@ -51,8 +53,19 @@ export class SchematicIncrementalRenderCoordinator<
     const z = previousCell?.get("z");
     if (previousCell) this.options.graphAdapter.removeCell(id);
     if (z !== undefined && z !== null) nextCell.set("z", z);
-    this.options.graphAdapter.addCell(nextCell);
+    const projection = resolveLayerObjects(this.options.document);
+    if (projection.displayed(id)) {
+      this.addLayerCell(id, nextCell, projection);
+    }
     return nextCell;
+  }
+
+  private addLayerCell(id: string, cell: Cell, projection: ReturnType<typeof resolveLayerObjects>) {
+    if (projection.layerOf(id).locked) {
+      cell.set("layerLocked", true);
+      cell.attr({ root: { pointerEvents: "none" } });
+    }
+    this.options.graphAdapter.addCell(cell);
   }
 
   replaceComponent(component: ComponentInstance) {
@@ -76,6 +89,7 @@ export class SchematicIncrementalRenderCoordinator<
   updateWireCellsFromDocument(wireIds: ReadonlySet<string>) {
     if (wireIds.size === 0) return;
 
+    const projection = resolveLayerObjects(this.options.document);
     const wiresById = wireIds.size > 1
       ? new Map(this.options.document.wires.map((wire) => [wire.id, wire]))
       : null;
@@ -85,6 +99,10 @@ export class SchematicIncrementalRenderCoordinator<
           ?? this.options.document.wires.find((candidate) => candidate.id === wireId);
         const cell = this.options.graphAdapter.getCell(wireId);
         if (!wire) {
+          if (cell) this.options.graphAdapter.removeCell(wireId);
+          return;
+        }
+        if (!projection.displayed(wire.id)) {
           if (cell) this.options.graphAdapter.removeCell(wireId);
           return;
         }
@@ -108,18 +126,19 @@ export class SchematicIncrementalRenderCoordinator<
         }
 
         if (!cell) {
-          this.options.graphAdapter.addCell(this.options.makeWireCell(wire));
+          this.addLayerCell(wire.id, this.options.makeWireCell(wire), projection);
           return;
         }
 
         cell.source({ ...points[0] });
         cell.target({ ...points[points.length - 1] });
         cell.vertices(points.slice(1, -1));
-        const line = wireLineAttrs(wire);
+        const bus = this.options.isBusWire?.(wireId);
+        const line = wireLineAttrs(wire, { bus });
         cell.attr({
           line,
           selectionHalo: wireSelectionHaloAttrs(wire, {
-            selected: this.options.isWireSelected(wire.id)
+            selected: this.options.isWireSelected(wire.id), bus
           }),
           wrapper: { pointerEvents: "stroke" }
         });

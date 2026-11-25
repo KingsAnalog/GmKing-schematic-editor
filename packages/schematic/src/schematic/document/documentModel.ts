@@ -1,8 +1,10 @@
 import { getComponentDef, isValidComponentVariant, resolveComponentDef } from "../catalog";
 import { DEFAULT_SYMBOL_TEMPLATE, resolveSymbolTemplate } from "../symbolTemplateModel";
+import { isProcessId } from "../netlist/profiles";
 import { applyNormalizedDocumentWires } from "./documentWires";
 import { cloneConnections, emptyConnections, connectGeometry } from "../connectionGraph";
-import { normalizeMarkdownNoteWidth } from "../notes/noteSizing";
+import { defaultLayers } from "../layers";
+import { normalizeLayerObjectStates } from "../layerObjectStateModel";
 import { snapPoint } from "../geometry";
 import {
   deriveSchematicTopology,
@@ -39,7 +41,8 @@ export function createEmptySchematicDocument(): SchematicDocument {
     connections: emptyConnections(),
     junctionAppearances: [],
     netLabels: [],
-    notes: []
+    notes: [],
+    layers: defaultLayers()
   };
 }
 
@@ -78,15 +81,20 @@ export function cloneSchematicDocument(document: SchematicDocument): SchematicDo
 export function contentFromDocument(document: SchematicDocument): SchematicContent {
   const snapshot = cloneSchematicDocument(document);
   const couplings = snapshot.inductorCouplings ?? [];
+  const layerObjectStates = normalizeLayerObjectStates(snapshot.layerObjectStates);
   return {
     symbolTemplate: resolveSymbolTemplate(snapshot.symbolTemplate).id,
+    ...(snapshot.display ? { display: snapshot.display } : {}),
+    ...(snapshot.netlistProcess && isProcessId(snapshot.netlistProcess) ? { netlistProcess: snapshot.netlistProcess } : {}),
     components: snapshot.components,
     wires: snapshot.wires,
     connections: snapshot.connections,
     ...(couplings.length > 0 ? { inductorCouplings: couplings } : {}),
     junctionAppearances: snapshot.junctionAppearances,
     netLabels: snapshot.netLabels,
-    notes: snapshot.notes
+    notes: snapshot.notes,
+    layers: snapshot.layers ?? defaultLayers(),
+    ...(layerObjectStates ? { layerObjectStates } : {})
   };
 }
 
@@ -119,6 +127,7 @@ export function restoreSchematicDocument(document: SchematicDocument): Schematic
   restored.junctionAppearances = normalizeJunctionAppearances(restored.junctionAppearances);
   restored.netLabels = restored.netLabels.map(normalizeNetLabel);
   restored.notes = restored.notes.map(normalizeSchematicNote);
+  restored.layerObjectStates = normalizeLayerObjectStates(restored.layerObjectStates);
   normalizeComponentValues(restored);
   normalizeComponentVariants(restored);
   normalizeComponentAppearances(restored);
@@ -130,6 +139,8 @@ export function restoreSchematicDocument(document: SchematicDocument): Schematic
 
 export function assignRestoredSchematicDocument(target: SchematicDocument, source: SchematicDocument) {
   target.symbolTemplate = resolveSymbolTemplate(source.symbolTemplate).id;
+  target.display = source.display && { ...source.display };
+  target.netlistProcess = source.netlistProcess;
   target.components = source.components;
   target.wires = source.wires;
   target.connections = cloneConnections(source.connections);
@@ -138,6 +149,8 @@ export function assignRestoredSchematicDocument(target: SchematicDocument, sourc
   target.junctionAppearances = normalizeJunctionAppearances(source.junctionAppearances);
   target.netLabels = source.netLabels.map(normalizeNetLabel);
   target.notes = source.notes.map(normalizeSchematicNote);
+  target.layers = (source.layers ?? defaultLayers()).map(layer => ({ ...layer }));
+  target.layerObjectStates = normalizeLayerObjectStates(source.layerObjectStates);
   normalizeComponentValues(target);
   normalizeComponentVariants(target);
   normalizeComponentAppearances(target);
@@ -149,6 +162,8 @@ export function assignRestoredSchematicDocument(target: SchematicDocument, sourc
 function normalizeNetLabel(label: NetLabel): NetLabel {
   return {
     id: String(label.id),
+    ...(label.layerId === undefined ? {} : { layerId: label.layerId }),
+    ...(label.fontFamily === undefined ? {} : { fontFamily: label.fontFamily }),
     name: String(label.name),
     attachment: {
       wireId: String(label.attachment.wireId),
@@ -190,6 +205,20 @@ function normalizeComponentValues(document: SchematicDocument) {
     if (component.type === "rectangle") {
       Object.assign(component.values, rectangleSettingsValues(rectangleSettings(component)));
     }
+    if (component.type === "rectangle" || component.type === "triangle") {
+      // Pure outlines never retain legacy electrical-pin or invisible-label state.
+      Object.keys(component.values).forEach(key => {
+        if (key === "labelVisible"
+          || key === "valueVisible"
+          || key.startsWith("rectanglePinCount:")
+          || key.startsWith("trianglePinCount:")
+          || key.startsWith("pinVisible:")
+          || key.startsWith("pinSymbolVisible:")
+          || key.startsWith("pinMode:")) {
+          delete component.values[key];
+        }
+      });
+    }
     if (
       !isTransistorComponentType(component.type)
       || component.values[TRANSISTOR_CIRCLE_VALUE_KEY] !== "true"
@@ -212,7 +241,17 @@ function normalizeComponentAppearances(document: SchematicDocument) {
 
 function normalizeSchematicNote(note: SchematicNote): SchematicNote {
   return {
-    ...note,
-    width: note.format === "markdown" ? normalizeMarkdownNoteWidth(note.width) : note.width
+    id: note.id, x: note.x, y: note.y, width: note.width,
+    ...(note.height !== undefined ? { height: note.height } : {}),
+    ...(note.rotation !== undefined ? { rotation: note.rotation } : {}),
+    ...(note.anchor !== undefined ? { anchor: note.anchor } : {}),
+    text: note.text,
+    ...(note.layerId !== undefined ? { layerId: note.layerId } : {}),
+    ...(note.fontFamily !== undefined ? { fontFamily: note.fontFamily } : {}),
+    ...(note.fontSizePx !== undefined ? { fontSizePx: note.fontSizePx } : {}),
+    ...(note.textColor !== undefined ? { textColor: note.textColor } : {}),
+    ...(note.backgroundColor !== undefined ? { backgroundColor: note.backgroundColor } : {}),
+    ...(note.backgroundEnabled !== undefined ? { backgroundEnabled: note.backgroundEnabled } : {}),
+    ...(note.backgroundOpacity !== undefined ? { backgroundOpacity: note.backgroundOpacity } : {})
   };
 }

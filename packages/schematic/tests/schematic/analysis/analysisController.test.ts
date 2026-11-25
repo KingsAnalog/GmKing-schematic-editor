@@ -176,7 +176,7 @@ function createRoot() {
 
   const compute = document.createElement("button");
   compute.dataset.analysis = "compute";
-  compute.textContent = "Compute H(s), Zin(s), Zout(s)";
+  compute.textContent = "Compute H(s), ZIN(s), Zout(s)";
   root.appendChild(compute);
 
   const progress = document.createElement("div");
@@ -522,7 +522,7 @@ describe("SchematicAnalysisController", () => {
     await pending;
 
     expect(compute.disabled).toBe(false);
-    expect(compute.textContent).toBe("Compute H(s), Zin(s), Zout(s)");
+    expect(compute.textContent).toBe("Compute H(s), ZIN(s), Zout(s)");
     expect(progress.hidden).toBe(true);
     expect(progress.getAttribute("aria-busy")).toBe("false");
     expect(transfer.textContent).toBe("\\[H(s)=A\\]");

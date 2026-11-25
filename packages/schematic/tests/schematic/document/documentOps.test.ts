@@ -2,6 +2,9 @@ import { authorFixture, connectFixtureJunction, fixtureDocument } from "../suppo
 import { executeSchematicPropertyBatchCommand } from "../../../src/schematic/propertyBatchCommands";
 import { describe, expect, it } from "vitest";
 import { createEmptySchematicDocument } from "../../../src/schematic/document/documentModel";
+import { applyNormalizedDocumentWires, reconcileDocumentConnectionEdit } from "../../../src/schematic/document/documentWires";
+import { buildConnectivity } from "../../../src/schematic/connectivity";
+import { applyTranslatedWireAnchors } from "../../../src/schematic/wire/wireMoveTopology";
 import { createSchematicDocumentHistoryAdapter, SCHEMATIC_DOCUMENT_HISTORY_MAX_DEPTH } from "../support/documentHistory";
 import {
   applyCopyPlacementDocumentOp,
@@ -10,15 +13,13 @@ import {
   applySelectionMoveDocumentOp,
   applyWireCommitDocumentOp,
   commitSelectionMoveDocumentOp,
-  commitNoteEditDocumentOp,
   commitNoteFontSizeDocumentOp,
-  commitNoteWidthDocumentOp,
-  createPlainSchematicNoteDocumentOp,
+  createSchematicNoteDocumentOp,
   deleteSchematicDocumentSelection,
   moveSchematicNoteDocumentOp,
+  projectPointerSelectionMove,
   resetSchematicDocument,
   restoreSchematicDocumentOp,
-  setNoteFormatDocumentOp,
   transformSelectionDocumentGeometryOp,
   transformSingleComponentOrientationDocumentOp,
   toggleTemporaryDeletedSchematicIds
@@ -32,6 +33,52 @@ import type { SchematicDocument } from "../../../src/schematic/types";
 import { fixtureComponent, fixtureNote, fixtureWire, mixedSelectionDoc, twoResistorsStraightWireDoc } from "../support/fixtures";
 
 describe("schematic document ops", () => {
+  it.each(["stretch", "moveOnly"] as const)("moves a wire from two stationary pins in %s mode", behavior => {
+    const document = twoResistorsStraightWireDoc();
+    // A conductor crossing the new endpoint extension is a different net.
+    document.wires.push(fixtureWire("crossing", [{ x: 210, y: 240 }, { x: 240, y: 240 }]));
+    authorFixture(document);
+    const before = buildConnectivity(document);
+    const connectedPins = before.pins.filter(pin => before.rootOf(pin.nodeKey) === before.rootOfWire("w-r1-r2"));
+    expect(connectedPins).toHaveLength(2);
+    const movement = beginSelectionMoveTransaction({
+      document, selectedIds: new Set(["w-r1-r2"]), pointer: { x: 270, y: 200 }
+    })!;
+    const { draft, wireAnchors } = projectPointerSelectionMove(document, movement, { x: 270, y: 280 }, behavior);
+    reconcileDocumentConnectionEdit(draft, document);
+    applyTranslatedWireAnchors(draft, wireAnchors);
+    const after = buildConnectivity(draft);
+    const moved = after.rootOfWire("w-r1-r2");
+    expect(draft.wires.find(wire => wire.id === "w-r1-r2")?.points).toEqual([{ x: 240, y: 280 }, { x: 320, y: 280 }]);
+    expect(after.rootOfWire("crossing")).not.toBe(moved);
+    for (const pin of connectedPins) {
+      const connected = after.rootOf(pin.nodeKey) === moved;
+      expect(connected).toBe(behavior === "stretch");
+    }
+    applyNormalizedDocumentWires(draft);
+    const normalized = buildConnectivity(draft);
+    expect(new Set(connectedPins.map(pin => normalized.rootOf(pin.nodeKey))).size).toBe(behavior === "stretch" ? 1 : 2);
+  });
+
+  it("keeps the moved wire joined to an unselected branch at its original junction", () => {
+    const document = fixtureDocument({
+      components: [fixtureComponent("resistor", "R1", 200, 200)],
+      wires: [
+        fixtureWire("moving", [{ x: 240, y: 200 }, { x: 320, y: 200 }]),
+        fixtureWire("branch", [{ x: 320, y: 200 }, { x: 320, y: 270 }])
+      ]
+    });
+    const selection = beginSelectionMoveTransaction({
+      document, selectedIds: new Set(["moving"]), pointer: { x: 280, y: 200 }
+    })!;
+    const result = projectPointerSelectionMove(document, selection, { x: 290, y: 150 }, "stretch");
+    reconcileDocumentConnectionEdit(result.draft, document);
+    applyTranslatedWireAnchors(result.draft, result.wireAnchors);
+    const connectivity = buildConnectivity(result.draft);
+    expect(connectivity.rootOfWire("branch")).toBe(connectivity.rootOfWire("moving"));
+    expect(result.draft.wires.find(wire => wire.id === "branch")).toEqual(document.wires[1]);
+  });
+
   it("resets to the ordinary empty shape and remains history-friendly", () => {
     const document: SchematicDocument = fixtureDocument({
       junctionAppearances: [],
@@ -195,34 +242,23 @@ describe("schematic document ops", () => {
       notes: [fixtureNote("note-existing", 20, 20)]
     });
 
-    const result = createPlainSchematicNoteDocumentOp(document, "note-created", { x: 120, y: 80 });
+    const result = createSchematicNoteDocumentOp(document, "note-created", { x: 120, y: 80 }, { text: "Gain", fontSizePx: 18, anchor: "lowerLeft" });
 
     expect(result).toEqual({
       changed: true,
       historyIntent: "push",
       selectedIds: [],
       noteIds: ["note-created"],
-      status: "Note created. Type to edit; Esc or focus outside finishes editing."
+      status: "Note created."
     });
     expect(document.notes?.map((note) => note.id)).toEqual(["note-existing", "note-created"]);
     expect(document.notes?.[1]).toMatchObject({
       id: "note-created",
       x: 120,
       y: 80,
-      format: "plain",
-      text: ""
+      anchor: "lowerLeft",
+      text: "Gain", fontSizePx: 18
     });
-  });
-
-  it("commits reversible note format and width changes", () => {
-    const target = fixtureNote("note-format", 20, 20);
-    const source = target.text;
-    expect(setNoteFormatDocumentOp(target, "markdown")).toMatchObject({ changed: true, historyIntent: "push" });
-    const snapshot = { noteId: target.id, width: target.width, height: target.height };
-    target.width = 400;
-    expect(commitNoteWidthDocumentOp(snapshot, target)).toMatchObject({ changed: true, historyIntent: "push" });
-    expect(setNoteFormatDocumentOp(target, "plain")).toMatchObject({ changed: true, historyIntent: "push" });
-    expect(target.text).toBe(source);
   });
 
   it("moves a schematic note through a document op", () => {
@@ -301,93 +337,6 @@ describe("schematic document ops", () => {
       historyIntent: "none",
     });
     expect(note.backgroundColor).toBe("#fff6bf");
-  });
-
-  it("commits changed note edit text snapshots without mutating", () => {
-    const note = fixtureNote("note-edit", 20, 20);
-    const snapshot = { noteId: note.id, text: note.text, width: note.width, height: note.height };
-    note.text = "updated note";
-
-    const result = commitNoteEditDocumentOp(snapshot, note);
-
-    expect(result).toEqual({
-      changed: true,
-      historyIntent: "push",
-      selectedIds: [],
-      noteIds: [],
-      status: "Note updated."
-    });
-    expect(note.text).toBe("updated note");
-  });
-
-  it("commits changed note edit bounds snapshots without mutating", () => {
-    const note = fixtureNote("note-edit", 20, 20);
-    const snapshot = { noteId: note.id, text: note.text, width: note.width, height: note.height };
-    note.width = 136;
-    note.height = 72;
-
-    const result = commitNoteEditDocumentOp(snapshot, note);
-
-    expect(result).toEqual({
-      changed: true,
-      historyIntent: "push",
-      selectedIds: [],
-      noteIds: [],
-      status: "Note updated."
-    });
-    expect(note).toMatchObject({ width: 136, height: 72 });
-  });
-
-  it("commits changed note edit font-size snapshots without mutating", () => {
-    const note = fixtureNote("note-edit", 20, 20);
-    note.fontSizePx = 14;
-    const snapshot = {
-      noteId: note.id,
-      text: note.text,
-      width: note.width,
-      height: note.height,
-      fontSizePx: note.fontSizePx
-    };
-    note.fontSizePx = 18;
-
-    expect(commitNoteEditDocumentOp(snapshot, note)).toMatchObject({
-      changed: true,
-      historyIntent: "push",
-      status: "Note updated."
-    });
-  });
-
-  it("reports unchanged note edit snapshots without history intent", () => {
-    const note = fixtureNote("note-edit", 20, 20);
-    const snapshot = { noteId: note.id, text: note.text, width: note.width, height: note.height };
-
-    expect(commitNoteEditDocumentOp(snapshot, note)).toEqual({
-      changed: false,
-      historyIntent: "none",
-      selectedIds: [],
-      noteIds: [],
-      status: ""
-    });
-  });
-
-  it("commits missing and mismatched note edit snapshots", () => {
-    const note = fixtureNote("note-edit", 20, 20);
-    const snapshot = { noteId: "note-other", text: note.text, width: note.width, height: note.height };
-
-    expect(commitNoteEditDocumentOp(null, note)).toEqual({
-      changed: true,
-      historyIntent: "push",
-      selectedIds: [],
-      noteIds: [],
-      status: "Note updated."
-    });
-    expect(commitNoteEditDocumentOp(snapshot, note)).toEqual({
-      changed: true,
-      historyIntent: "push",
-      selectedIds: [],
-      noteIds: [],
-      status: "Note updated."
-    });
   });
 
   it("commits changed note font size snapshots without mutating", () => {
@@ -790,7 +739,6 @@ describe("schematic document ops", () => {
       () => executeSchematicPropertyBatchCommand(document, { selectedIds: [wire.id], selectedNoteIds: [] }, { kind: "ink-color", color: "invalid" }),
       () => executeSchematicPropertyBatchCommand(document, { selectedIds: [junctionId({ x: 20, y: 40 })], selectedNoteIds: [] }, { kind: "ink-color", color: "invalid" }),
       () => executeSchematicPropertyBatchCommand(documentWithNote(note), { selectedIds: [], selectedNoteIds: [note.id] }, { kind: "note-background", color: "invalid" }),
-      () => setNoteFormatDocumentOp(note, note.format),
       () => moveSchematicNoteDocumentOp(note, { x: note.x, y: note.y })
     ];
 
@@ -818,7 +766,7 @@ describe("schematic document ops", () => {
         }
       ],
       junctions: [],
-      notes: [{ id: "note-current", x: 10, y: 20, width: 80, height: 40, format: "markdown", text: "current **text**" }]
+      notes: [{ id: "note-current", x: 10, y: 20, width: 80, height: 40, anchor: "upperLeft", text: "current **text**" }]
     });
 
     const result = restoreSchematicDocumentOp(document, source);
@@ -833,7 +781,7 @@ describe("schematic document ops", () => {
     expect(document.components.map((component) => component.id)).toEqual(["R1"]);
 
     expect(document.notes).toEqual([
-      { id: "note-current", x: 10, y: 20, width: 160, height: 40, format: "markdown", text: "current **text**" }
+      { id: "note-current", x: 10, y: 20, width: 80, height: 40, anchor: "upperLeft", text: "current **text**" }
     ]);
     expect(document.wires.map((wire) => wire.id)).toEqual(["w-legacy", "w-legacy-segment-1"]);
     expect(document.wires[0].points).toEqual([

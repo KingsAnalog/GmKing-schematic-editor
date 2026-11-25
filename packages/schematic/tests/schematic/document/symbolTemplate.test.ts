@@ -30,7 +30,7 @@ describe("symbol template content and availability", () => {
       { id: "razavi", label: "razavi", available: true },
       { id: "abidi", label: "abidi", available: false }
     ]);
-    expect(renderSchematicEditorSidebarProjection()).toContain('<option value="abidi" disabled>abidi (not ready)</option>');
+    expect(renderSchematicEditorSidebarProjection()).toMatch(/<option value="abidi" disabled[^>]*>abidi \(not ready\)<\/option>/);
     expect(() => getSymbolTemplateRenderer("abidi")).toThrow(/not ready/);
   });
 });

@@ -42,6 +42,40 @@ describe("schematic cell geometry model", () => {
     expect(instance).toMatchObject({ x: 240, y: 220 });
   });
 
+  it("keeps a half-grid rectangle center stationary on click and moves by grid-aligned vertices", () => {
+    const instance = fixtureComponent("rectangle", "X1", 215, 260);
+    instance.values.rectangleWidthGrid = "1.5";
+    instance.values.rectangleHeightGrid = "2";
+    const document = fixtureDocument({ components: [instance], wires: [] });
+    const input = {
+      document,
+      componentId: instance.id,
+      oldPinPoints: componentPinPoints(instance),
+      moveBehavior: "moveOnly" as const
+    };
+
+    expect(applyComponentCellGeometry({ ...input, nextCenter: { x: 215, y: 260 } }).changed).toBe(false);
+    expect(instance).toMatchObject({ x: 215, y: 260 });
+    expect(applyComponentCellGeometry({ ...input, nextCenter: { x: 225, y: 270 } }).changed).toBe(true);
+    expect(instance).toMatchObject({ x: 225, y: 270 });
+  });
+
+  it("keeps a half-grid triangle center stationary on click and moves by grid-aligned vertices", () => {
+    const instance = fixtureComponent("triangle", "X1", 210, 260);
+    const document = fixtureDocument({ components: [instance], wires: [] });
+    const input = {
+      document,
+      componentId: instance.id,
+      oldPinPoints: componentPinPoints(instance),
+      moveBehavior: "moveOnly" as const
+    };
+
+    expect(applyComponentCellGeometry({ ...input, nextCenter: { x: 210, y: 260 } }).changed).toBe(false);
+    expect(instance).toMatchObject({ x: 210, y: 260 });
+    expect(applyComponentCellGeometry({ ...input, nextCenter: { x: 220, y: 270 } }).changed).toBe(true);
+    expect(instance).toMatchObject({ x: 220, y: 270 });
+  });
+
   it("stretches attached wire endpoints in stretch mode and returns updated wire ids", () => {
     const document = twoResistorsStraightWireDoc();
     const instance = document.components[0];

@@ -1,4 +1,6 @@
 import type { SymbolTemplateContext } from "./symbolTemplateModel";
+import type { ProcessId } from "./netlist/profiles";
+import type { SchematicTextFont } from "./schematicFont";
 
 /** Display and interaction snapping interval. */
 export const GRID_SIZE = 10;
@@ -55,11 +57,17 @@ export type ComponentType =
   | "transmissionGate"
   | "rectangle"
   | "triangle"
+  | "polyline"
+  | "arc"
+  | "circle"
+  | "polygon"
   | "integrator"
   | "differentiator"
   | "delay"
   | "filter"
-  | "annotation";
+  | "annotation"
+  | "sheetPort"
+  | "sheetBlock";
 
 export type PinRole =
   | "in"
@@ -134,6 +142,8 @@ export interface ComponentDef {
   nameFormat?: ComponentNameFormat;
   centeredRefLabel?: boolean;
   bodyPolygon?: readonly Point[];
+  bodyPolyline?: readonly Point[];
+  bodyArc?: readonly Point[];
   editableGainPolarity?: boolean;
   editablePinVisibility?: boolean;
   editablePinVisibilityIds?: string[];
@@ -170,6 +180,7 @@ export type WireRouteMode = "orthogonal" | "freeAngle";
 
 export interface Wire {
   id: string;
+  layerId?: string;
   points: Point[];
   routeMode: WireRouteMode;
   appearance?: WireAppearance;
@@ -198,25 +209,49 @@ export interface NetLabelAttachment {
 
 export interface NetLabel {
   id: string;
+  layerId?: string;
+  fontFamily?: SchematicTextFont;
   name: string;
   attachment: NetLabelAttachment;
 }
 
-export type SchematicNoteFormat = "plain" | "markdown";
+export const NOTE_ANCHORS = [
+  "upperLeft", "centerLeft", "lowerLeft", "upperCenter", "centerCenter", "lowerCenter",
+  "upperRight", "centerRight", "lowerRight"
+] as const;
+export type SchematicNoteAnchor = typeof NOTE_ANCHORS[number];
+
+export interface SchematicLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+}
+
+export interface SchematicLayerObjectState {
+  visible?: boolean;
+  z?: number;
+}
+
+export type SchematicLayerObjectStates = Record<string, SchematicLayerObjectState>;
 
 export interface SchematicNote {
   rotation?: 0 | 90 | 180 | 270;
   id: string;
+  layerId?: string;
   x: number;
   y: number;
   width: number;
   height?: number;
-  format: SchematicNoteFormat;
+  anchor?: SchematicNoteAnchor;
   text: string;
   /** Undefined uses the default fill; null explicitly disables the fill. */
   backgroundColor?: string | null;
+  backgroundEnabled?: boolean;
+  backgroundOpacity?: number;
   textColor?: string;
   fontSizePx?: number;
+  fontFamily?: SchematicTextFont;
 }
 
 export interface JunctionAppearance {
@@ -236,6 +271,7 @@ export type InductorCouplingLabelMode = "coefficient" | "ratio";
 
 export interface InductorCoupling {
   id: string;
+  layerId?: string;
   inductorAId: string;
   inductorBId: string;
   coefficient: string;
@@ -250,6 +286,8 @@ export interface InductorCoupling {
 
 /** Durable schematic content. */
 export interface SchematicContent extends SymbolTemplateContext {
+  display?: SchematicDisplaySettings;
+  netlistProcess?: ProcessId;
   components: ComponentInstance[];
   wires: Wire[];
   connections: SchematicConnections;
@@ -257,6 +295,13 @@ export interface SchematicContent extends SymbolTemplateContext {
   junctionAppearances: JunctionAppearance[];
   netLabels: NetLabel[];
   notes: SchematicNote[];
+  layers?: SchematicLayer[];
+  layerObjectStates?: SchematicLayerObjectStates;
+}
+
+export interface SchematicDisplaySettings {
+  wireCrossings?: "plain" | "hop";
+  textFont?: SchematicTextFont;
 }
 
 /** Runtime document shape. `junctions` is derived and omitted from durable content. */

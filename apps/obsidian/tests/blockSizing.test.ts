@@ -21,7 +21,7 @@ describe("Obsidian schematic height limit", () => {
     updateSchematicBlockHeight(root, renderSchematicBlockSvg(content, "translated"));
     expect(limit()).toBe(smallHeight);
 
-    content.notes.push({ id: "note", x: 100, y: 1400, width: 100, height: 20, rotation: 90, format: "plain", text: "Outside the circuit" });
+    content.notes.push({ id: "note", x: 100, y: 1400, width: 100, height: 20, rotation: 90, anchor: "upperLeft", text: "Outside the circuit" });
     const rendering = renderSchematicBlockSvg(content, "note");
     updateSchematicBlockHeight(root, rendering);
     expect(limit()).toBeGreaterThan(800);

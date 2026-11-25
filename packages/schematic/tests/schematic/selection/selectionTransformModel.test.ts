@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { pointKey } from "../../../src/schematic/geometry";
+import { transformSingleComponentOrientationDocumentOp } from "../../../src/schematic/document/documentOps";
+import { pointKey, transformPin } from "../../../src/schematic/geometry";
 import { junctionId } from "../../../src/schematic/renderer";
 import { projectSchematicSelection, remapSelectedJunctionIds } from "../../../src/schematic/selection/selectionProjection";
 import { setMixedSelection } from "../../../src/schematic/selection/selectionModel";
 import {
   transformSelectionDocumentGeometry,
-  transformSingleComponentOrientation,
   transformSelectionPoint,
   type GroupTransformKind
 } from "../../../src/schematic/selection/selectionTransformModel";
 import { componentVisualBounds, noteVisualBounds, type Rect } from "../../../src/schematic/view-geometry";
 import { normalizeWirePath } from "../../../src/schematic/wire/wireGeometry";
-import type { Point, SchematicDocument } from "../../../src/schematic/types";
+import type { PinDef, Point, SchematicDocument } from "../../../src/schematic/types";
 import { emptyDoc, fixtureComponent, mixedSelectionDoc } from "../support/fixtures";
 
 describe("schematic selection transform model", () => {
@@ -69,6 +69,7 @@ describe("schematic selection transform model", () => {
     const previousComponentCenter = rectCenter(componentVisualBounds(component));
     const previousWirePoints = wire.points.map((point) => ({ ...point }));
     const previousNoteBox = noteVisualBounds(note);
+    const anchor = { x: note.x, y: note.y };
 
     const result = transformSelectionDocumentGeometry({ document, selection, kind: "mirror-x" });
 
@@ -76,7 +77,7 @@ describe("schematic selection transform model", () => {
     expect(component).toMatchObject({ rotation: 270, mirrored: true });
     expect(rectCenter(componentVisualBounds(component))).toEqual(transform(previousComponentCenter));
     expect(wire.points).toEqual(normalizeWirePath(previousWirePoints.map(transform)));
-    expect(rectCenter(noteVisualBounds(note))).toEqual(transform(rectCenter(previousNoteBox)));
+    expect({ x: note.x, y: note.y }).toEqual(transform(anchor));
     expect(note).toMatchObject({ width: previousNoteBox.width, height: previousNoteBox.height });
 
     const transformedSelectedJunction = transform({ x: 280, y: 200 });
@@ -99,6 +100,7 @@ describe("schematic selection transform model", () => {
     const previousComponentCenter = rectCenter(componentVisualBounds(component));
     const previousWirePoints = wire.points.map((point) => ({ ...point }));
     const previousNoteBox = noteVisualBounds(note);
+    const anchor = { x: note.x, y: note.y };
 
     const result = transformSelectionDocumentGeometry({ document, selection, kind: "mirror-y" });
 
@@ -106,7 +108,7 @@ describe("schematic selection transform model", () => {
     expect(component).toMatchObject({ rotation: 180, mirrored: true });
     expect(rectCenter(componentVisualBounds(component))).toEqual(transform(previousComponentCenter));
     expect(wire.points).toEqual(normalizeWirePath(previousWirePoints.map(transform)));
-    expect(rectCenter(noteVisualBounds(note))).toEqual(transform(rectCenter(previousNoteBox)));
+    expect({ x: note.x, y: note.y }).toEqual(transform(anchor));
     expect(note).toMatchObject({ width: previousNoteBox.width, height: previousNoteBox.height });
 
     const transformedSelectedJunction = transform({ x: 280, y: 200 });
@@ -129,33 +131,29 @@ describe("schematic selection transform model", () => {
   it("rotates a single component orientation without changing mirrored state", () => {
     const component = { ...fixtureComponent("resistor", "R1", 0, 0, 270), mirrored: true };
 
-    transformSingleComponentOrientation(component, "rotate");
+    transformSingleComponentOrientationDocumentOp([component], "rotate");
 
     expect(component).toMatchObject({ rotation: 0, mirrored: true });
   });
 
-  it("mirrors a single component across x by toggling mirrored without changing rotation", () => {
-    const component = fixtureComponent("resistor", "R1", 0, 0, 90);
+  it.each([
+    { kind: "mirror-x", rotation: 0, mirrored: false },
+    { kind: "mirror-y", rotation: 0, mirrored: false },
+    { kind: "mirror-x", rotation: 90, mirrored: true },
+    { kind: "mirror-y", rotation: 90, mirrored: true }
+  ] as const)("reflects a single component's canvas pin positions for $kind at $rotation degrees", ({ kind, rotation, mirrored }) => {
+    const component = { ...fixtureComponent("resistor", "R1", 100, 200, rotation), mirrored };
+    const pin: PinDef = { id: "test-pin", label: "P", role: "p", x: 30, y: 10 };
+    const before = transformPin(component, pin);
 
-    transformSingleComponentOrientation(component, "mirror-x");
+    transformSingleComponentOrientationDocumentOp([component], kind);
 
-    expect(component).toMatchObject({ rotation: 90, mirrored: true });
-  });
+    const expected = kind === "mirror-x" ? { x: 200 - before.x, y: before.y } : { x: before.x, y: 400 - before.y };
+    expect(transformPin(component, pin)).toEqual(expected);
+    expect(component).toMatchObject({ x: 100, y: 200, mirrored: !mirrored });
 
-  it("mirrors a single component across y by reflecting rotation and toggling mirrored", () => {
-    const component = fixtureComponent("resistor", "R1", 0, 0, 90);
-
-    transformSingleComponentOrientation(component, "mirror-y");
-
-    expect(component).toMatchObject({ rotation: 270, mirrored: true });
-  });
-
-  it("keeps zero rotation at zero when mirroring a single component across y", () => {
-    const component = fixtureComponent("resistor", "R1", 0, 0, 0);
-
-    transformSingleComponentOrientation(component, "mirror-y");
-
-    expect(component).toMatchObject({ rotation: 0, mirrored: true });
+    transformSingleComponentOrientationDocumentOp([component], kind);
+    expect(component).toMatchObject({ rotation, mirrored });
   });
 });
 

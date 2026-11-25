@@ -1,7 +1,7 @@
 import type { VoltageSourceField } from "./voltageSourceModel";
 import type { MosArrowView, MosPinView } from "./mosViewModel";
 import type { RectangleSettings } from "./rectangleComponentModel";
-import type { TriangleEdge } from "./triangleComponentModel";
+import type { LibraryShapeArrowSize, LibraryShapeArrowType, LibraryShapeLineStyle } from "./libraryShapeStyleModel";
 import type { FilterKind, FunctionBlockTimeDomain } from "./functionBlockModel";
 import type {
   DffActiveLevel,
@@ -14,7 +14,7 @@ import type {
   GainPolarity,
   InductorCouplingLabelMode,
   OperatorPinMode,
-  SchematicNoteFormat,
+  SchematicNoteAnchor,
   WireEndpointMarker,
   WireLineWidth
 } from "./types";
@@ -128,18 +128,33 @@ export interface SchematicPropertyPanelComponentInput {
   mosThickGate?: AggregateValue<boolean>;
   transistorCircle?: AggregateValue<boolean>;
   inductor?: SchematicPropertyPanelInductorInput;
+  /** Pure library shapes have no name, label, or electrical pin controls. */
+  libraryShape?: boolean;
+  libraryShapeStyle?: {
+    strokeWidth?: AggregateValue<number>;
+    lineStyle?: AggregateValue<LibraryShapeLineStyle>;
+    cornerRadius?: AggregateValue<number>;
+    startArrow?: AggregateValue<LibraryShapeArrowType>;
+    endArrow?: AggregateValue<LibraryShapeArrowType>;
+    startArrowSize?: AggregateValue<LibraryShapeArrowSize>;
+    endArrowSize?: AggregateValue<LibraryShapeArrowSize>;
+    fillEnabled?: AggregateValue<boolean>;
+    fillColor?: AggregateValue<string>;
+    fillOpacity?: AggregateValue<number>;
+  };
   rectangle?: {
     [Property in keyof RectangleSettings]: AggregateValue<number>;
   };
-  triangle?: Record<TriangleEdge, AggregateValue<number>>;
 }
 
 export interface SchematicPropertyPanelNoteInput {
   backgroundColor: AggregateValue<string | null>;
+  backgroundEnabled: AggregateValue<boolean>;
+  backgroundOpacity: AggregateValue<number>;
   textColor?: AggregateValue<string>;
   fontSizePx: AggregateValue<number>;
-  format: AggregateValue<SchematicNoteFormat>;
-  widthPx?: AggregateValue<number>;
+  anchor: AggregateValue<SchematicNoteAnchor>;
+  text?: string;
 }
 
 export interface SchematicPropertyPanelNetworkInput {
@@ -164,7 +179,6 @@ export interface SchematicPropertyPanelInput {
   inductorCoupling?: SchematicPropertyPanelInductorCouplingInput | null;
   note?: SchematicPropertyPanelNoteInput | null;
   network?: SchematicPropertyPanelNetworkInput | null;
-  labelTool?: { value: string; error?: string } | null;
 }
 
 export function aggregateValues<T>(

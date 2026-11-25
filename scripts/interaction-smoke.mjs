@@ -109,14 +109,24 @@ try {
     const control = document.querySelector('[data-property-component-color-row] .property-color-control');
     const bounds = control.getBoundingClientRect();
     const boxes = [...control.querySelectorAll('button,input[type=color]')].map(e => { const b=e.getBoundingClientRect(); return {x:b.x,y:b.y,w:b.width,h:b.height}; });
-    const labels = [...document.querySelectorAll('.property-pin-header span,.property-row > span:first-child')].filter(e=>e.getBoundingClientRect().width && /^(Show|Show label|Show value)$/.test(e.textContent.trim())).map(e=>({text:e.textContent.trim(),h:e.getBoundingClientRect().height,line:parseFloat(getComputedStyle(e).lineHeight)||parseFloat(getComputedStyle(e).fontSize)*1.25}));
+    const labels = [...document.querySelectorAll(".property-pin-header span, .property-row > span:first-child")]
+      .filter(label => label.getBoundingClientRect().width && /^(Show|Show label|Show value)$/.test(label.textContent.trim()))
+      .map(label => {
+        const text = document.createRange();
+        text.selectNodeContents(label);
+        return {
+          text: label.textContent.trim(),
+          lineCount: new Set([...text.getClientRects()].map(rect => rect.top)).size
+        };
+      });
     return {right:bounds.right,boxes,labels};
   });
   for (const b of layout.boxes) { assert(Math.abs(b.w-b.h)<1); assert(b.x+b.w<=layout.right+1); }
   for (let i=0;i<layout.boxes.length;i++) for(let j=i+1;j<layout.boxes.length;j++) {
     const a=layout.boxes[i],b=layout.boxes[j]; assert(a.x+a.w<=b.x+0.5||b.x+b.w<=a.x+0.5||a.y+a.h<=b.y+0.5||b.y+b.h<=a.y+0.5,"Palette swatches overlap");
   }
-  assert(layout.labels.length>=3); for(const label of layout.labels) assert(label.h<=label.line+1,JSON.stringify(label));
+  assert(layout.labels.length >= 3);
+  for (const label of layout.labels) assert.equal(label.lineCount, 1, JSON.stringify(label));
   console.log("[properties] host button height and word-breaking do not distort colors or Show labels");
 
   // Use actual mouse/keyboard routing, deletion, history and reload for detached junctions.
@@ -128,18 +138,39 @@ try {
       ] }), { commit: true });
     window.interactionEditor.fit();
   });
-  async function key(key, code, virtualCode) {
-    await page.send("Input.dispatchKeyEvent", { type:"keyDown", key, code, windowsVirtualKeyCode:virtualCode });
-    await page.send("Input.dispatchKeyEvent", { type:"keyUp", key, code, windowsVirtualKeyCode:virtualCode });
+  async function key(key, code, virtualCode, modifiers = 0) {
+    for (const type of ["keyDown", "keyUp"]) {
+      await page.send("Input.dispatchKeyEvent", { type, key, code, windowsVirtualKeyCode: virtualCode, modifiers });
+    }
   }
-  async function clickWorld(x, y) {
-    const p = await evaluate(page, (x,y) => {
+  async function assertCursor(expected) {
+    const state = await evaluate(page, () => {
+      const paper = document.querySelector("[data-schematic-paper]");
+      const wire = paper.querySelector(".joint-link [joint-selector='line']");
+      return {
+        name: paper.getAttribute("data-schematic-tool-cursor"),
+        paper: getComputedStyle(paper).cursor,
+        wire: wire && getComputedStyle(wire).cursor
+      };
+    });
+    assert.equal(state.name, expected);
+    if (expected) {
+      assert.match(state.paper, /^url\("data:image\/svg\+xml,/);
+      if (state.wire) assert.equal(state.wire, state.paper);
+    } else assert(!state.paper.includes("data:image/svg+xml"));
+  }
+  async function moveToWorld(x, y) {
+    const point = await evaluate(page, (x,y) => {
       const matrix=document.querySelector('[model-id="horizontal"] [joint-selector="line"]').getScreenCTM();
       const p=new DOMPoint(x,y).matrixTransform(matrix); return {x:p.x,y:p.y};
     }, x,y);
-    await page.send("Input.dispatchMouseEvent", {type:"mouseMoved",...p,button:"none"});
-    await page.send("Input.dispatchMouseEvent", {type:"mousePressed",...p,button:"left",buttons:1,clickCount:1});
-    await page.send("Input.dispatchMouseEvent", {type:"mouseReleased",...p,button:"left",buttons:0,clickCount:1});
+    await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point, button: "none" });
+    return point;
+  }
+  async function clickWorld(x, y, clickCount = 1) {
+    const point = await moveToWorld(x, y);
+    await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", buttons: 1, clickCount });
+    await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", buttons: 0, clickCount });
   }
   await clickSelector(page, '[model-id="junction-300-200"]');
   await key("Delete","Delete",46);
@@ -148,7 +179,7 @@ try {
   await clickWire("stem"); await key("Delete","Delete",46);
   const deleted = await content(); assert.equal(deleted.wires.length,1);
   await key("w","KeyW",87);
-  await clickWorld(300,200); await clickWorld(300,300); await key("Enter","Enter",13); await key("Escape","Escape",27);
+  await clickWorld(300,200); await moveToWorld(300,300); await key("Enter","Enter",13); await key("Escape","Escape",27);
   const redrawn = await content(); assert.equal(redrawn.wires.length,3);
   assert.equal(await evaluate(page, () => !!document.querySelector('[model-id="junction-300-200"]')),true);
   assert(!JSON.stringify(redrawn).includes("noConnect"));
@@ -159,6 +190,235 @@ try {
   await waitFor(page, () => !!window.interactionEditor && !!document.querySelector('[model-id="junction-300-200"]'), "Redrawn junction did not survive reload");
   assert.deepEqual(await content(),redrawn);
   console.log("[connections] delete junction, delete branch, redraw, Undo/Redo and reload passed with real mouse and keyboard events");
+
+  await clickWorld(350, 250);
+  await key("w", "KeyW", 87);
+  await assertCursor("wire");
+  await clickWorld(350, 250);
+  await clickWorld(350, 250, 2);
+  assert.deepEqual(await content(), redrawn, "Double-clicking the start must not create a zero-length wire");
+  await clickWorld(350, 200);
+  assert.deepEqual(await content(), redrawn, "A single click on an existing wire must keep the route pending");
+  await clickWorld(350, 200, 2);
+  const joined = await content();
+  assert.equal(joined.wires.length, redrawn.wires.length + 2, "Finishing at an existing wire must split it and add the new branch");
+  assert(joined.wires.some(wire => wire.points.every(point => point.x === 350) &&
+    wire.points.some(point => point.y === 200) && wire.points.some(point => point.y === 250)));
+  await key("Escape", "Escape", 27);
+  await clickSelector(page, '[data-command="undo"]');
+  assert.deepEqual(await content(), redrawn, "One Undo must remove the double-click route and its junction");
+  console.log("[wire-finish] Enter at the preview endpoint and double-click at a wire junction passed");
+
+  await evaluate(page, () => {
+    const part = (id, x) => ({ id, ref: id, type: "resistor", x, y: 200, rotation: 0, mirrored: false, values: {} });
+    window.interactionEditor.replaceContent(window.authorContent({
+      components: [part("R1", 240), part("R2", 400), part("R3", 560)],
+      wires: [
+        { id: "horizontal", routeMode: "orthogonal", points: [{ x: 100, y: 200 }, { x: 200, y: 200 }] },
+        { id: "r2-wire", routeMode: "orthogonal", points: [{ x: 440, y: 200 }, { x: 480, y: 200 }] },
+        { id: "scale", routeMode: "orthogonal", points: [{ x: 100, y: 440 }, { x: 680, y: 440 }] }
+      ], notes: [], junctionAppearances: [], netLabels: []
+    }), { commit: true });
+    window.interactionEditor.fit();
+    window.interactionEditor.focus();
+  });
+  const beforeMove = await content();
+  const currentRevision = () => evaluate(page, () => window.interactionEditor.getState().revision);
+  const beforeMoveRevision = await currentRevision();
+  const location = async id => {
+    const { x, y } = (await content()).components.find(part => part.id === id);
+    return { x, y };
+  };
+  const assertTool = async text => {
+    const summary = await evaluate(page, () => document.querySelector("[data-selection-summary]").textContent);
+    assert.match(summary, text);
+  };
+  await key("m", "KeyM", 77);
+  await assertCursor("stretch");
+  await assertTool(/Stretch move.*click an object/);
+  await clickWorld(240, 200);
+  await moveToWorld(240, 300);
+  await assertTool(/Stretch move.*click to place/);
+  await waitFor(page, () => !!document.querySelector('[model-id="move-preview-R1"]') &&
+    !!document.querySelector('[model-id="move-preview-horizontal"]'), "Stretch must preview both the device and the wire");
+  assert.deepEqual(await content(), beforeMove, "Preview must keep the committed schematic intact");
+  assert.equal(await currentRevision(), beforeMoveRevision);
+  await clickWorld(240, 300);
+  const firstMove = await content();
+  assert.deepEqual(await location("R1"), { x: 240, y: 300 });
+  const wireNodes = firstMove.connections.wires.horizontal;
+  assert(wireNodes.includes(firstMove.connections.pins.R1.p) &&
+    firstMove.wires.find(wire => wire.id === "horizontal").points.some(point => point.x === 200 && point.y === 300));
+  await assertTool(/Stretch move.*click an object/);
+  await clickWorld(440, 200); // Pick R2 through its pin.
+  await assertTool(/Stretch move.*click to place/);
+  await clickWorld(400, 310);
+  assert.deepEqual(await location("R2"), { x: 400, y: 310 });
+  assert.equal(await currentRevision(), beforeMoveRevision + 2);
+  await clickWorld(560, 200);
+  await moveToWorld(560, 340);
+  await key("Escape", "Escape", 27);
+  assert.deepEqual(await location("R3"), { x: 560, y: 200 });
+  assert.equal(await currentRevision(), beforeMoveRevision + 2);
+  await clickSelector(page, '[data-command="undo"]');
+  assert.deepEqual(await content(), firstMove, "One Undo must restore only the last placement");
+
+  await clickWorld(240, 300);
+  await key("m", "KeyM", 77);
+  await assertTool(/Stretch move.*click to place/);
+  await clickWorld(240, 340);
+  await assertTool(/Selected:.*R1/);
+  await assertCursor(null);
+  assert.deepEqual(await location("R1"), { x: 240, y: 340 });
+  await clickWorld(530, 310);
+  await key("M", "KeyM", 77, 8);
+  await assertCursor("move-only");
+  await assertTool(/Move only.*click an object/);
+  for (const [x, y] of [[240, 340], [400, 200]]) {
+    await clickWorld(x, y);
+    await clickWorld(x, 370);
+    await assertTool(/Move only.*click an object/);
+  }
+  const beforeMoveOnly = await content();
+  assert.deepEqual(await location("R2"), { x: 400, y: 370 });
+  assert(beforeMoveOnly.wires.find(wire => wire.id === "horizontal").points.some(point => point.x === 200 && point.y === 340));
+  assert(!beforeMoveOnly.connections.wires.horizontal.includes(beforeMoveOnly.connections.pins.R1.p));
+  await key("Escape", "Escape", 27);
+  await clickWorld(400, 370);
+  await key("M", "KeyM", 77, 8);
+  await assertTool(/Move only.*click to place/);
+  await clickWorld(480, 370);
+  await assertTool(/Selected:.*R2/);
+  assert.deepEqual(await location("R2"), { x: 480, y: 370 });
+  assert.deepEqual((await content()).wires, beforeMoveOnly.wires, "Move-only must leave attached wire geometry untouched");
+
+  await clickWorld(530, 310);
+  await key("c", "KeyC", 67);
+  await assertCursor("copy");
+  await assertTool(/Copy.*click an object/);
+  await clickWorld(240, 370);
+  await clickWorld(280, 250);
+  await assertTool(/Copy.*click an object/);
+  await clickWorld(350, 270);
+  assert.equal((await content()).components.length, 4, "Blank clicks must not duplicate the last picked source");
+  await clickWorld(480, 370);
+  await clickWorld(480, 260);
+  await assertTool(/Copy.*click an object/);
+  assert.equal((await content()).components.length, 5);
+  await key("Escape", "Escape", 27);
+  await clickWorld(560, 200);
+  await key("c", "KeyC", 67);
+  await assertTool(/Copy.*click to place/);
+  await clickWorld(600, 310);
+  await assertTool(/Selected:/);
+  await clickWorld(620, 250);
+  assert.equal((await content()).components.length, 6);
+  assert((await content()).components.some(part => part.id !== "R3" && part.x === 600 && part.y === 310));
+  console.log("[click-tools] M, Shift+M and C support preselection, repeat pickup, preview, Escape and Undo");
+
+  await assertCursor(null);
+  const beforeRotate = await content();
+  const beforeRotateRevision = await currentRevision();
+  await key("r", "KeyR", 82);
+  await assertCursor("rotate");
+  assert.equal(await evaluate(page, () => document.querySelector('[data-command="rotate"]').getAttribute("aria-pressed")), "true");
+  await assertTool(/Rotate.*click a component/);
+  await clickWorld(620, 250);
+  await assertTool(/Rotate.*click a component/);
+  await clickWorld(240, 370);
+  await moveToWorld(280, 390);
+  await assertTool(/Rotate.*click to place/);
+  await waitFor(page, () => !!document.querySelector('[model-id="rotate-preview-R1"]'),
+    "Rotation did not show an uncommitted device preview");
+  assert.deepEqual(await content(), beforeRotate);
+  assert.equal(await currentRevision(), beforeRotateRevision);
+  await clickWorld(280, 390);
+  const firstRotation = await content();
+  assert.deepEqual(await location("R1"), { x: 280, y: 390 });
+  assert.equal(firstRotation.components.find(part => part.id === "R1").rotation, 90);
+  assert.deepEqual(firstRotation.wires, beforeRotate.wires);
+  await assertCursor("rotate");
+  await assertTool(/Rotate.*click a component/);
+
+  await clickWorld(480, 370);
+  await clickWorld(480, 370);
+  assert.equal((await content()).components.find(part => part.id === "R2").rotation, 90);
+  assert.deepEqual(await location("R2"), { x: 480, y: 370 });
+  await assertTool(/Rotate.*click a component/);
+  await assertCursor("rotate");
+  await clickWorld(560, 200);
+  await moveToWorld(550, 310);
+  await key("Escape", "Escape", 27);
+  assert.deepEqual((await content()).components.find(part => part.id === "R3"),
+    beforeRotate.components.find(part => part.id === "R3"), "Escape must cancel the pending rotation");
+  assert.equal(await currentRevision(), beforeRotateRevision + 2);
+  await assertCursor(null);
+  await clickSelector(page, '[data-command="undo"]');
+  assert.deepEqual(await content(), firstRotation, "One Undo must restore only the last rotation");
+
+  await clickWorld(560, 200);
+  await key("r", "KeyR", 82);
+  assert.equal((await content()).components.find(part => part.id === "R3").rotation, 90);
+  assert.deepEqual(await location("R3"), { x: 560, y: 200 });
+  await assertTool(/Selected:.*R3/);
+  await assertCursor(null);
+  assert.equal(await evaluate(page, () => document.querySelector('[data-command="rotate"]').getAttribute("aria-pressed")), "false");
+  await clickWorld(620, 250);
+  assert.equal((await content()).components.length, beforeRotate.components.length);
+  console.log("[rotate-tool] repeat pickup, one-shot rotation, preview, cursor, Escape and Undo passed");
+
+  await key("Delete", "Delete", 46);
+  await assertCursor("delete");
+  await key("Escape", "Escape", 27);
+  await assertCursor(null);
+  console.log("[tool-cursors] Tool switches and selection cursor passed");
+
+  await key("W", "KeyW", 87, 8);
+  await assertTool(/Wide wire/);
+  await assertCursor("wire");
+  await key("Escape", "Escape", 27);
+
+  const isTemporarilyDeleted = async id => Boolean((await content()).components.find(part => part.id === id).temporarilyDeleted);
+  await key("Delete", "Delete", 46, 8);
+  await assertCursor("plus");
+  await assertTool(/Temporary Delete/);
+  await clickWorld(560, 200);
+  assert.equal(await isTemporarilyDeleted("R3"), true);
+  assert.equal(await evaluate(page, () => window.interactionEditor.hasExportableSelection()), false);
+  await clickWorld(480, 370);
+  assert.equal(await isTemporarilyDeleted("R2"), true);
+  await assertCursor("plus");
+  await clickWorld(560, 200);
+  assert.equal(await isTemporarilyDeleted("R3"), false);
+  await key("Escape", "Escape", 27);
+  await assertCursor(null);
+  await clickWorld(560, 200);
+  await key("Delete", "Delete", 46, 8);
+  assert.equal(await isTemporarilyDeleted("R3"), true);
+  await clickWorld(280, 390);
+  await assertTool(/Selected:.*R1/);
+  assert.equal(await isTemporarilyDeleted("R1"), false);
+  await assertCursor(null);
+  console.log("[temporary-delete] Plus cursor, repeated toggle, recovery and one-shot selection passed");
+
+  const dragStart = await moveToWorld(350, 310);
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...dragStart, button: "left", buttons: 1, clickCount: 1 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: dragStart.x + 70, y: dragStart.y + 30, button: "left", buttons: 1 });
+  await assertCursor("selection-box");
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: dragStart.x + 70, y: dragStart.y + 30, button: "left", buttons: 0, clickCount: 1 });
+  await assertCursor(null);
+  await key("w", "KeyW", 87);
+  const wireCursorPoint = await wirePoint("horizontal");
+  const { x, y } = wireCursorPoint;
+  await page.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "middle", buttons: 4, clickCount: 1 });
+  assert.equal(await evaluate(page, () =>
+    getComputedStyle(document.querySelector('[model-id="horizontal"] [joint-selector="line"]')).cursor), "grabbing");
+  await page.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x + 40, y: y + 30, button: "middle", buttons: 4 });
+  await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x + 40, y: y + 30, button: "middle", buttons: 0, clickCount: 1 });
+  await assertCursor("wire");
+  await key("Escape", "Escape", 27);
+  console.log("[gesture-cursors] Box selection and panning over a wire passed");
+
   if (failures.length) throw new AggregateError(failures, "Interaction regressions failed");
 } finally {
   if (page) await evaluate(page, () => window.interactionEditor?.destroy()).catch(()=>{});

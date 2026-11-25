@@ -16,8 +16,9 @@
     "connections": {"wires": {"wire-1": ["node-5", "node-1"], "wire-1-segment-1": ["node-1", "node-3"], "branch": ["node-1", "node-6"]}, "pins": {"resistor-1": {"p": "node-4", "n": "node-5"}}},
     "junctionAppearances": [],
     "netLabels": [{"id": "net-label-1", "name": "OUT", "attachment": {"wireId": "wire-1", "point": {"x": 100, "y": 60}}}],
+    "layers": [{"id": "layer-1", "name": "Layer 1", "visible": true, "locked": false}],
     "notes": [
-      {"x": 20, "y": 120, "width": 180, "height": 60, "format": "plain", "id": "note-1",
+      {"x": 20, "y": 120, "width": 180, "height": 60, "anchor": "upperLeft", "id": "note-1",
         "text": "Golden note"}
     ]
   }

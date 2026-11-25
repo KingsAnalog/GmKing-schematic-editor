@@ -8,6 +8,12 @@ export interface SchematicClipboardTextReader {
 export async function readSchematicDocumentFromClipboard(
   clipboard: SchematicClipboardTextReader | null | undefined = systemClipboard()
 ): Promise<SchematicDocument> {
+  return parseSchematicDocumentFile(await readSchematicClipboardText(clipboard));
+}
+
+export async function readSchematicClipboardText(
+  clipboard: SchematicClipboardTextReader | null | undefined = systemClipboard()
+) {
   if (!clipboard?.readText) {
     throw new Error("Text clipboard is not available.");
   }
@@ -15,7 +21,7 @@ export async function readSchematicDocumentFromClipboard(
   if (!source.trim()) {
     throw new Error("The clipboard does not contain schematic JSON.");
   }
-  return parseSchematicDocumentFile(source);
+  return source;
 }
 
 function systemClipboard(): SchematicClipboardTextReader | null {
